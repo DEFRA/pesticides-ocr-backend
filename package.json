@@ -1,0 +1,66 @@
+{
+  "name": "cdp-node-backend-template",
+  "version": "0.1.0",
+  "description": "CDP Node.js Backend Template",
+  "main": "src/index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "AWS_EMF_ENVIRONMENT=Local NODE_ENV=development npm run server:watch",
+    "dev:debug": "AWS_EMF_ENVIRONMENT=Local NODE_ENV=development npm run server:debug",
+    "docker:dev": "npm run dev",
+    "format": "prettier --write \"**/*.{cjs,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{cjs,js,json,md}\"",
+    "git:pre-commit-hook": "npm run security-audit && npm run format:check && npm run lint && npm test",
+    "lint": "eslint --cache --cache-strategy content \"**/*.{cjs,js}\"",
+    "lint:fix": "npm run lint -- --fix",
+    "security-audit": "npm audit --audit-level=critical",
+    "server:debug": "node --watch --inspect-brk=0.0.0.0 --env-file-if-exists=.env ./src",
+    "server:watch": "node --watch --inspect=0.0.0.0 --env-file-if-exists=.env ./src",
+    "setup:husky": "node -e \"try { (await import('husky')).default() } catch (e) { if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e }\" --input-type module",
+    "start": "NODE_ENV=production node . --env-file-if-exists=.env",
+    "test": "TZ=UTC vitest run --coverage",
+    "test:watch": "TZ=UTC vitest"
+  },
+  "imports": {
+    "#/*": "./src/*"
+  },
+  "author": "Defra DDTS",
+  "license": "OGL-UK-3.0",
+  "dependencies": {
+    "@aws-sdk/credential-providers": "3.1050.0",
+    "@defra/cdp-auditing": "0.6.0",
+    "@defra/cdp-metrics": "0.5.0",
+    "@defra/hapi-secure-context": "0.4.0",
+    "@defra/hapi-tracing": "1.30.0",
+    "@elastic/ecs-pino-format": "1.5.0",
+    "@hapi/boom": "10.0.1",
+    "@hapi/hapi": "21.4.9",
+    "aws4": "1.13.2",
+    "convict": "6.2.5",
+    "convict-format-with-validator": "6.2.0",
+    "global-agent": "3.0.0",
+    "hapi-pino": "13.0.0",
+    "hapi-pulse": "3.0.1",
+    "https-proxy-agent": "7.0.6",
+    "joi": "18.1.2",
+    "mongo-locks": "3.1.2",
+    "mongodb": "7.1.1",
+    "pino": "10.3.1",
+    "pino-pretty": "13.1.3",
+    "undici": "7.24.8"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "4.1.4",
+    "eslint": "9.39.2",
+    "husky": "9.1.7",
+    "neostandard": "0.13.0",
+    "npm-run-all": "4.1.5",
+    "prettier": "3.8.2",
+    "vitest": "4.1.4",
+    "vitest-fetch-mock": "0.4.5",
+    "vitest-mongodb": "1.0.3"
+  }
+}
