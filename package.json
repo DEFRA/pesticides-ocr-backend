@@ -1,7 +1,7 @@
 {
-  "name": "cdp-node-backend-template",
-  "version": "0.1.0",
-  "description": "CDP Node.js Backend Template",
+  "name": "pesticides-ocr-backend",
+  "version": "0.0.0",
+  "description": "pesticides-ocr-backend",
   "main": "src/index.js",
   "type": "module",
   "engines": {

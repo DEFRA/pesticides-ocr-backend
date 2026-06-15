@@ -39,7 +39,7 @@ services:
 
   ################################################################################
 
-  cdp-node-backend-template:
+  pesticides-ocr-backend:
     build:
       context: .
       target: development
