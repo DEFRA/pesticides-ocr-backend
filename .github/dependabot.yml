@@ -1,0 +1,82 @@
+version: 2
+
+updates:
+  # Update npm packages
+  - package-ecosystem: npm
+    directory: /
+    open-pull-requests-limit: 5
+
+    # Group packages into shared PR
+    groups:
+      dev:
+        applies-to: 'version-updates'
+        dependency-type: 'development'
+        update-types:
+          - 'minor'
+          - 'patch'
+        patterns:
+          - '*'
+
+      prod:
+        applies-to: 'version-updates'
+        dependency-type: 'production'
+        update-types:
+          - 'minor'
+          - 'patch'
+        patterns:
+          - '*'
+
+    # Schedule regular updates weekly
+    schedule:
+      interval: weekly
+      day: friday
+      time: '05:00'
+      timezone: 'UTC'
+
+    versioning-strategy: increase
+
+    allow:
+      # Include direct package.json updates
+      - dependency-type: direct
+
+  # Update npm security fixes daily
+  - package-ecosystem: npm
+    directory: /
+    open-pull-requests-limit: 10
+
+    groups:
+      security:
+        applies-to: 'security-updates'
+        patterns:
+          - '*'
+
+    # Schedule security updates daily
+    schedule:
+      interval: daily
+      time: '05:00'
+      timezone: 'UTC'
+
+    versioning-strategy: increase
+
+    allow:
+      # Include direct package.json updates
+      - dependency-type: direct
+
+    # Ignore normal version updates in this daily block
+    ignore:
+      - dependency-name: '*'
+        update-types:
+          - 'version-update:semver-major'
+          - 'version-update:semver-minor'
+          - 'version-update:semver-patch'
+
+  # Update GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+
+    # Schedule run weekly
+    schedule:
+      interval: weekly
+      day: friday
+      time: '05:00'
+      timezone: 'UTC'
