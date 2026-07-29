@@ -9,6 +9,15 @@ convict.addFormats(convictFormatWithValidator)
 const isProduction = process.env.NODE_ENV === 'production'
 const isTest = process.env.NODE_ENV === 'test'
 
+const notifyKeyMode = process.env.NOTIFY_KEY_MODE ?? 'test'
+const localNotifyApiKey =
+  {
+    team: process.env.NOTIFY_TEAM_API_KEY,
+    test: process.env.NOTIFY_TEST_API_KEY
+  }[notifyKeyMode] ?? ''
+
+convict.addFormats(convictFormatWithValidator)
+
 export const config = convict({
   serviceVersion: {
     doc: 'The service version, this variable is injected into your docker container in CDP environments',
@@ -125,6 +134,29 @@ export const config = convict({
       format: String,
       default: 'x-cdp-request-id',
       env: 'TRACING_HEADER'
+    }
+  },
+  notify: {
+    keyMode: {
+      doc: 'Which local Notify key to use: team sends real email to the guestlist, test sends none. Ignored when NOTIFY_API_KEY is set.',
+      format: ['team', 'test'],
+      default: notifyKeyMode,
+      env: 'NOTIFY_KEY_MODE'
+    },
+    apiKey: {
+      doc: 'Gov.UK Notify API key. Injected as a pipeline secret in deployed environments, resolved from NOTIFY_KEY_MODE locally.',
+      format: String,
+      default: localNotifyApiKey,
+      sensitive: true,
+      env: 'NOTIFY_API_KEY'
+    },
+    templates: {
+      submissionConfirmation: {
+        doc: 'Notify template ID for the submission confirmation email',
+        format: String,
+        default: '',
+        env: 'NOTIFY_TEMPLATE_SUBMISSION_CONFIRMATION'
+      }
     }
   }
 })
