@@ -1,4 +1,4 @@
-import { config } from '#/config/config.js'
+import { config } from '#/config.js'
 import { NotifyClient } from 'notifications-node-client'
 
 const notifyConfig = config.get('notify')
