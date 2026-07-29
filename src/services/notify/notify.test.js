@@ -25,7 +25,7 @@ vi.mock('notifications-node-client', () => {
   }
 })
 
-vi.mock('#/config/config.js', () => ({
+vi.mock('#/config.js', () => ({
   config: { get: (key) => configValues[key] }
 }))
 
