@@ -8,9 +8,7 @@ let client
 function getClient() {
   if (!client) {
     if (!notifyConfig.apiKey) {
-      throw new Error(
-        'No Notify API key configured'
-      )
+      throw new Error('No Notify API key configured')
     }
 
     client = new NotifyClient(notifyConfig.apiKey)
@@ -26,7 +24,8 @@ async function sendEmail(templateName, emailAddress, personalisation) {
     throw new Error(`Unknown template '${templateName}'`)
   }
 
-  return getClient().sendEmail(templateId, emailAddress, { personalisation })
+  return getClient()
+    .sendEmail(templateId, emailAddress, { personalisation })
     .then((response) => {
       if (!config.get('isProduction')) {
         console.log(
@@ -39,7 +38,7 @@ async function sendEmail(templateName, emailAddress, personalisation) {
     .catch((error) => {
       if (!config.get('isProduction')) {
         console.error(
-        `Error sending email to ${emailAddress} using template '${templateName}' (ID: ${templateId}):`
+          `Error sending email to ${emailAddress} using template '${templateName}' (ID: ${templateId}):`
         )
         for (const [key, value] of Object.entries(error.response.data.errors)) {
           console.error(`  ${key}:`, value)

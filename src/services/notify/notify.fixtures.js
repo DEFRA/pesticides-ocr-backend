@@ -6,9 +6,11 @@ export const failedSendEmailMock = {
   status: 400,
   response: {
     data: {
-      errors: [{
-        email: 'Invalid email address'
-      }]
+      errors: [
+        {
+          email: 'Invalid email address'
+        }
+      ]
     }
   }
 }
