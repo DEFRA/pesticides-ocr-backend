@@ -20,23 +20,37 @@ const professionalSectorsValues = [
 
 const quantityTypeValues = ['area', 'amount']
 
+const HTTP_CREATED = 201
+
+const MAX_SHORT_TEXT = 100
+const MAX_BUSINESS_NAME = 200
+const MAX_EMAIL = 254
+const MAX_TELEPHONE = 20
+const MAX_MEMBER_SCHEMES = 50
+const MAX_ADDITIONAL_ADDRESSES = 20
+
 const addressSchema = Joi.object({
-  line1: Joi.string().trim().min(1).max(100).required().messages({
+  line1: Joi.string().trim().min(1).max(MAX_SHORT_TEXT).required().messages({
     'string.empty': "Enter the first line of your business's address",
     'string.max': 'Address line 1 must be 100 characters or less',
     'any.required': "Enter the first line of your business's address"
   }),
-  line2: Joi.string().trim().max(100).allow('').optional().messages({
+  line2: Joi.string().trim().max(MAX_SHORT_TEXT).allow('').optional().messages({
     'string.max': 'Address line 2 must be 100 characters or less'
   }),
-  town: Joi.string().trim().min(1).max(100).required().messages({
+  town: Joi.string().trim().min(1).max(MAX_SHORT_TEXT).required().messages({
     'string.empty': 'Enter town or city',
     'string.max': 'Town or city must be 100 characters or less',
     'any.required': 'Enter town or city'
   }),
-  county: Joi.string().trim().max(100).allow('').optional().messages({
-    'string.max': 'County must be 100 characters or less'
-  }),
+  county: Joi.string()
+    .trim()
+    .max(MAX_SHORT_TEXT)
+    .allow('')
+    .optional()
+    .messages({
+      'string.max': 'County must be 100 characters or less'
+    }),
   postcode: Joi.string()
     .trim()
     .pattern(/^[A-Z]{1,2}[0-9][0-9A-Z]?\s?[0-9][A-Z]{2}$/i)
@@ -49,7 +63,7 @@ const addressSchema = Joi.object({
 })
 
 const contactSchema = Joi.object({
-  name: Joi.string().trim().min(1).max(100).required().messages({
+  name: Joi.string().trim().min(1).max(MAX_SHORT_TEXT).required().messages({
     'string.empty': 'Enter a contact name',
     'string.max': 'Contact name must be 100 characters or less',
     'any.required': 'Enter a contact name'
@@ -58,7 +72,7 @@ const contactSchema = Joi.object({
     .trim()
     .pattern(/^[0-9+()\- ]+$/)
     .min(1)
-    .max(20)
+    .max(MAX_TELEPHONE)
     .required()
     .messages({
       'string.empty': 'Enter a telephone number',
@@ -66,7 +80,7 @@ const contactSchema = Joi.object({
       'string.max': 'Telephone number must be 20 characters or less',
       'any.required': 'Enter a telephone number'
     }),
-  email: Joi.string().email().max(254).required().messages({
+  email: Joi.string().email().max(MAX_EMAIL).required().messages({
     'string.empty': 'Enter an email address',
     'string.email': 'Enter a valid email address',
     'string.max': 'Email address must be 254 characters or less',
@@ -104,11 +118,16 @@ const schema = Joi.object({
       'array.min': 'Select at least one business activity',
       'any.required': 'Select at least one business activity'
     }),
-  businessName: Joi.string().trim().min(1).max(200).required().messages({
-    'string.empty': 'Enter a business name',
-    'string.max': 'Business name must be 200 characters or less',
-    'any.required': 'Enter a business name'
-  }),
+  businessName: Joi.string()
+    .trim()
+    .min(1)
+    .max(MAX_BUSINESS_NAME)
+    .required()
+    .messages({
+      'string.empty': 'Enter a business name',
+      'string.max': 'Business name must be 200 characters or less',
+      'any.required': 'Enter a business name'
+    }),
   address: addressSchema.required().messages({
     'any.required': 'Address is required'
   }),
@@ -150,13 +169,13 @@ const schema = Joi.object({
     .unique()
     .optional(),
   memberSchemes: Joi.array()
-    .items(Joi.string().trim().min(1).max(100))
-    .max(50)
+    .items(Joi.string().trim().min(1).max(MAX_SHORT_TEXT))
+    .max(MAX_MEMBER_SCHEMES)
     .unique()
     .optional(),
   additionalAddresses: Joi.array()
     .items(additionalAddressSchema)
-    .max(20)
+    .max(MAX_ADDITIONAL_ADDRESSES)
     .optional()
 })
 
@@ -193,7 +212,7 @@ export const register = [
       }
 
       const result = await saveRegistration(request.db, value)
-      return h.response({ reference: result.reference }).code(201)
+      return h.response({ reference: result.reference }).code(HTTP_CREATED)
     }
   }
 ]

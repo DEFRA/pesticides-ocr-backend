@@ -22,7 +22,9 @@ export async function saveRegistration(db, data) {
       })
       return { ...result, reference }
     } catch (err) {
-      if (err.code !== MONGO_DUPLICATE_KEY_ERROR) throw err
+      if (err.code !== MONGO_DUPLICATE_KEY_ERROR) {
+        throw err
+      }
     }
   }
 }
