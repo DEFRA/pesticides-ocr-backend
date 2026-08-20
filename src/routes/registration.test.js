@@ -15,6 +15,10 @@ describe('POST /register', () => {
     await server.initialize()
   })
 
+  afterAll(async () => {
+    await server.stop({ timeout: 1000 })
+  })
+
   const validPayload = {
     formSession: {
       businessActivities: ['manufacture', 'market'],
