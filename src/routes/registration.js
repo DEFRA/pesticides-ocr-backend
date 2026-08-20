@@ -186,7 +186,7 @@ export const register = [
     options: {
       validate: {
         payload: Joi.object({
-          formSession: Joi.object().required()
+          formSession: schema.required()
         }).required(),
         failAction: async (_request, _h, err) => {
           throw Boom.badRequest(err.message, {
@@ -199,19 +199,10 @@ export const register = [
       }
     },
     handler: async (request, h) => {
-      const { error, value } = schema.validate(request.payload.formSession, {
-        abortEarly: false
-      })
-      if (error) {
-        throw Boom.badRequest(error.message, {
-          validation: error.details.map((d) => ({
-            field: d.path.join('.'),
-            message: d.message
-          }))
-        })
-      }
-
-      const result = await saveRegistration(request.db, value)
+      const result = await saveRegistration(
+        request.db,
+        request.payload.formSession
+      )
       return h.response({ reference: result.reference }).code(HTTP_CREATED)
     }
   }
