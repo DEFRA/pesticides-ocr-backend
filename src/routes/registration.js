@@ -152,14 +152,11 @@ const schema = Joi.object({
         'any.only': 'Select a quantity type',
         'any.required': 'Select a quantity type'
       }),
-    quantity: Joi.string()
-      .pattern(/^\d+(\.\d+)?$/)
-      .required()
-      .messages({
-        'string.empty': 'Enter a quantity',
-        'string.pattern.base': 'Enter a valid quantity',
-        'any.required': 'Enter a quantity'
-      })
+    quantity: Joi.number().positive().required().messages({
+      'number.base': 'Enter a valid quantity',
+      'number.positive': 'Quantity must be a positive number',
+      'any.required': 'Enter a quantity'
+    })
   })
     .required()
     .messages({ 'any.required': 'Quantity is required' }),
