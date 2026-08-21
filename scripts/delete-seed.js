@@ -6,7 +6,7 @@
  *   node --env-file-if-exists=.env scripts/delete-seed.js
  */
 
-import { MongoClient, ServerApiVersion } from 'mongodb'
+import { MongoClient } from 'mongodb'
 import { fileURLToPath } from 'url'
 
 const MONGO_URI = process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/'
@@ -17,9 +17,7 @@ export async function deleteSeed(
   mongoUri = MONGO_URI,
   mongoDatabase = MONGO_DATABASE
 ) {
-  const client = new MongoClient(mongoUri, {
-    serverApi: ServerApiVersion.v1
-  })
+  const client = new MongoClient(mongoUri)
 
   try {
     await client.connect()

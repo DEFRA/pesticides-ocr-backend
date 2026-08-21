@@ -18,8 +18,7 @@ const { mockCollection, mockClient } = vi.hoisted(() => {
 vi.mock('mongodb', () => ({
   MongoClient: vi.fn().mockImplementation(function () {
     return mockClient
-  }),
-  ServerApiVersion: { v1: '1' }
+  })
 }))
 
 const {

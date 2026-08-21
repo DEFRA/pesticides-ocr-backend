@@ -14,8 +14,7 @@ const { mockCollection, mockDb, mockClient } = vi.hoisted(() => {
 vi.mock('mongodb', () => ({
   MongoClient: vi.fn().mockImplementation(function () {
     return mockClient
-  }),
-  ServerApiVersion: { v1: '1' }
+  })
 }))
 
 const { deleteSeed, SEED_PREFIX } = await import('./delete-seed.js')

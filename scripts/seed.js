@@ -7,7 +7,7 @@
  *   node --env-file-if-exists=.env scripts/seed.js --count=20
  */
 
-import { MongoClient, ServerApiVersion } from 'mongodb'
+import { MongoClient } from 'mongodb'
 import { randomInt } from 'crypto'
 import { fileURLToPath } from 'url'
 import { generateReference } from '../src/services/registration.js'
@@ -117,9 +117,7 @@ export async function seed(
   mongoUri = MONGO_URI,
   mongoDatabase = MONGO_DATABASE
 ) {
-  const client = new MongoClient(mongoUri, {
-    serverApi: ServerApiVersion.v1
-  })
+  const client = new MongoClient(mongoUri)
 
   try {
     await client.connect()
