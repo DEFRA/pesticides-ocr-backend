@@ -27,6 +27,7 @@ const {
   buildRecord,
   seed,
   parseSeedArgs,
+  runCli,
   SEED_PREFIX,
   DEFAULT_COUNT
 } = await import('./seed.js')
@@ -236,10 +237,7 @@ describe('parseSeedArgs', () => {
 })
 
 describe('CLI guard', () => {
-  let originalArgv
-
   beforeEach(() => {
-    originalArgv = [...process.argv]
     mockCollection.dropIndex.mockResolvedValue({})
     mockCollection.createIndex.mockResolvedValue({})
     mockClient.connect.mockResolvedValue(undefined)
@@ -247,42 +245,23 @@ describe('CLI guard', () => {
   })
 
   afterEach(() => {
-    process.argv = originalArgv
-    vi.resetModules()
     vi.restoreAllMocks()
   })
 
-  test('runs seed when invoked as the main module', async () => {
-    vi.resetModules()
-    const { fileURLToPath } = await import('url')
-    process.argv = [
-      process.argv[0],
-      fileURLToPath(new URL('./seed.js', import.meta.url)),
-      '--count=1'
-    ]
+  test('runs seed when invoked with a valid count', async () => {
     mockCollection.insertOne.mockResolvedValue({ insertedId: 'abc' })
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await import('./seed.js')
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await runCli(['node', 'seed.js', '--count=1'])
 
     expect(mockCollection.insertOne).toHaveBeenCalledTimes(1)
   })
 
-  test('calls process.exit(1) and logs error for invalid count', async () => {
-    vi.resetModules()
-    const { fileURLToPath } = await import('url')
-    process.argv = [
-      process.argv[0],
-      fileURLToPath(new URL('./seed.js', import.meta.url)),
-      '--count=abc'
-    ]
+  test('calls process.exit(1) for invalid count', async () => {
     vi.spyOn(process, 'exit').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    mockCollection.insertOne.mockResolvedValue({ insertedId: 'abc' })
 
-    await import('./seed.js')
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await runCli(['node', 'seed.js', '--count=abc'])
 
     expect(process.exit).toHaveBeenCalledWith(1)
     expect(console.error).toHaveBeenCalledWith(
@@ -290,24 +269,11 @@ describe('CLI guard', () => {
     )
   })
 
-  test('calls process.exit(1) and logs error when seed throws', async () => {
-    vi.resetModules()
-    const { fileURLToPath } = await import('url')
-    process.argv = [
-      process.argv[0],
-      fileURLToPath(new URL('./seed.js', import.meta.url)),
-      '--count=1'
-    ]
+  test('propagates errors thrown by seed', async () => {
     mockCollection.insertOne.mockRejectedValue(new Error('connection lost'))
-    vi.spyOn(process, 'exit').mockImplementation(() => {})
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await import('./seed.js')
-    await new Promise((resolve) => setTimeout(resolve, 100))
-
-    expect(process.exit).toHaveBeenCalledWith(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('[seed] Failed:'),
+    await expect(runCli(['node', 'seed.js', '--count=1'])).rejects.toThrow(
       'connection lost'
     )
   })

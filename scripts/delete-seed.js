@@ -36,8 +36,12 @@ export async function deleteSeed(
   }
 }
 
+export async function runCli() {
+  await deleteSeed()
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  deleteSeed().catch((err) => {
+  runCli().catch((err) => {
     console.error('[delete-seed] Failed:', err.message)
     process.exit(1)
   })

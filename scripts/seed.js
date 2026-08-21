@@ -29,8 +29,13 @@ export function pickRandom(arr) {
 }
 
 export function pickSubset(arr) {
-  const count = randomInt(1, arr.length + 1)
-  return [...arr].sort(() => Math.random() - 0.5).slice(0, count)
+  const a = [...arr]
+  const count = randomInt(1, a.length + 1)
+  for (let i = 0; i < count; i++) {
+    const j = randomInt(i, a.length)
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a.slice(0, count)
 }
 
 export function buildRecord() {
@@ -156,15 +161,20 @@ export async function seed(
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const count = parseSeedArgs(process.argv)
+export async function runCli(argv = process.argv) {
+  const count = parseSeedArgs(argv)
 
   if (!Number.isInteger(count) || count < 1) {
     console.error('[seed] --count must be a positive integer')
     process.exit(1)
+    return
   }
 
-  seed(count).catch((err) => {
+  await seed(count)
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  runCli().catch((err) => {
     console.error('[seed] Failed:', err.message)
     process.exit(1)
   })

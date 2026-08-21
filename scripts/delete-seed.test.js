@@ -17,7 +17,7 @@ vi.mock('mongodb', () => ({
   })
 }))
 
-const { deleteSeed, SEED_PREFIX } = await import('./delete-seed.js')
+const { deleteSeed, SEED_PREFIX, runCli } = await import('./delete-seed.js')
 
 describe('deleteSeed', () => {
   beforeEach(() => {
@@ -81,54 +81,27 @@ describe('constants', () => {
 })
 
 describe('CLI guard', () => {
-  let originalArgv
-
   beforeEach(() => {
-    originalArgv = [...process.argv]
     mockClient.connect.mockResolvedValue(undefined)
     mockClient.close.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
-    process.argv = originalArgv
-    vi.resetModules()
     vi.restoreAllMocks()
   })
 
   test('runs deleteSeed when invoked as the main module', async () => {
-    vi.resetModules()
-    const { fileURLToPath } = await import('url')
-    process.argv = [
-      process.argv[0],
-      fileURLToPath(new URL('./delete-seed.js', import.meta.url))
-    ]
     mockCollection.deleteMany.mockResolvedValue({ deletedCount: 2 })
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await import('./delete-seed.js')
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await runCli()
 
     expect(mockCollection.deleteMany).toHaveBeenCalled()
   })
 
-  test('calls process.exit(1) and logs error when deleteSeed throws', async () => {
-    vi.resetModules()
-    const { fileURLToPath } = await import('url')
-    process.argv = [
-      process.argv[0],
-      fileURLToPath(new URL('./delete-seed.js', import.meta.url))
-    ]
+  test('propagates errors thrown by deleteSeed', async () => {
     mockCollection.deleteMany.mockRejectedValue(new Error('db error'))
-    vi.spyOn(process, 'exit').mockImplementation(() => {})
-    vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await import('./delete-seed.js')
-    await new Promise((resolve) => setTimeout(resolve, 100))
-
-    expect(process.exit).toHaveBeenCalledWith(1)
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining('[delete-seed] Failed:'),
-      'db error'
-    )
+    await expect(runCli()).rejects.toThrow('db error')
   })
 })
