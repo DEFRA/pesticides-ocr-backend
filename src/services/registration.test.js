@@ -90,4 +90,29 @@ describe('saveRegistration', () => {
 
     expect(results[0].reference).not.toBe(results[1].reference)
   })
+
+  test('rethrows non-duplicate errors from insertOne', async () => {
+    const networkError = new Error('connection reset')
+    const brokenDb = {
+      collection: () => ({ insertOne: () => Promise.reject(networkError) })
+    }
+
+    await expect(saveRegistration(brokenDb, validData)).rejects.toThrow(
+      'connection reset'
+    )
+  })
+
+  test('rethrows duplicate key errors not on the reference field', async () => {
+    const dupError = Object.assign(new Error('duplicate key'), {
+      code: 11000,
+      keyPattern: { someOtherField: 1 }
+    })
+    const brokenDb = {
+      collection: () => ({ insertOne: () => Promise.reject(dupError) })
+    }
+
+    await expect(saveRegistration(brokenDb, validData)).rejects.toThrow(
+      'duplicate key'
+    )
+  })
 })
