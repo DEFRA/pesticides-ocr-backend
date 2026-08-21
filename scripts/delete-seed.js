@@ -8,10 +8,10 @@
 
 import { MongoClient } from 'mongodb'
 import { fileURLToPath } from 'url'
+import { SEED_PREFIX } from './seed.js'
 
 const MONGO_URI = process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/'
 const MONGO_DATABASE = process.env.MONGO_DATABASE ?? 'pesticides-ocr-backend'
-export const SEED_PREFIX = 'SED-'
 
 export async function deleteSeed(
   mongoUri = MONGO_URI,
@@ -25,7 +25,7 @@ export async function deleteSeed(
     const collection = db.collection('ocr-registration')
 
     const result = await collection.deleteMany({
-      reference: { $regex: `^${SEED_PREFIX}` }
+      reference: { $regex: `^${SEED_PREFIX}-` }
     })
 
     console.log(

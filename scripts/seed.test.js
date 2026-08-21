@@ -105,24 +105,34 @@ describe('buildRecord', () => {
   })
 
   test('optional additionalAddresses entry has correct shape when present', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(1)
-    const { additionalAddresses } = buildRecord()
-    expect(additionalAddresses).toBeDefined()
-    expect(additionalAddresses[0]).toMatchObject({
+    let record
+    for (let i = 0; i < 100; i++) {
+      record = buildRecord()
+      if (record.additionalAddresses) break
+    }
+    expect(record.additionalAddresses).toBeDefined()
+    expect(record.additionalAddresses[0]).toMatchObject({
       address: expect.any(Object),
       contact: expect.any(Object),
       activity: expect.any(Array)
     })
-    vi.restoreAllMocks()
   })
 
-  test('optional fields are absent when Math.random returns 0', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0)
-    const record = buildRecord()
+  test('optional fields can be absent', () => {
+    let record
+    for (let i = 0; i < 100; i++) {
+      record = buildRecord()
+      if (
+        !record.additionalAddresses &&
+        !record.professionalSectors &&
+        !record.memberSchemes
+      ) {
+        break
+      }
+    }
     expect(record.additionalAddresses).toBeUndefined()
     expect(record.professionalSectors).toBeUndefined()
     expect(record.memberSchemes).toBeUndefined()
-    vi.restoreAllMocks()
   })
 })
 

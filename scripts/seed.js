@@ -61,18 +61,18 @@ export function buildRecord() {
     'sqc'
   ]
 
-  const includeAdditional = Math.random() > 0.5
-  const includeSectors = Math.random() > 0.4
-  const includeSchemes = Math.random() > 0.5
+  const includeAdditional = randomInt(2) === 0
+  const includeSectors = randomInt(2) === 0
+  const includeSchemes = randomInt(2) === 0
 
   return {
     businessActivities: pickSubset(businessActivitiesPool),
     businessName: `Seed Company ${randomInt(1, 999)}`,
     address: {
       line1: `${randomInt(1, 200)} Seed Street`,
-      line2: Math.random() > 0.5 ? 'Seed Village' : undefined,
+      line2: randomInt(2) === 0 ? 'Seed Village' : undefined,
       town: pickRandom(['London', 'York', 'Exeter', 'Chester', 'Ipswich']),
-      county: Math.random() > 0.4 ? pickRandom(counties) : undefined,
+      county: randomInt(2) === 0 ? pickRandom(counties) : undefined,
       postcode: pickRandom([
         'AB12 3CD',
         'SW1A 2AA',

@@ -17,7 +17,7 @@ vi.mock('mongodb', () => ({
   })
 }))
 
-const { deleteSeed, SEED_PREFIX, runCli } = await import('./delete-seed.js')
+const { deleteSeed, runCli } = await import('./delete-seed.js')
 
 describe('deleteSeed', () => {
   beforeEach(() => {
@@ -71,12 +71,6 @@ describe('deleteSeed', () => {
   test('uses the correct collection name', async () => {
     await deleteSeed('mongodb://test', 'test-db')
     expect(mockDb.collection).toHaveBeenCalledWith('ocr-registration')
-  })
-})
-
-describe('constants', () => {
-  test('SEED_PREFIX is SED-', () => {
-    expect(SEED_PREFIX).toBe('SED-')
   })
 })
 
