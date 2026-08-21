@@ -1,6 +1,8 @@
 import { randomInt } from 'node:crypto'
 import { config } from '#/config.js'
+import { createLogger } from '#/common/helpers/logging/logger.js'
 
+const logger = createLogger()
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 const MONGO_DUPLICATE_KEY_ERROR = 11000
 
@@ -29,6 +31,7 @@ export async function saveRegistration(db, data, { prefix } = {}) {
       ) {
         throw err
       }
+      logger.warn({ reference }, 'Reference collision, retrying')
     }
   }
 }
