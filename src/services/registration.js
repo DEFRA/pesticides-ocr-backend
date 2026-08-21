@@ -5,6 +5,7 @@ import { createLogger } from '#/common/helpers/logging/logger.js'
 const logger = createLogger()
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 const MONGO_DUPLICATE_KEY_ERROR = 11000
+const MAX_REFERENCE_RETRIES = 10
 
 export function generateReference(prefix = config.get('referencePrefix')) {
   const segment = () =>
@@ -15,7 +16,7 @@ export function generateReference(prefix = config.get('referencePrefix')) {
 export async function saveRegistration(db, data, { prefix } = {}) {
   const collection = db.collection('ocr-registration')
 
-  while (true) {
+  for (let attempt = 1; attempt <= MAX_REFERENCE_RETRIES; attempt++) {
     const reference = generateReference(prefix)
     try {
       const result = await collection.insertOne({
@@ -31,7 +32,11 @@ export async function saveRegistration(db, data, { prefix } = {}) {
       ) {
         throw err
       }
-      logger.warn({ reference }, 'Reference collision, retrying')
+      logger.warn({ reference, attempt }, 'Reference collision, retrying')
     }
   }
+
+  throw new Error(
+    `Failed to generate a unique reference after ${MAX_REFERENCE_RETRIES} attempts`
+  )
 }

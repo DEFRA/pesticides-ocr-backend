@@ -102,4 +102,18 @@ describe('saveRegistration', () => {
       saveRegistration(makeDb(insertOne), validData)
     ).rejects.toThrow('duplicate key')
   })
+
+  test('throws after exhausting max retries on persistent reference collisions', async () => {
+    const dupError = Object.assign(new Error('duplicate key'), {
+      code: 11000,
+      keyPattern: { reference: 1 }
+    })
+    const insertOne = vi.fn().mockRejectedValue(dupError)
+
+    await expect(
+      saveRegistration(makeDb(insertOne), validData)
+    ).rejects.toThrow('Failed to generate a unique reference after 10 attempts')
+
+    expect(insertOne).toHaveBeenCalledTimes(10)
+  })
 })
