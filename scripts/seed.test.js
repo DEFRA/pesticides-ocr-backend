@@ -2,7 +2,6 @@ import { describe, test, expect, vi, beforeEach } from 'vitest'
 
 const { mockCollection, mockClient } = vi.hoisted(() => {
   const mockCollection = {
-    dropIndex: vi.fn(),
     createIndex: vi.fn(),
     insertOne: vi.fn()
   }
@@ -138,7 +137,6 @@ describe('buildRecord', () => {
 
 describe('seed', () => {
   beforeEach(() => {
-    mockCollection.dropIndex.mockResolvedValue({})
     mockCollection.createIndex.mockResolvedValue({})
     mockCollection.insertOne.mockResolvedValue({ insertedId: 'abc' })
     mockClient.connect.mockResolvedValue(undefined)
@@ -241,14 +239,13 @@ describe('parseSeedArgs', () => {
     expect(parseSeedArgs(['node', 'seed.js', '--count=abc'])).toBeNaN()
   })
 
-  test('returns NaN for --count=0', () => {
+  test('returns 0 for --count=0 (treated as invalid by runCli)', () => {
     expect(parseSeedArgs(['node', 'seed.js', '--count=0'])).toBe(0)
   })
 })
 
 describe('CLI guard', () => {
   beforeEach(() => {
-    mockCollection.dropIndex.mockResolvedValue({})
     mockCollection.createIndex.mockResolvedValue({})
     mockClient.connect.mockResolvedValue(undefined)
     mockClient.close.mockResolvedValue(undefined)
