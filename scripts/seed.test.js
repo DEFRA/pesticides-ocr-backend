@@ -23,7 +23,6 @@ vi.mock('mongodb', () => ({
 }))
 
 const {
-  generateReference,
   pickRandom,
   pickSubset,
   buildRecord,
@@ -32,17 +31,6 @@ const {
   SEED_PREFIX,
   DEFAULT_COUNT
 } = await import('./seed.js')
-
-describe('generateReference', () => {
-  test('returns a string matching SED-XXX-XXX format', () => {
-    expect(generateReference()).toMatch(/^SED-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
-  })
-
-  test('generates unique values across calls', () => {
-    const refs = new Set(Array.from({ length: 20 }, () => generateReference()))
-    expect(refs.size).toBeGreaterThan(1)
-  })
-})
 
 describe('pickRandom', () => {
   test('returns an element from the array', () => {

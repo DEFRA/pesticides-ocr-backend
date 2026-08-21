@@ -10,11 +10,11 @@
 import { MongoClient, ServerApiVersion } from 'mongodb'
 import { randomInt } from 'crypto'
 import { fileURLToPath } from 'url'
+import { generateReference } from '../src/services/registration.js'
 
 const MONGO_URI = process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/'
 const MONGO_DATABASE = process.env.MONGO_DATABASE ?? 'pesticides-ocr-backend'
 export const SEED_PREFIX = 'SED'
-const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 const MONGO_DUPLICATE_KEY_ERROR = 11000
 
 export const DEFAULT_COUNT = 10
@@ -22,12 +22,6 @@ export const DEFAULT_COUNT = 10
 export function parseSeedArgs(argv) {
   const countArg = argv.find((a) => a.startsWith('--count='))?.split('=')[1]
   return countArg ? parseInt(countArg, 10) : DEFAULT_COUNT
-}
-
-export function generateReference() {
-  const segment = () =>
-    Array.from({ length: 3 }, () => CHARS[randomInt(CHARS.length)]).join('')
-  return `${SEED_PREFIX}-${segment()}-${segment()}`
 }
 
 export function pickRandom(arr) {
@@ -137,7 +131,7 @@ export async function seed(
     let inserted = 0
 
     while (inserted < count) {
-      const reference = generateReference()
+      const reference = generateReference(SEED_PREFIX)
       try {
         await collection.insertOne({
           ...buildRecord(),
