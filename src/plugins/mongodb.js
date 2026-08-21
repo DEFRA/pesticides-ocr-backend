@@ -39,9 +39,9 @@ export const mongoDb = {
 }
 
 async function createIndexes(db) {
+  const registrations = db.collection('ocr-registration')
+
   await db.collection('mongo-locks').createIndex({ id: 1 })
-  await db.collection('ocr-registration').createIndex({ submittedAt: 1 })
-  await db
-    .collection('ocr-registration')
-    .createIndex({ reference: 1 }, { unique: true })
+  await registrations.createIndex({ submittedAt: 1 })
+  await registrations.createIndex({ reference: 1 }, { unique: true })
 }

@@ -1,6 +1,16 @@
 import { MongoClient } from 'mongodb'
 import { describe, test, expect, beforeAll, afterAll } from 'vitest'
-import { saveRegistration } from '#/services/registration.js'
+import { saveRegistration, generateReference } from '#/services/registration.js'
+
+describe('generateReference', () => {
+  test('uses OCR prefix by default', () => {
+    expect(generateReference()).toMatch(/^OCR-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
+  })
+
+  test('uses a custom prefix when provided', () => {
+    expect(generateReference('SED')).toMatch(/^SED-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
+  })
+})
 
 describe('saveRegistration', () => {
   let client
@@ -39,10 +49,16 @@ describe('saveRegistration', () => {
     quantity: { quantityType: 'area', quantity: '10' }
   }
 
-  test('inserts a document and returns a reference', async () => {
+  test('inserts a document and returns an OCR reference by default', async () => {
     const result = await saveRegistration(db, validData)
 
-    expect(result.reference).toMatch(/^PP-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
+    expect(result.reference).toMatch(/^OCR-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
+  })
+
+  test('uses a custom prefix when provided', async () => {
+    const result = await saveRegistration(db, validData, { prefix: 'SED' })
+
+    expect(result.reference).toMatch(/^SED-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
   })
 
   test('persists submittedAt timestamp', async () => {

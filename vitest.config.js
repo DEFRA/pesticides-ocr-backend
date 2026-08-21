@@ -10,7 +10,7 @@ export default defineConfig({
       provider: 'v8',
       reportsDirectory: './coverage',
       reporter: ['text', 'lcov'],
-      include: ['src/**/*.js'],
+      include: ['src/**/*.js', 'scripts/**/*.js'],
       exclude: [...configDefaults.exclude, 'coverage']
     },
     setupFiles: ['.vite/mongo-memory-server.js', '.vite/setup-files.js']

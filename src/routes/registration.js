@@ -53,7 +53,7 @@ const addressSchema = Joi.object({
     }),
   postcode: Joi.string()
     .trim()
-    .pattern(/^[A-Z]{1,2}[0-9][0-9A-Z]?\s?[0-9][A-Z]{2}$/i)
+    .pattern(/^[A-Z]{1,2}\d[\dA-Z]?\s?\d[A-Z]{2}$/i)
     .required()
     .messages({
       'string.empty': 'Enter your postcode',

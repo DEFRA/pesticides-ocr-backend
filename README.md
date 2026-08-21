@@ -1,6 +1,4 @@
-# pesticides-ocr-backend
-
-Core delivery platform Node.js Backend Template.
+# Pesticides OCR Register backend
 
 - [Requirements](#requirements)
   - [Node.js](#nodejs)
@@ -10,13 +8,10 @@ Core delivery platform Node.js Backend Template.
   - [Testing](#testing)
   - [Production](#production)
   - [Npm scripts](#npm-scripts)
-  - [Update dependencies](#update-dependencies)
   - [Formatting](#formatting)
     - [Windows prettier issue](#windows-prettier-issue)
 - [API endpoints](#api-endpoints)
-- [Development helpers](#development-helpers)
-  - [MongoDB Locks](#mongodb-locks)
-  - [Proxy](#proxy)
+- [Database seeding](#database-seeding)
 - [Docker](#docker)
   - [Development image](#development-image)
   - [Production image](#production-image)
@@ -104,17 +99,6 @@ To view them in your command line run:
 npm run
 ```
 
-### Update dependencies
-
-To update dependencies use [npm-check-updates](https://github.com/raineorshine/npm-check-updates):
-
-> The following script is a good start. Check out all the options on
-> the [npm-check-updates](https://github.com/raineorshine/npm-check-updates)
-
-```bash
-ncu --interactive --format group
-```
-
 ### Formatting
 
 #### Windows prettier issue
@@ -127,78 +111,76 @@ git config --global core.autocrlf false
 
 ## API endpoints
 
-| Endpoint             | Description                    |
-| :------------------- | :----------------------------- |
-| `GET: /health`       | Health                         |
-| `GET: /example    `  | Example API (remove as needed) |
-| `GET: /example/<id>` | Example API (remove as needed) |
+| Endpoint    | Method | Description                                 |
+| :---------- | :----- | :------------------------------------------ |
+| `/health`   | GET    | Health check                                |
+| `/register` | POST   | Submit a pesticide registration application |
 
-## Development helpers
+### POST /register
 
-### MongoDB Locks
+Accepts a JSON body with a `formSession` object containing the registration form data.
 
-If you require a write lock for Mongo you can acquire it via `server.locker` or `request.locker`:
+**Request body:**
 
-```javascript
-async function doStuff(server) {
-  const lock = await server.locker.lock('unique-resource-name')
-
-  if (!lock) {
-    // Lock unavailable
-    return
-  }
-
-  try {
-    // do stuff
-  } finally {
-    await lock.free()
+```json
+{
+  "formSession": {
+    "businessActivities": ["manufacture", "market"],
+    "businessName": "Company Name",
+    "address": {
+      "line1": "1 Example Street",
+      "line2": "Village",
+      "town": "Town",
+      "county": "County",
+      "postcode": "AB12 3CD"
+    },
+    "primaryContact": {
+      "name": "Full Name",
+      "telephone": "01234567890",
+      "email": "contact@example.com"
+    },
+    "addressActivities": ["use", "store"],
+    "quantity": {
+      "quantityType": "area",
+      "quantity": "50"
+    },
+    "professionalSectors": ["agriculture-horticulture"],
+    "memberSchemes": ["BASIS"],
+    "additionalAddresses": []
   }
 }
 ```
 
-Keep it small and atomic.
+**Response (201):**
 
-You may use **using** for the lock resource management.
-Note test coverage reports do not like that syntax.
-
-```javascript
-async function doStuff(server) {
-  await using lock = await server.locker.lock('unique-resource-name')
-
-  if (!lock) {
-    // Lock unavailable
-    return
-  }
-
-  // do stuff
-
-  // lock automatically released
-}
+```json
+{ "reference": "OCR-ABC-123" }
 ```
 
-Helper methods are also available in `/src/helpers/mongo-lock.js`.
+Reference numbers use the format `{PREFIX}-XXX-XXX` (uppercase alphanumeric). The prefix defaults to `OCR` and is configurable via the `REFERENCE_PREFIX` environment variable.
 
-### Proxy
+## Database seeding
 
-We are using forward-proxy which is set up by default. To make use of this: `import { fetch } from 'undici'` then
-because of the `setGlobalDispatcher(new ProxyAgent(proxyUrl))` calls will use the ProxyAgent Dispatcher
+Seed scripts are available for local development and testing.
 
-If you are not using Wreck, Axios or Undici or a similar http that uses `Request`. Then you may have to provide the
-proxy dispatcher:
+### Seed records
 
-To add the dispatcher to your own client:
+Insert sample registration records (uses `SED-XXX-XXX` references to distinguish from real data):
 
-```javascript
-import { ProxyAgent } from 'undici'
-
-return await fetch(url, {
-  dispatcher: new ProxyAgent({
-    uri: proxyUrl,
-    keepAliveTimeout: 10,
-    keepAliveMaxTimeout: 10
-  })
-})
+```bash
+npm run db:seed                 # insert 10 records (default)
+npm run db:seed -- --count=50   # insert 50 records
 ```
+
+### Delete seeded records
+
+Remove all seeded records (those with a `SED-` reference prefix):
+
+```bash
+npm run db:seed:delete
+```
+
+Both scripts read `MONGO_URI` and `MONGO_DATABASE` from your `.env` file (or environment).
 
 ## Docker
 
@@ -230,15 +212,6 @@ docker compose up --build -d
 
 Mock AWS resources can be created when Floci starts up by editing the scripts in `./compose/floci/start.d/`.
 MongoDB records can also be created when Mongo starts by editing the scripts in `./compose/mongo/`.
-
-### Dependabot
-
-We have added an example dependabot configuration file to the repository. You can enable it by renaming
-the [.github/example.dependabot.yml](.github/example.dependabot.yml) to `.github/dependabot.yml`
-
-### SonarCloud
-
-Instructions for setting up SonarCloud can be found in [sonar-project.properties](./sonar-project.properties)
 
 ## Licence
 

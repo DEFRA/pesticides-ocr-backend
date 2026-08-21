@@ -1,6 +1,6 @@
 {
   "name": "pesticides-ocr-backend",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "pesticides-ocr-backend",
   "main": "src/index.js",
   "type": "module",
@@ -8,6 +8,8 @@
     "node": ">=24"
   },
   "scripts": {
+    "db:seed": "node --env-file-if-exists=.env scripts/seed.js",
+    "db:seed:delete": "node --env-file-if-exists=.env scripts/delete-seed.js",
     "dev": "AWS_EMF_ENVIRONMENT=Local NODE_ENV=development npm run server:watch",
     "dev:debug": "AWS_EMF_ENVIRONMENT=Local NODE_ENV=development npm run server:debug",
     "docker:dev": "npm run dev",
