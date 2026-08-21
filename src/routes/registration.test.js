@@ -109,6 +109,23 @@ describe('POST /register', () => {
     })
   })
 
+  describe('service errors', () => {
+    test('returns 500 when saveRegistration throws', async () => {
+      mockSaveRegistration.mockRejectedValue(new Error('db connection lost'))
+
+      const response = await server.inject({
+        method: 'POST',
+        url: '/register',
+        payload: validPayload
+      })
+
+      expect(response.statusCode).toBe(500)
+      expect(JSON.parse(response.payload).message).toBe(
+        'An internal server error occurred'
+      )
+    })
+  })
+
   describe('validation failures', () => {
     test('returns 400 when formSession is missing', async () => {
       const response = await server.inject({

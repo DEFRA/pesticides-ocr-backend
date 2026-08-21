@@ -199,11 +199,16 @@ export const register = [
       }
     },
     handler: async (request, h) => {
-      const result = await saveRegistration(
-        request.db,
-        request.payload.formSession
-      )
-      return h.response({ reference: result.reference }).code(HTTP_CREATED)
+      try {
+        const result = await saveRegistration(
+          request.db,
+          request.payload.formSession
+        )
+        return h.response({ reference: result.reference }).code(HTTP_CREATED)
+      } catch (err) {
+        request.log(['error'], err)
+        throw Boom.internal('Failed to save registration')
+      }
     }
   }
 ]
