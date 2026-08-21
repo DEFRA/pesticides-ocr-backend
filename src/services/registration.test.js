@@ -1,6 +1,9 @@
-import { MongoClient } from 'mongodb'
-import { describe, test, expect, beforeAll, afterAll } from 'vitest'
+import { describe, test, expect, vi } from 'vitest'
 import { saveRegistration, generateReference } from '#/services/registration.js'
+
+function makeDb(insertOne) {
+  return { collection: () => ({ insertOne }) }
+}
 
 describe('generateReference', () => {
   test('uses OCR prefix by default', () => {
@@ -13,33 +16,10 @@ describe('generateReference', () => {
 })
 
 describe('saveRegistration', () => {
-  let client
-  let db
-
-  beforeAll(async () => {
-    client = await MongoClient.connect(process.env.MONGO_URI)
-    db = client.db('test-registration')
-    await db
-      .collection('ocr-registration')
-      .createIndex({ reference: 1 }, { unique: true })
-  })
-
-  afterAll(async () => {
-    await db
-      .collection('ocr-registration')
-      .drop()
-      .catch(() => {})
-    await client.close()
-  })
-
   const validData = {
     businessName: 'Test Co',
     businessActivities: ['manufacture'],
-    address: {
-      line1: '1 Test St',
-      town: 'Testville',
-      postcode: 'TE1 1ST'
-    },
+    address: { line1: '1 Test St', town: 'Testville', postcode: 'TE1 1ST' },
     primaryContact: {
       name: 'Test User',
       telephone: '01234567890',
@@ -49,57 +29,66 @@ describe('saveRegistration', () => {
     quantity: { quantityType: 'area', quantity: '10' }
   }
 
-  test('inserts a document and returns an OCR reference by default', async () => {
-    const result = await saveRegistration(db, validData)
+  test('returns an OCR reference by default', async () => {
+    const insertOne = vi.fn().mockResolvedValue({ insertedId: 'abc' })
+    const result = await saveRegistration(makeDb(insertOne), validData)
 
     expect(result.reference).toMatch(/^OCR-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
   })
 
   test('uses a custom prefix when provided', async () => {
-    const result = await saveRegistration(db, validData, { prefix: 'SED' })
+    const insertOne = vi.fn().mockResolvedValue({ insertedId: 'abc' })
+    const result = await saveRegistration(makeDb(insertOne), validData, {
+      prefix: 'SED'
+    })
 
     expect(result.reference).toMatch(/^SED-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
   })
 
-  test('persists submittedAt timestamp', async () => {
-    const result = await saveRegistration(db, validData)
+  test('passes submittedAt timestamp to insertOne', async () => {
+    const insertOne = vi.fn().mockResolvedValue({ insertedId: 'abc' })
+    await saveRegistration(makeDb(insertOne), validData)
 
-    const doc = await db
-      .collection('ocr-registration')
-      .findOne({ reference: result.reference })
-
-    expect(doc.submittedAt).toBeInstanceOf(Date)
+    expect(insertOne).toHaveBeenCalledWith(
+      expect.objectContaining({ submittedAt: expect.any(Date) })
+    )
   })
 
-  test('persists all provided data fields', async () => {
-    const result = await saveRegistration(db, validData)
+  test('passes all provided data fields to insertOne', async () => {
+    const insertOne = vi.fn().mockResolvedValue({ insertedId: 'abc' })
+    await saveRegistration(makeDb(insertOne), validData)
 
-    const doc = await db
-      .collection('ocr-registration')
-      .findOne({ reference: result.reference })
-
-    expect(doc.businessName).toBe(validData.businessName)
-    expect(doc.businessActivities).toEqual(validData.businessActivities)
+    expect(insertOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        businessName: validData.businessName,
+        businessActivities: validData.businessActivities
+      })
+    )
   })
 
-  test('generates a unique reference on duplicate collision', async () => {
-    const results = await Promise.all([
-      saveRegistration(db, validData),
-      saveRegistration(db, validData)
-    ])
+  test('retries with a new reference on duplicate reference collision', async () => {
+    const dupError = Object.assign(new Error('duplicate key'), {
+      code: 11000,
+      keyPattern: { reference: 1 }
+    })
+    const insertOne = vi
+      .fn()
+      .mockRejectedValueOnce(dupError)
+      .mockResolvedValueOnce({ insertedId: 'abc' })
 
-    expect(results[0].reference).not.toBe(results[1].reference)
+    const result = await saveRegistration(makeDb(insertOne), validData)
+
+    expect(insertOne).toHaveBeenCalledTimes(2)
+    expect(result.reference).toMatch(/^OCR-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
   })
 
   test('rethrows non-duplicate errors from insertOne', async () => {
     const networkError = new Error('connection reset')
-    const brokenDb = {
-      collection: () => ({ insertOne: () => Promise.reject(networkError) })
-    }
+    const insertOne = vi.fn().mockRejectedValue(networkError)
 
-    await expect(saveRegistration(brokenDb, validData)).rejects.toThrow(
-      'connection reset'
-    )
+    await expect(
+      saveRegistration(makeDb(insertOne), validData)
+    ).rejects.toThrow('connection reset')
   })
 
   test('rethrows duplicate key errors not on the reference field', async () => {
@@ -107,12 +96,10 @@ describe('saveRegistration', () => {
       code: 11000,
       keyPattern: { someOtherField: 1 }
     })
-    const brokenDb = {
-      collection: () => ({ insertOne: () => Promise.reject(dupError) })
-    }
+    const insertOne = vi.fn().mockRejectedValue(dupError)
 
-    await expect(saveRegistration(brokenDb, validData)).rejects.toThrow(
-      'duplicate key'
-    )
+    await expect(
+      saveRegistration(makeDb(insertOne), validData)
+    ).rejects.toThrow('duplicate key')
   })
 })
