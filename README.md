@@ -154,10 +154,10 @@ Accepts a JSON body with a `formSession` object containing the registration form
 **Response (201):**
 
 ```json
-{ "reference": "OCR-ABC-123" }
+{ "reference": "PPP-ABC-123" }
 ```
 
-Reference numbers use the format `{PREFIX}-XXX-XXX` (uppercase alphanumeric). The prefix defaults to `OCR` and is configurable via the `REFERENCE_PREFIX` environment variable.
+Reference numbers use the format `{PREFIX}-XXX-XXX` (uppercase alphanumeric). The prefix defaults to `PPP` and is configurable via the `REFERENCE_PREFIX` environment variable.
 
 ## Database seeding
 

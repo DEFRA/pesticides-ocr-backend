@@ -137,9 +137,9 @@ export const config = convict({
     }
   },
   referencePrefix: {
-    doc: 'Prefix used when generating registration reference numbers (e.g. OCR produces OCR-XXX-XXX)',
+    doc: 'Prefix used when generating registration reference numbers (e.g. PPP produces PP-XXX-XXX)',
     format: String,
-    default: 'OCR',
+    default: 'PPP',
     env: 'REFERENCE_PREFIX'
   },
   notify: {

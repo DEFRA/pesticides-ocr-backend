@@ -6,8 +6,8 @@ function makeDb(insertOne) {
 }
 
 describe('generateReference', () => {
-  test('uses OCR prefix by default', () => {
-    expect(generateReference()).toMatch(/^OCR-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
+  test('uses PPP prefix by default', () => {
+    expect(generateReference()).toMatch(/^PPP-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
   })
 
   test('uses a custom prefix when provided', () => {
@@ -29,11 +29,11 @@ describe('saveRegistration', () => {
     quantity: { quantityType: 'area', quantity: '10' }
   }
 
-  test('returns an OCR reference by default', async () => {
+  test('returns an PPP reference by default', async () => {
     const insertOne = vi.fn().mockResolvedValue({ insertedId: 'abc' })
     const result = await saveRegistration(makeDb(insertOne), validData)
 
-    expect(result.reference).toMatch(/^OCR-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
+    expect(result.reference).toMatch(/^PPP-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
   })
 
   test('uses a custom prefix when provided', async () => {
@@ -79,7 +79,7 @@ describe('saveRegistration', () => {
     const result = await saveRegistration(makeDb(insertOne), validData)
 
     expect(insertOne).toHaveBeenCalledTimes(2)
-    expect(result.reference).toMatch(/^OCR-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
+    expect(result.reference).toMatch(/^PPP-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
   })
 
   test('rethrows non-duplicate errors from insertOne', async () => {
