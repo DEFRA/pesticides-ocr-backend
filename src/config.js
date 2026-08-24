@@ -8,6 +8,7 @@ convict.addFormats(convictFormatWithValidator)
 
 const isProduction = process.env.NODE_ENV === 'production'
 const isTest = process.env.NODE_ENV === 'test'
+const isDevelopment = process.env.NODE_ENV === 'development'
 
 const notifyKeyMode = process.env.NOTIFY_KEY_MODE ?? 'test'
 const localNotifyApiKey =
@@ -19,6 +20,11 @@ const localNotifyApiKey =
 convict.addFormats(convictFormatWithValidator)
 
 export const config = convict({
+  isDevelopment: {
+    doc: 'Whether the app is running in development mode, derived from NODE_ENV',
+    format: Boolean,
+    default: isDevelopment
+  },
   serviceVersion: {
     doc: 'The service version, this variable is injected into your docker container in CDP environments',
     format: String,
