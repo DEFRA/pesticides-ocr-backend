@@ -142,6 +142,12 @@ export const config = convict({
       env: 'TRACING_HEADER'
     }
   },
+  referencePrefix: {
+    doc: 'Prefix used when generating registration reference numbers (e.g. PPP produces PP-XXX-XXX)',
+    format: String,
+    default: 'PPP',
+    env: 'REFERENCE_PREFIX'
+  },
   notify: {
     keyMode: {
       doc: 'Which local Notify key to use: team sends real email to the guestlist, test sends none. Ignored when NOTIFY_API_KEY is set.',

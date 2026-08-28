@@ -1,6 +1,6 @@
 {
   "name": "pesticides-ocr-backend",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "pesticides-ocr-backend",
   "main": "src/index.js",
   "type": "module",
@@ -8,6 +8,8 @@
     "node": ">=24"
   },
   "scripts": {
+    "db:seed": "node --env-file-if-exists=.env scripts/seed.js",
+    "db:seed:delete": "node --env-file-if-exists=.env scripts/delete-seed.js",
     "dev": "AWS_EMF_ENVIRONMENT=Local NODE_ENV=development npm run server:watch",
     "dev:debug": "AWS_EMF_ENVIRONMENT=Local NODE_ENV=development npm run server:debug",
     "docker:dev": "npm run dev",
@@ -30,7 +32,7 @@
   "author": "Defra DDTS",
   "license": "OGL-UK-3.0",
   "dependencies": {
-    "@aws-sdk/credential-providers": "3.1104.0",
+    "@aws-sdk/credential-providers": "3.1114.0",
     "@defra/cdp-auditing": "0.6.1",
     "@defra/cdp-metrics": "0.6.0",
     "@defra/hapi-secure-context": "0.4.0",
@@ -45,7 +47,7 @@
     "hapi-pino": "13.0.0",
     "hapi-pulse": "3.0.1",
     "https-proxy-agent": "7.0.6",
-    "joi": "18.2.3",
+    "joi": "18.2.5",
     "mongo-locks": "3.2.0",
     "mongodb": "7.5.0",
     "notifications-node-client": "8.4.0",
@@ -54,18 +56,18 @@
     "undici": "8.10.0"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "4.1.10",
-    "eslint": "9.39.2",
+    "@vitest/coverage-v8": "4.1.11",
+    "eslint": "9.39.5",
     "husky": "9.1.7",
     "neostandard": "0.13.0",
     "nodemon": "3.1.14",
     "npm-run-all": "4.1.5",
     "prettier": "3.9.6",
-    "vitest": "4.1.10",
+    "vitest": "4.1.11",
     "vitest-fetch-mock": "0.4.5",
     "vitest-mongodb": "1.0.3"
   },
   "overrides": {
-    "joi": "18.2.3"
+    "joi": "18.2.5"
   }
 }

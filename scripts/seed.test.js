@@ -1,0 +1,287 @@
+import { describe, test, expect, vi, beforeEach } from 'vitest'
+
+const { mockCollection, mockClient } = vi.hoisted(() => {
+  const mockCollection = {
+    createIndex: vi.fn(),
+    insertOne: vi.fn()
+  }
+  const mockDb = { collection: vi.fn().mockReturnValue(mockCollection) }
+  const mockClient = {
+    connect: vi.fn(),
+    db: vi.fn().mockReturnValue(mockDb),
+    close: vi.fn()
+  }
+  return { mockCollection, mockClient }
+})
+
+vi.mock('mongodb', () => ({
+  MongoClient: vi.fn().mockImplementation(function () {
+    return mockClient
+  })
+}))
+
+const {
+  pickRandom,
+  pickSubset,
+  buildRecord,
+  seed,
+  parseSeedArgs,
+  runCli,
+  SEED_PREFIX,
+  DEFAULT_COUNT
+} = await import('./seed.js')
+
+describe('pickRandom', () => {
+  test('returns an element from the array', () => {
+    const arr = ['a', 'b', 'c']
+    expect(arr).toContain(pickRandom(arr))
+  })
+
+  test('works with a single-element array', () => {
+    expect(pickRandom(['only'])).toBe('only')
+  })
+})
+
+describe('pickSubset', () => {
+  test('returns a non-empty array', () => {
+    expect(pickSubset(['a', 'b', 'c']).length).toBeGreaterThan(0)
+  })
+
+  test('all elements come from the source array', () => {
+    const source = ['use', 'store', 'records']
+    const subset = pickSubset(source)
+    expect(subset.every((item) => source.includes(item))).toBe(true)
+  })
+
+  test('returns the only element for a single-element array', () => {
+    expect(pickSubset(['solo'])).toEqual(['solo'])
+  })
+})
+
+describe('buildRecord', () => {
+  test('returns all required top-level fields', () => {
+    const record = buildRecord()
+    expect(record).toMatchObject({
+      businessActivities: expect.any(Array),
+      businessName: expect.stringMatching(/^Seed Company \d+$/),
+      address: expect.any(Object),
+      primaryContact: expect.any(Object),
+      addressActivities: expect.any(Array),
+      quantity: expect.any(Object)
+    })
+  })
+
+  test('address contains required fields with valid postcode', () => {
+    const { address } = buildRecord()
+    expect(address.line1).toMatch(/^\d+ Seed Street$/)
+    expect(address.town).toBeTruthy()
+    expect(address.postcode).toMatch(/^[A-Z]{1,2}\d[\dA-Z]?\s?\d[A-Z]{2}$/i)
+  })
+
+  test('primaryContact contains name, telephone and email', () => {
+    const { primaryContact } = buildRecord()
+    expect(primaryContact.name).toBeTruthy()
+    expect(primaryContact.telephone).toMatch(/^0\d+$/)
+    expect(primaryContact.email).toMatch(/^seed\d+@example\.com$/)
+  })
+
+  test('quantity has a valid quantityType', () => {
+    const { quantity } = buildRecord()
+    expect(['area', 'amount']).toContain(quantity.quantityType)
+    expect(Number(quantity.quantity)).toBeGreaterThan(0)
+  })
+
+  test('businessActivities contains only valid values', () => {
+    const valid = [
+      'manufacture',
+      'market',
+      'seller-professional',
+      'seller-amateur',
+      'use-professional'
+    ]
+    const { businessActivities } = buildRecord()
+    expect(businessActivities.every((a) => valid.includes(a))).toBe(true)
+  })
+
+  test('optional additionalAddresses entry has correct shape when present', () => {
+    let record
+    for (let i = 0; i < 100; i++) {
+      record = buildRecord()
+      if (record.additionalAddresses) break
+    }
+    expect(record.additionalAddresses).toBeDefined()
+    expect(record.additionalAddresses[0]).toMatchObject({
+      address: expect.any(Object),
+      contact: expect.any(Object),
+      activity: expect.any(Array)
+    })
+  })
+
+  test('optional fields can be absent', () => {
+    let record
+    for (let i = 0; i < 100; i++) {
+      record = buildRecord()
+      if (
+        !record.additionalAddresses &&
+        !record.professionalSectors &&
+        !record.memberSchemes
+      ) {
+        break
+      }
+    }
+    expect(record.additionalAddresses).toBeUndefined()
+    expect(record.professionalSectors).toBeUndefined()
+    expect(record.memberSchemes).toBeUndefined()
+  })
+})
+
+describe('seed', () => {
+  beforeEach(() => {
+    mockCollection.createIndex.mockResolvedValue({})
+    mockCollection.insertOne.mockResolvedValue({ insertedId: 'abc' })
+    mockClient.connect.mockResolvedValue(undefined)
+    mockClient.close.mockResolvedValue(undefined)
+  })
+
+  test('inserts the specified number of records', async () => {
+    await seed(3, 'mongodb://test', 'test-db')
+    expect(mockCollection.insertOne).toHaveBeenCalledTimes(3)
+  })
+
+  test('each inserted record has a SED- reference and submittedAt', async () => {
+    await seed(2, 'mongodb://test', 'test-db')
+    for (const call of mockCollection.insertOne.mock.calls) {
+      expect(call[0].reference).toMatch(/^SED-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
+      expect(call[0].submittedAt).toBeInstanceOf(Date)
+    }
+  })
+
+  test('creates the reference unique index on startup', async () => {
+    await seed(1, 'mongodb://test', 'test-db')
+    expect(mockCollection.createIndex).toHaveBeenCalledWith(
+      { reference: 1 },
+      { unique: true }
+    )
+  })
+
+  test('logs each inserted reference', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await seed(2, 'mongodb://test', 'test-db')
+    expect(console.log).toHaveBeenCalledTimes(3) // 2 inserts + 1 done
+    vi.restoreAllMocks()
+  })
+
+  test('logs done message on completion', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await seed(1, 'mongodb://test', 'test-db')
+    const calls = console.log.mock.calls.map((c) => c[0])
+    expect(calls.some((m) => m.includes('Done'))).toBe(true)
+    vi.restoreAllMocks()
+  })
+
+  test('retries silently on reference field duplicate key error', async () => {
+    mockCollection.insertOne
+      .mockRejectedValueOnce({ code: 11000, keyPattern: { reference: 1 } })
+      .mockResolvedValue({ insertedId: 'abc' })
+
+    await seed(1, 'mongodb://test', 'test-db')
+
+    expect(mockCollection.insertOne).toHaveBeenCalledTimes(2)
+  })
+
+  test('throws on duplicate key error for a non-reference field', async () => {
+    mockCollection.insertOne.mockRejectedValue({
+      code: 11000,
+      keyPattern: { referenceNumber: 1 }
+    })
+
+    await expect(seed(1, 'mongodb://test', 'test-db')).rejects.toMatchObject({
+      keyPattern: { referenceNumber: 1 }
+    })
+  })
+
+  test('throws on non-duplicate MongoDB errors', async () => {
+    mockCollection.insertOne.mockRejectedValue(new Error('network failure'))
+
+    await expect(seed(1, 'mongodb://test', 'test-db')).rejects.toThrow(
+      'network failure'
+    )
+  })
+
+  test('closes the client even when an error is thrown', async () => {
+    mockCollection.insertOne.mockRejectedValue(new Error('boom'))
+
+    await expect(seed(1, 'mongodb://test', 'test-db')).rejects.toThrow()
+    expect(mockClient.close).toHaveBeenCalled()
+  })
+})
+
+describe('constants', () => {
+  test('SEED_PREFIX is SED', () => {
+    expect(SEED_PREFIX).toBe('SED')
+  })
+
+  test('DEFAULT_COUNT is 10', () => {
+    expect(DEFAULT_COUNT).toBe(10)
+  })
+})
+
+describe('parseSeedArgs', () => {
+  test('returns DEFAULT_COUNT when no --count argument is present', () => {
+    expect(parseSeedArgs(['node', 'seed.js'])).toBe(DEFAULT_COUNT)
+  })
+
+  test('parses a valid --count argument', () => {
+    expect(parseSeedArgs(['node', 'seed.js', '--count=25'])).toBe(25)
+  })
+
+  test('returns NaN for a non-numeric --count value', () => {
+    expect(parseSeedArgs(['node', 'seed.js', '--count=abc'])).toBeNaN()
+  })
+
+  test('returns 0 for --count=0 (treated as invalid by runCli)', () => {
+    expect(parseSeedArgs(['node', 'seed.js', '--count=0'])).toBe(0)
+  })
+})
+
+describe('CLI guard', () => {
+  beforeEach(() => {
+    mockCollection.createIndex.mockResolvedValue({})
+    mockClient.connect.mockResolvedValue(undefined)
+    mockClient.close.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  test('runs seed when invoked with a valid count', async () => {
+    mockCollection.insertOne.mockResolvedValue({ insertedId: 'abc' })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await runCli(['node', 'seed.js', '--count=1'])
+
+    expect(mockCollection.insertOne).toHaveBeenCalledTimes(1)
+  })
+
+  test('calls process.exit(1) for invalid count', async () => {
+    vi.spyOn(process, 'exit').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await runCli(['node', 'seed.js', '--count=abc'])
+
+    expect(process.exit).toHaveBeenCalledWith(1)
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('--count must be a positive integer')
+    )
+  })
+
+  test('propagates errors thrown by seed', async () => {
+    mockCollection.insertOne.mockRejectedValue(new Error('connection lost'))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await expect(runCli(['node', 'seed.js', '--count=1'])).rejects.toThrow(
+      'connection lost'
+    )
+  })
+})
