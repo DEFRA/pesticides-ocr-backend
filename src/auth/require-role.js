@@ -9,7 +9,12 @@ import { STRATEGY_NAME } from './strategy-name.js'
 // include any required value gets 403.
 //
 //   route.options.auth = requireRole('case_officer')
-//   route.options.auth = requireRole(config.get('auth.entra.roleValues'))
+//
+// `auth.entra.roleValues` is a comma-separated string, so split + trim it before
+// passing (as whoami.js does) — don't pass it whole, or 'case_officer,admin'
+// becomes a single literal scope that never matches:
+//   const roles = config.get('auth.entra.roleValues').split(',').map((r) => r.trim())
+//   route.options.auth = requireRole(...roles)
 //
 // Note: Hapi scope matching is case-sensitive, so the configured role value must
 // match the Entra app-role value exactly.
@@ -18,9 +23,9 @@ export function requireRole(...roles) {
   if (scope.length === 0) {
     // Fail loud at route-definition time rather than relying on Hapi's incidental
     // "scope must contain at least 1 item" schema error, which hides the cause
-    // (usually an empty ENTRA_CASE_OFFICER_ROLE_VALUE).
+    // (usually an empty ENTRA_CASE_OFFICER_ROLE_VALUES).
     throw new Error(
-      'requireRole: at least one role value is required (check ENTRA_CASE_OFFICER_ROLE_VALUE)'
+      'requireRole: at least one role value is required (check ENTRA_CASE_OFFICER_ROLE_VALUES)'
     )
   }
   return {

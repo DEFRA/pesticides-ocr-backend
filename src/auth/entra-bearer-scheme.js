@@ -14,15 +14,16 @@ function extractBearerToken(request) {
 
 // Map a verified/decoded token payload onto Hapi credentials. `scope` is set to
 // the token's app roles so routes can authorise with Hapi's built-in scope
-// checking (see require-role.js).
+// checking (see require-role.js). Only the fields the app needs are exposed —
+// the raw token claims (email, oid, tid, ipaddr, …) are deliberately NOT carried
+// on credentials, so a handler that logs/returns credentials can't leak PII.
 function toCredentials(payload) {
   const roles = Array.isArray(payload.roles) ? payload.roles : []
   return {
     subject: payload.sub ?? '',
     name: payload.name ?? '',
     roles,
-    scope: roles,
-    claims: payload
+    scope: roles
   }
 }
 

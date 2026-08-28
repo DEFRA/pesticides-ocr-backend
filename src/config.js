@@ -208,10 +208,10 @@ export const config = convict({
         env: 'ENTRA_JWKS_URI'
       },
       roleValues: {
-        doc: 'Entra app-role value(s) that grant case-officer access, comma-separated; enforced as a route scope',
+        doc: 'Entra app-role value(s) that grant case-officer access, comma-separated (e.g. "case_officer" or "case_officer,admin"); enforced as a route scope',
         format: String,
         default: 'case_officer',
-        env: 'ENTRA_CASE_OFFICER_ROLE_VALUE'
+        env: 'ENTRA_CASE_OFFICER_ROLE_VALUES'
       }
     }
   }
