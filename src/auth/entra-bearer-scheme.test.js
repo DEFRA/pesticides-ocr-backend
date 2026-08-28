@@ -152,7 +152,8 @@ describe('entraBearerScheme — live mode (signature + claim verification)', () 
     const { statusCode } = await server.inject({
       method: 'GET',
       url: '/protected',
-      headers: { authorization: 'Basic dXNlcjpwYXNz' }
+      // A non-Bearer scheme with a dummy, non-credential value (not a secret).
+      headers: { authorization: 'Basic not-a-real-credential' }
     })
     expect(statusCode).toBe(401)
   })
