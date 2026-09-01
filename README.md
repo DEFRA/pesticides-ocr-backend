@@ -111,10 +111,11 @@ git config --global core.autocrlf false
 
 ## API endpoints
 
-| Endpoint    | Method | Description                                 |
-| :---------- | :----- | :------------------------------------------ |
-| `/health`   | GET    | Health check                                |
-| `/register` | POST   | Submit a pesticide registration application |
+| Endpoint    | Method | Description                                          |
+| :---------- | :----- | :--------------------------------------------------- |
+| `/health`   | GET    | Health check                                         |
+| `/register` | POST   | Submit a pesticide registration application          |
+| `/whoami`   | GET    | Authenticated caller's identity (case-officer scope) |
 
 ### POST /register
 
@@ -158,6 +159,32 @@ Accepts a JSON body with a `formSession` object containing the registration form
 ```
 
 Reference numbers use the format `{PREFIX}-XXX-XXX` (uppercase alphanumeric). The prefix defaults to `PPP` and is configurable via the `REFERENCE_PREFIX` environment variable.
+
+## API authorisation (EQ-413)
+
+Protected routes require an `Authorization: Bearer <jwt>` header carrying a Microsoft Entra token. The reusable pieces live in [`src/auth/`](./src/auth):
+
+- an `entra-bearer` Hapi auth **strategy** — in `live` mode it verifies the JWT signature against the Entra tenant JWKS and checks issuer, audience and expiry; in `mock` mode it decodes the token without verification (local/CI only, refused in production);
+- a `requireRole(...roles)` helper returning the route `auth` options that authorise the caller by Entra app-role (via Hapi scope).
+
+Protect a route by opting in:
+
+```js
+import { requireRole } from '#/auth/require-role.js'
+
+export const example = {
+  method: 'GET',
+  path: '/example',
+  options: { auth: requireRole('case_officer') },
+  handler: (request, h) => h.response(request.auth.credentials)
+}
+```
+
+The role value(s) are configurable — `GET /whoami` reads `auth.entra.roleValues` (comma-separated) rather than hard-coding the string.
+
+Routes without `options.auth` (e.g. `/health`) stay open. A request with no/invalid token gets `401`; a valid token lacking the required role gets `403`. Configure live mode via `AUTH_MODE=live` + the `ENTRA_*` variables (see `.env.example`). `GET /whoami` is a worked example.
+
+> The exact token contract (whether the frontend forwards the Entra access token or ID token, i.e. the expected `audience`/`issuer`) is confirmed at Entra onboarding and is fully config-driven — no code change needed.
 
 ## Database seeding
 

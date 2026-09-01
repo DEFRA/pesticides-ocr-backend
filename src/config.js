@@ -10,6 +10,11 @@ const isProduction = process.env.NODE_ENV === 'production'
 const isTest = process.env.NODE_ENV === 'test'
 const isDevelopment = process.env.NODE_ENV === 'development'
 
+// Auth mode keys off the CDP tier (the `ENVIRONMENT` var, same signal the
+// `cdpEnvironment` setting below reads), not NODE_ENV, so a deployed tier can
+// never silently fall back to the unverified mock auth path.
+const isLocalTier = (process.env.ENVIRONMENT ?? 'local') === 'local'
+
 const notifyKeyMode = process.env.NOTIFY_KEY_MODE ?? 'test'
 const localNotifyApiKey =
   {
@@ -168,6 +173,51 @@ export const config = convict({
         format: String,
         default: '',
         env: 'NOTIFY_TEMPLATE_SUBMISSION_CONFIRMATION'
+      }
+    }
+  },
+  // API authorisation (EQ-413). Protected routes require a bearer token:
+  //   live  - a Microsoft Entra JWT, signature-verified against the tenant JWKS
+  //           with issuer + audience checks.
+  //   mock  - the token is decoded WITHOUT signature verification (local/CI only,
+  //           never production) so the API can be exercised without a live IdP.
+  auth: {
+    mode: {
+      doc: 'API auth mode: mock (decode token, no IdP; local only) or live (verify Entra JWTs via JWKS). Defaults to live on every deployed tier.',
+      format: ['mock', 'live'],
+      default: isLocalTier ? 'mock' : 'live',
+      env: 'AUTH_MODE'
+    },
+    entra: {
+      tenantId: {
+        doc: 'Entra tenant (directory) id — issuer and JWKS URI are derived from it',
+        format: String,
+        default: '',
+        env: 'ENTRA_TENANT_ID'
+      },
+      audience: {
+        doc: 'Expected token audience (the API app-registration id / app-id-uri). Required in live mode.',
+        format: String,
+        default: '',
+        env: 'ENTRA_API_AUDIENCE'
+      },
+      issuer: {
+        doc: 'Expected token issuer. Empty = derive the v2.0 issuer from tenantId.',
+        format: String,
+        default: '',
+        env: 'ENTRA_ISSUER'
+      },
+      jwksUri: {
+        doc: 'JWKS endpoint. Empty = derive from tenantId.',
+        format: String,
+        default: '',
+        env: 'ENTRA_JWKS_URI'
+      },
+      roleValues: {
+        doc: 'Entra app-role value(s) that grant case-officer access, comma-separated (e.g. "case_officer" or "case_officer,admin"); enforced as a route scope',
+        format: String,
+        default: 'case_officer',
+        env: 'ENTRA_CASE_OFFICER_ROLE_VALUES'
       }
     }
   }

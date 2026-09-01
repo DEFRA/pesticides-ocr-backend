@@ -3,6 +3,7 @@ import Hapi from '@hapi/hapi'
 import { secureContext } from '@defra/hapi-secure-context'
 
 import { config } from '#/config.js'
+import { auth } from '#/auth/auth.js'
 import { router } from '#/plugins/router.js'
 import { requestLogger } from '#/plugins/request-logger.js'
 import { mongoDb } from '#/plugins/mongodb.js'
@@ -57,6 +58,7 @@ export async function createServer() {
       plugin: mongoDb,
       options: config.get('mongo')
     },
+    auth, // registers the entra-bearer strategy before routes reference it
     router
   ])
 
