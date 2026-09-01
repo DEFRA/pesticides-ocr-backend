@@ -7,7 +7,7 @@ export const router = {
   plugin: {
     name: 'router',
     register: (server, _options) => {
-      server.route([health].concat(register).concat([search]).concat([whoami]))
+      server.route([health].concat(register).concat(search).concat([whoami]))
     }
   }
 }
