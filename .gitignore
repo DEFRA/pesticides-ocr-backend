@@ -9,3 +9,5 @@ coverage
 .cache
 .eslintcache
 .env
+.claude
+.github/copilot-*.md

@@ -8,6 +8,7 @@ convict.addFormats(convictFormatWithValidator)
 
 const isProduction = process.env.NODE_ENV === 'production'
 const isTest = process.env.NODE_ENV === 'test'
+const isDevelopment = process.env.NODE_ENV === 'development'
 
 // Auth mode keys off the CDP tier (the `ENVIRONMENT` var, same signal the
 // `cdpEnvironment` setting below reads), not NODE_ENV, so a deployed tier can
@@ -24,6 +25,11 @@ const localNotifyApiKey =
 convict.addFormats(convictFormatWithValidator)
 
 export const config = convict({
+  isDevelopment: {
+    doc: 'Whether the app is running in development mode, derived from NODE_ENV',
+    format: Boolean,
+    default: isDevelopment
+  },
   serviceVersion: {
     doc: 'The service version, this variable is injected into your docker container in CDP environments',
     format: String,
