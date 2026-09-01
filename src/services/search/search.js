@@ -5,7 +5,7 @@ function validateReferenceNumber(referenceNumber) {
     const referenceNumberPatternDev = /^SED-[A-Z0-9]{3}-[A-Z0-9]{3}$/
     return referenceNumberPatternDev.test(referenceNumber)
   }
-  
+
   const referenceNumberPattern = /^PPP-[A-Z0-9]{3}-[A-Z0-9]{3}$/
   return referenceNumberPattern.test(referenceNumber)
 }
