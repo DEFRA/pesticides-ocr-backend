@@ -120,7 +120,7 @@ export function toOperator(doc) {
 // Escape a user-supplied string for safe use inside a RegExp (prevents the
 // search term being interpreted as a pattern / ReDoS).
 function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return value.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 }
 
 // Build the Mongo filter for a search term: case-insensitive match across the
