@@ -73,14 +73,32 @@ function toIsoDate(value) {
     : ''
 }
 
+// The Operator contract carries only line1/town/postcode/country; the stored
+// address.line2/county are intentionally dropped (not shown on the grid).
+function mapAddress(address = {}) {
+  return {
+    line1: address.line1 ?? '',
+    town: address.town ?? '',
+    postcode: address.postcode ?? '',
+    country: address.country ?? DEFAULT_COUNTRY
+  }
+}
+
+function mapContact(contact = {}) {
+  return {
+    name: contact.name ?? '',
+    email: contact.email ?? '',
+    telephone: contact.telephone ?? ''
+  }
+}
+
 // Map a stored registration document onto the frontend Operator contract.
+// Stored fields with no place in the contract are intentionally omitted:
+// address.line2/county (see mapAddress), and additionalAddresses /
+// professionalSectors / memberSchemes. additionalAddresses (further regulated
+// premises) may warrant a multi-site signal on the grid — see the EQ-385
+// data-model decision.
 export function toOperator(doc) {
-  const address = doc.address ?? {}
-  const contact = doc.primaryContact ?? {}
-  // Stored fields with no place in the Operator contract are intentionally
-  // omitted: address.line2/county, and additionalAddresses / professionalSectors
-  // / memberSchemes. additionalAddresses (further regulated premises) may warrant
-  // a multi-site signal on the grid — see the EQ-385 data-model decision.
   return {
     reference: doc.reference ?? '',
     businessName: doc.businessName ?? '',
@@ -88,17 +106,8 @@ export function toOperator(doc) {
       labelFor(BUSINESS_ACTIVITY_LABELS)
     ),
     mainCustomer: doc.mainCustomer ?? DEFAULT_MAIN_CUSTOMER,
-    address: {
-      line1: address.line1 ?? '',
-      town: address.town ?? '',
-      postcode: address.postcode ?? '',
-      country: address.country ?? DEFAULT_COUNTRY
-    },
-    contact: {
-      name: contact.name ?? '',
-      email: contact.email ?? '',
-      telephone: contact.telephone ?? ''
-    },
+    address: mapAddress(doc.address),
+    contact: mapContact(doc.primaryContact),
     addressActivities: (doc.addressActivities ?? []).map(
       labelFor(ADDRESS_ACTIVITY_LABELS)
     ),
