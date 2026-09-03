@@ -6,6 +6,7 @@ import {
   searchOperators,
   getOperatorByReference
 } from '#/services/operators/operators.js'
+import { toCsv } from '#/services/operators/operators-export.js'
 
 // Case-officer dashboard API (EQ-385). Serves registered operators to the admin
 // UI (EQ-227), protected by the EQ-413 auth foundation: a valid Entra bearer
@@ -52,6 +53,32 @@ export const operators = [
         query: request.query.search
       })
       return h.response(results)
+    }
+  },
+  {
+    // Export the (filtered) operators as CSV for download (EQ-369). Same search +
+    // auth as the list route; a static path so it takes precedence over
+    // /operators/{reference}. An empty result yields the header row only.
+    method: 'GET',
+    path: '/operators/export',
+    options: {
+      auth: requireRole(...roleValues),
+      validate: {
+        query: searchQuerySchema,
+        failAction: failWithBadRequest
+      }
+    },
+    handler: async (request, h) => {
+      const results = await searchOperators(request.db, {
+        query: request.query.search
+      })
+      return h
+        .response(toCsv(results))
+        .type('text/csv; charset=utf-8')
+        .header(
+          'content-disposition',
+          'attachment; filename="ocr-registrations.csv"'
+        )
     }
   },
   {
