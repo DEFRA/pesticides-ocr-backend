@@ -217,4 +217,65 @@ describe('#operatorsRoutes', () => {
       expect(statusCode).toBe(404)
     })
   })
+
+  describe('GET /operators/export', () => {
+    test('401 when no bearer token is presented', async () => {
+      const { statusCode } = await getOperators('/operators/export')
+      expect(statusCode).toBe(401)
+    })
+
+    test('403 for a token without the case_officer role', async () => {
+      const { statusCode } = await getOperators(
+        '/operators/export',
+        viewerToken
+      )
+      expect(statusCode).toBe(403)
+    })
+
+    test('200 returns CSV with download headers and a header + data rows', async () => {
+      const { statusCode, headers, payload } = await getOperators(
+        '/operators/export',
+        officerToken
+      )
+      expect(statusCode).toBe(200)
+      expect(headers['content-type']).toContain('text/csv')
+      expect(headers['content-disposition']).toBe(
+        'attachment; filename="ocr-registrations.csv"'
+      )
+      const lines = payload.split('\r\n')
+      expect(lines[0]).toContain('"Reference"')
+      expect(lines).toHaveLength(3) // header + 2 seeded operators
+      expect(payload).toContain('"Pesticides Ltd"')
+      expect(payload).toContain('"Green Acres Growers"')
+    })
+
+    test('applies the search filter to the export', async () => {
+      const { payload } = await getOperators(
+        '/operators/export?search=green',
+        officerToken
+      )
+      const lines = payload.split('\r\n')
+      expect(lines).toHaveLength(2) // header + 1 match
+      expect(payload).toContain('"Green Acres Growers"')
+      expect(payload).not.toContain('"Pesticides Ltd"')
+    })
+
+    test('returns the header row only when nothing matches', async () => {
+      const { statusCode, payload } = await getOperators(
+        '/operators/export?search=no-such-operator',
+        officerToken
+      )
+      expect(statusCode).toBe(200)
+      expect(payload.split('\r\n')).toHaveLength(1)
+      expect(payload).toContain('"Reference"')
+    })
+
+    test('400 for an over-length search term', async () => {
+      const { statusCode } = await getOperators(
+        `/operators/export?search=${'x'.repeat(101)}`,
+        officerToken
+      )
+      expect(statusCode).toBe(400)
+    })
+  })
 })
