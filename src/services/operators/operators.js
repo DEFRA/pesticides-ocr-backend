@@ -143,14 +143,21 @@ export function buildSearchFilter(query) {
   }
 }
 
-// List/search operators for the grid. Blank query returns all (capped).
-export async function searchOperators(db, { query = '' } = {}) {
-  const docs = await db
+// List/search operators. Blank query returns all. `limit` caps the result set
+// (default MAX_RESULTS for the grid); pass 0 for no cap — the export needs the
+// full matching set (EQ-369). Very large exports are a future streaming concern.
+export async function searchOperators(
+  db,
+  { query = '', limit = MAX_RESULTS } = {}
+) {
+  const cursor = db
     .collection(COLLECTION)
     .find(buildSearchFilter(query), { projection: { _id: 0 } })
     .sort({ submittedAt: -1 })
-    .limit(MAX_RESULTS)
-    .toArray()
+  if (limit) {
+    cursor.limit(limit)
+  }
+  const docs = await cursor.toArray()
   return docs.map(toOperator)
 }
 

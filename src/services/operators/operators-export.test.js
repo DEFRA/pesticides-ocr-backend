@@ -24,19 +24,21 @@ const operator = {
   status: 'Registered'
 }
 
+// The export is prefixed with a UTF-8 BOM so Excel reads it as UTF-8.
+const BOM = '\uFEFF'
 const HEADER =
   '"Reference","Business name","Registered date","Activities","Main customer",' +
   '"Contact name","Email","Telephone","Town","Postcode","Country","Status"'
 
 describe('toCsv', () => {
-  test('an empty list yields the header row only', () => {
-    expect(toCsv([])).toBe(HEADER)
+  test('an empty list yields the header row only (BOM-prefixed)', () => {
+    expect(toCsv([])).toBe(BOM + HEADER)
   })
 
   test('renders a header row followed by one row per operator (CRLF separated)', () => {
     const csv = toCsv([operator])
     const lines = csv.split('\r\n')
-    expect(lines[0]).toBe(HEADER)
+    expect(lines[0]).toBe(BOM + HEADER)
     expect(lines).toHaveLength(2)
     expect(lines[1]).toContain('"PPP-A1B-2C3"')
     expect(lines[1]).toContain('"Pesticides Ltd"')

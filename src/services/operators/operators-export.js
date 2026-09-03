@@ -26,6 +26,10 @@ const CSV_COLUMNS = [
 // operator-supplied names flow through this seam (CSV injection).
 const CSV_FORMULA_PREFIXES = /^[=+\-@\t\r]/
 
+// Prepended so Excel opens the file as UTF-8; without a BOM it assumes ANSI and
+// mangles accented characters in names/addresses.
+const UTF8_BOM = '\uFEFF'
+
 // Quote a CSV field (RFC 4180), escape embedded quotes, and neutralise formula
 // injection.
 function csvCell(value) {
@@ -41,5 +45,5 @@ export function toCsv(operators) {
   const rows = operators.map((op) =>
     CSV_COLUMNS.map(([, get]) => csvCell(get(op))).join(',')
   )
-  return [header, ...rows].join('\r\n')
+  return UTF8_BOM + [header, ...rows].join('\r\n')
 }
