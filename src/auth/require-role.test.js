@@ -1,7 +1,22 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect, afterEach } from 'vitest'
 
-import { requireRole } from './require-role.js'
+import { config } from '#/config.js'
+import { requireRole, getCaseOfficerRoles } from './require-role.js'
 import { STRATEGY_NAME } from './strategy-name.js'
+
+describe('getCaseOfficerRoles', () => {
+  const original = config.get('auth.entra.roleValues')
+  afterEach(() => config.set('auth.entra.roleValues', original))
+
+  test('returns the single configured role by default', () => {
+    expect(getCaseOfficerRoles()).toEqual(['case_officer'])
+  })
+
+  test('splits and trims a comma-separated list', () => {
+    config.set('auth.entra.roleValues', 'case_officer, admin ,viewer')
+    expect(getCaseOfficerRoles()).toEqual(['case_officer', 'admin', 'viewer'])
+  })
+})
 
 describe('requireRole', () => {
   test('returns the strategy + scope for the given roles', () => {
