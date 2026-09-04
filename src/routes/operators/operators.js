@@ -5,7 +5,7 @@ import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
 import {
   searchOperators,
   getOperatorByReference
-} from '#/services/operators/operators.js'
+} from '#/services/search/search.js'
 
 // Case-officer dashboard API (EQ-385). Serves registered operators to the admin
 // UI (EQ-227), protected by the EQ-413 auth foundation: a valid Entra bearer
