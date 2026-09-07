@@ -3,7 +3,8 @@ import {
   validateReferenceNumber,
   toOperator,
   buildSearchFilter,
-  searchOperators
+  searchOperators,
+  MAX_RESULTS
 } from '#/services/search/search.js'
 
 const { configValues } = vi.hoisted(() => ({
@@ -250,37 +251,37 @@ describe('buildSearchFilter', () => {
 })
 
 describe('#searchOperators', () => {
-  let toArray
-  let limit
+  let cursor
   let sort
   let find
   let collection
   let db
 
   beforeEach(() => {
-    toArray = vi.fn().mockResolvedValue([storedDoc])
-    limit = vi.fn()
-    sort = vi.fn().mockReturnValue({ limit, toArray })
+    // Chainable Mongo cursor stub: find().sort().limit().toArray()
+    cursor = { toArray: vi.fn().mockResolvedValue([storedDoc]) }
+    cursor.limit = vi.fn().mockReturnValue(cursor)
+    sort = vi.fn().mockReturnValue(cursor)
     find = vi.fn().mockReturnValue({ sort })
     collection = vi.fn().mockReturnValue({ find })
     db = { collection }
   })
 
-  test('caps the paged grid at the default limit and maps to the Operator contract', async () => {
+  test('caps the paged grid at MAX_RESULTS and maps to the Operator contract', async () => {
     const result = await searchOperators(db, { query: '' })
 
     expect(collection).toHaveBeenCalledWith('ocr-registration')
     expect(find).toHaveBeenCalledWith({}, { projection: { _id: 0 } })
     expect(sort).toHaveBeenCalledWith({ submittedAt: -1 })
-    expect(limit).toHaveBeenCalledWith(500)
+    expect(cursor.limit).toHaveBeenCalledWith(MAX_RESULTS)
     expect(result).toEqual([toOperator(storedDoc)])
   })
 
-  test('applies no cap when limit is 0 (the CSV export needs the full set)', async () => {
+  test('passes limit 0 to Mongo (its "no cap" sentinel) for the CSV export', async () => {
     await searchOperators(db, { query: '', limit: 0 })
 
-    expect(limit).not.toHaveBeenCalled()
-    expect(toArray).toHaveBeenCalled()
+    expect(cursor.limit).toHaveBeenCalledWith(0)
+    expect(cursor.toArray).toHaveBeenCalled()
   })
 
   test('passes the built search filter for a non-blank query', async () => {

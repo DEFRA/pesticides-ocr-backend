@@ -277,5 +277,28 @@ describe('#operatorsRoutes', () => {
       )
       expect(statusCode).toBe(400)
     })
+
+    test('audit-logs who/how-many/filtered, never the raw search term', async () => {
+      const audits = []
+      const onRequest = (_request, event) => {
+        if (event.tags?.includes('audit')) {
+          audits.push(event.data)
+        }
+      }
+      server.events.on('request', onRequest)
+      try {
+        await getOperators('/operators/export?search=green', officerToken)
+      } finally {
+        server.events.removeListener('request', onRequest)
+      }
+
+      expect(audits).toHaveLength(1)
+      const message = audits[0]
+      expect(message).toContain('roles=case_officer')
+      expect(message).toContain('rows=1')
+      expect(message).toContain('filtered=true')
+      // The search term may be a person's name (PII) — it must never be logged.
+      expect(message).not.toContain('green')
+    })
   })
 })
