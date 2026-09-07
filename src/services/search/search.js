@@ -29,7 +29,8 @@ function getOneByReferenceNumber(db, referenceNumber) {
 // to the other, so the frontend can drop its stub and become a thin adapter.
 
 // Cap the grid result set until real pagination lands (EQ-385 follow-up).
-const MAX_RESULTS = 500
+// Exported so callers/tests reference the single source of truth, not a literal.
+export const MAX_RESULTS = 500
 
 // --- POC mapping defaults --------------------------------------------------
 // Fields the Operator contract needs but the register journey does not (yet)
@@ -154,13 +155,24 @@ export function buildSearchFilter(query) {
   }
 }
 
-// List/search operators for the grid. Blank query returns all (capped).
-export async function searchOperators(db, { query = '' } = {}) {
+// List/search operators. Blank query returns all matching (capped at
+// MAX_RESULTS for the paged grid). `limit` is passed straight to Mongo, whose
+// `.limit(0)` means "no cap" — the CSV export (EQ-369) relies on that to get the
+// full matching set, not just the first page.
+//
+// POC caveat: the uncapped export buffers every matching row and builds the
+// whole CSV in memory. Fine at POC volumes; before this holds production data,
+// add a hard ceiling (e.g. MAX_EXPORT_ROWS) and/or stream the CSV. Tracked on
+// the EQ-385 hardening follow-up.
+export async function searchOperators(
+  db,
+  { query = '', limit = MAX_RESULTS } = {}
+) {
   const docs = await db
     .collection(COLLECTION)
     .find(buildSearchFilter(query), { projection: { _id: 0 } })
     .sort({ submittedAt: -1 })
-    .limit(MAX_RESULTS)
+    .limit(limit)
     .toArray()
   return docs.map(toOperator)
 }
