@@ -5,7 +5,7 @@ import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
 import {
   searchOperators,
   getOperatorByReference
-} from '#/services/operators/operators.js'
+} from '#/services/search/search.js'
 import { toCsv } from '#/services/operators/operators-export.js'
 
 // Case-officer dashboard API (EQ-385). Serves registered operators to the admin
