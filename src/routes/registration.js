@@ -138,6 +138,10 @@ const schema = Joi.object({
       'array.min': 'Select at least one business activity',
       'any.required': 'Select at least one business activity'
     }),
+  mainCustomer: Joi.string().trim().min(1).required().messages({
+    'string.empty': 'Enter your main customer',
+    'any.required': 'Enter your main customer'
+  }),
   businessName: Joi.string()
     .trim()
     .min(1)

@@ -21,6 +21,7 @@ describe('POST /register', () => {
 
   const validPayload = {
     businessActivities: ['manufacture', 'market'],
+    mainCustomer: 'professional',
     businessName: 'Company 1',
     address: {
       addressLine1: '67 My Road',
@@ -167,6 +168,19 @@ describe('POST /register', () => {
 
       expect(response.statusCode).toBe(400)
       expect(JSON.parse(response.payload).message).toMatch(/business name/i)
+    })
+
+    test('returns 400 when mainCustomer is missing', async () => {
+      const { mainCustomer, ...rest } = validPayload
+
+      const response = await server.inject({
+        method: 'POST',
+        url: '/register',
+        payload: rest
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(JSON.parse(response.payload).message).toMatch(/main customer/i)
     })
 
     test('returns 400 for invalid UK postcode', async () => {
