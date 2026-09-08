@@ -30,20 +30,35 @@ const MAX_MEMBER_SCHEMES = 50
 const MAX_ADDITIONAL_ADDRESSES = 20
 
 const addressSchema = Joi.object({
-  line1: Joi.string().trim().min(1).max(MAX_SHORT_TEXT).required().messages({
-    'string.empty': "Enter the first line of your business's address",
-    'string.max': 'Address line 1 must be 100 characters or less',
-    'any.required': "Enter the first line of your business's address"
-  }),
-  line2: Joi.string().trim().max(MAX_SHORT_TEXT).allow('').optional().messages({
-    'string.max': 'Address line 2 must be 100 characters or less'
-  }),
-  town: Joi.string().trim().min(1).max(MAX_SHORT_TEXT).required().messages({
-    'string.empty': 'Enter town or city',
-    'string.max': 'Town or city must be 100 characters or less',
-    'any.required': 'Enter town or city'
-  }),
-  county: Joi.string()
+  addressLine1: Joi.string()
+    .trim()
+    .min(1)
+    .max(MAX_SHORT_TEXT)
+    .required()
+    .messages({
+      'string.empty': "Enter the first line of your business's address",
+      'string.max': 'Address line 1 must be 100 characters or less',
+      'any.required': "Enter the first line of your business's address"
+    }),
+  addressLine2: Joi.string()
+    .trim()
+    .max(MAX_SHORT_TEXT)
+    .allow('')
+    .optional()
+    .messages({
+      'string.max': 'Address line 2 must be 100 characters or less'
+    }),
+  addressTown: Joi.string()
+    .trim()
+    .min(1)
+    .max(MAX_SHORT_TEXT)
+    .required()
+    .messages({
+      'string.empty': 'Enter town or city',
+      'string.max': 'Town or city must be 100 characters or less',
+      'any.required': 'Enter town or city'
+    }),
+  addressCounty: Joi.string()
     .trim()
     .max(MAX_SHORT_TEXT)
     .allow('')
@@ -51,7 +66,7 @@ const addressSchema = Joi.object({
     .messages({
       'string.max': 'County must be 100 characters or less'
     }),
-  postcode: Joi.string()
+  addressPostcode: Joi.string()
     .trim()
     .pattern(/^[A-Z]{1,2}\d[\dA-Z]?\s?\d[A-Z]{2}$/i)
     .required()
@@ -63,12 +78,17 @@ const addressSchema = Joi.object({
 })
 
 const contactSchema = Joi.object({
-  name: Joi.string().trim().min(1).max(MAX_SHORT_TEXT).required().messages({
-    'string.empty': 'Enter a contact name',
-    'string.max': 'Contact name must be 100 characters or less',
-    'any.required': 'Enter a contact name'
-  }),
-  telephone: Joi.string()
+  contactName: Joi.string()
+    .trim()
+    .min(1)
+    .max(MAX_SHORT_TEXT)
+    .required()
+    .messages({
+      'string.empty': 'Enter a contact name',
+      'string.max': 'Contact name must be 100 characters or less',
+      'any.required': 'Enter a contact name'
+    }),
+  contactTelephone: Joi.string()
     .trim()
     .pattern(/^[0-9+()\- ]+$/)
     .min(1)
@@ -80,7 +100,7 @@ const contactSchema = Joi.object({
       'string.max': 'Telephone number must be 20 characters or less',
       'any.required': 'Enter a telephone number'
     }),
-  email: Joi.string().email().max(MAX_EMAIL).required().messages({
+  contactEmail: Joi.string().email().max(MAX_EMAIL).required().messages({
     'string.empty': 'Enter an email address',
     'string.email': 'Enter a valid email address',
     'string.max': 'Email address must be 254 characters or less',
@@ -182,9 +202,7 @@ export const register = [
     path: '/register',
     options: {
       validate: {
-        payload: Joi.object({
-          formSession: schema.required()
-        }).required(),
+        payload: schema.required(),
         failAction: async (_request, _h, err) => {
           throw Boom.badRequest(err.message, {
             validation: err.details.map((d) => ({
@@ -197,10 +215,7 @@ export const register = [
     },
     handler: async (request, h) => {
       try {
-        const result = await saveRegistration(
-          request.db,
-          request.payload.formSession
-        )
+        const result = await saveRegistration(request.db, request.payload)
         return h.response({ reference: result.reference }).code(HTTP_CREATED)
       } catch (err) {
         request.log(['error'], err)
