@@ -68,12 +68,19 @@ export function buildRecord() {
   return {
     businessActivities: pickSubset(businessActivitiesPool),
     businessName: `Seed Company ${randomInt(1, 999)}`,
+    mainCustomer: pickRandom(['professional', 'amateur', 'both']),
     address: {
-      line1: `${randomInt(1, 200)} Seed Street`,
-      line2: randomInt(2) === 0 ? 'Seed Village' : undefined,
-      town: pickRandom(['London', 'York', 'Exeter', 'Chester', 'Ipswich']),
-      county: randomInt(2) === 0 ? pickRandom(counties) : undefined,
-      postcode: pickRandom([
+      addressLine1: `${randomInt(1, 200)} Seed Street`,
+      addressLine2: randomInt(2) === 0 ? 'Seed Village' : undefined,
+      addressTown: pickRandom([
+        'London',
+        'York',
+        'Exeter',
+        'Chester',
+        'Ipswich'
+      ]),
+      addressCounty: randomInt(2) === 0 ? pickRandom(counties) : undefined,
+      addressPostcode: pickRandom([
         'AB12 3CD',
         'SW1A 2AA',
         'EX1 1AA',
@@ -82,9 +89,14 @@ export function buildRecord() {
       ])
     },
     primaryContact: {
-      name: pickRandom(['Alice Seed', 'Bob Seed', 'Carol Seed', 'Dave Seed']),
-      telephone: `0${randomInt(1000000000, 9999999999)}`,
-      email: `seed${randomInt(1, 9999)}@example.com`
+      contactName: pickRandom([
+        'Alice Seed',
+        'Bob Seed',
+        'Carol Seed',
+        'Dave Seed'
+      ]),
+      contactTelephone: `0${randomInt(1000000000, 9999999999)}`,
+      contactEmail: `seed${randomInt(1, 9999)}@example.com`
     },
     addressActivities: pickSubset(addressActivitiesPool),
     quantity: {
@@ -101,14 +113,23 @@ export function buildRecord() {
       additionalAddresses: [
         {
           address: {
-            line1: `${randomInt(1, 200)} Extra Road`,
-            town: pickRandom(['Leeds', 'Bristol', 'Oxford', 'Derby']),
-            postcode: pickRandom(['LS1 1AA', 'BS1 1AA', 'OX1 1AA', 'DE1 1AA'])
+            addressLine1: `${randomInt(1, 200)} Extra Road`,
+            addressTown: pickRandom(['Leeds', 'Bristol', 'Oxford', 'Derby']),
+            addressPostcode: pickRandom([
+              'LS1 1AA',
+              'BS1 1AA',
+              'OX1 1AA',
+              'DE1 1AA'
+            ])
           },
           contact: {
-            name: pickRandom(['Extra Alice', 'Extra Bob', 'Extra Carol']),
-            telephone: `0${randomInt(1000000000, 9999999999)}`,
-            email: `extra${randomInt(1, 9999)}@example.com`
+            contactName: pickRandom([
+              'Extra Alice',
+              'Extra Bob',
+              'Extra Carol'
+            ]),
+            contactTelephone: `0${randomInt(1000000000, 9999999999)}`,
+            contactEmail: `extra${randomInt(1, 9999)}@example.com`
           },
           activity: pickSubset(addressActivitiesPool)
         }

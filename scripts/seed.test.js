@@ -64,6 +64,7 @@ describe('buildRecord', () => {
     expect(record).toMatchObject({
       businessActivities: expect.any(Array),
       businessName: expect.stringMatching(/^Seed Company \d+$/),
+      mainCustomer: expect.any(String),
       address: expect.any(Object),
       primaryContact: expect.any(Object),
       addressActivities: expect.any(Array),
@@ -71,18 +72,22 @@ describe('buildRecord', () => {
     })
   })
 
+  // Seeded records must use the same field names /register persists, or the
+  // dashboard reads them back blank — see services/search/search.js.
   test('address contains required fields with valid postcode', () => {
     const { address } = buildRecord()
-    expect(address.line1).toMatch(/^\d+ Seed Street$/)
-    expect(address.town).toBeTruthy()
-    expect(address.postcode).toMatch(/^[A-Z]{1,2}\d[\dA-Z]?\s?\d[A-Z]{2}$/i)
+    expect(address.addressLine1).toMatch(/^\d+ Seed Street$/)
+    expect(address.addressTown).toBeTruthy()
+    expect(address.addressPostcode).toMatch(
+      /^[A-Z]{1,2}\d[\dA-Z]?\s?\d[A-Z]{2}$/i
+    )
   })
 
   test('primaryContact contains name, telephone and email', () => {
     const { primaryContact } = buildRecord()
-    expect(primaryContact.name).toBeTruthy()
-    expect(primaryContact.telephone).toMatch(/^0\d+$/)
-    expect(primaryContact.email).toMatch(/^seed\d+@example\.com$/)
+    expect(primaryContact.contactName).toBeTruthy()
+    expect(primaryContact.contactTelephone).toMatch(/^0\d+$/)
+    expect(primaryContact.contactEmail).toMatch(/^seed\d+@example\.com$/)
   })
 
   test('quantity has a valid quantityType', () => {
