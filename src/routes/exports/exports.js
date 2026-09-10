@@ -8,7 +8,7 @@ export const exports = [
   {
     method: 'GET',
     path: '/export',
-    handler: async (request, h) => {
+    handler: async (request, _h) => {
       return exportOneToCsv(
         await getOneByReferenceNumber(request.db, request.query.reference)
       )
