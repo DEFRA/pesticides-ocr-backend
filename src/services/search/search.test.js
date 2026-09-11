@@ -106,16 +106,16 @@ const storedDoc = {
   businessName: 'Pesticides Ltd',
   businessActivities: ['manufacture', 'market'],
   address: {
-    line1: 'Highfield Farm',
-    line2: '',
-    town: 'Farmtown',
-    county: '',
-    postcode: 'PH1 1FT'
+    addressLine1: 'Highfield Farm',
+    addressLine2: '',
+    addressTown: 'Farmtown',
+    addressCounty: '',
+    addressPostcode: 'PH1 1FT'
   },
   primaryContact: {
-    name: 'John Smith',
-    telephone: '01234 567890',
-    email: 'john.smith@pesticides.co.uk'
+    contactName: 'John Smith',
+    contactTelephone: '01234 567890',
+    contactEmail: 'john.smith@pesticides.co.uk'
   },
   addressActivities: ['use', 'store'],
   quantity: { quantityType: 'amount', quantity: 80000 }
@@ -162,12 +162,12 @@ describe('toOperator', () => {
     expect(operator.quantity).toBe('1,500 hectares')
   })
 
-  test('prefers a stored mainCustomer/status/country when present (forward-compatible)', () => {
+  test('prefers a stored mainCustomer/status/country when present', () => {
     const operator = toOperator({
       ...storedDoc,
       mainCustomer: 'Professional users',
       status: 'Suspended',
-      address: { ...storedDoc.address, country: 'England' }
+      address: { ...storedDoc.address, addressCountry: 'England' }
     })
     expect(operator.mainCustomer).toBe('Professional users')
     expect(operator.status).toBe('Suspended')
@@ -207,7 +207,11 @@ describe('toOperator', () => {
   test('omits stored fields not in the Operator contract', () => {
     const operator = toOperator({
       ...storedDoc,
-      address: { ...storedDoc.address, line2: 'Unit 2', county: 'Surrey' },
+      address: {
+        ...storedDoc.address,
+        addressLine2: 'Unit 2',
+        addressCounty: 'Surrey'
+      },
       professionalSectors: ['forestry'],
       memberSchemes: ['Red Tractor'],
       additionalAddresses: [{ address: {}, contact: {}, activity: ['use'] }]
@@ -232,9 +236,9 @@ describe('buildSearchFilter', () => {
     expect(filter.$or.map((clause) => Object.keys(clause)[0])).toEqual([
       'reference',
       'businessName',
-      'primaryContact.name',
-      'address.town',
-      'address.postcode'
+      'primaryContact.contactName',
+      'address.addressTown',
+      'address.addressPostcode'
     ])
     for (const clause of filter.$or) {
       const rx = Object.values(clause)[0]

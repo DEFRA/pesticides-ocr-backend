@@ -20,41 +20,40 @@ describe('POST /register', () => {
   })
 
   const validPayload = {
-    formSession: {
-      businessActivities: ['manufacture', 'market'],
-      businessName: 'Company 1',
-      address: {
-        line1: '67 My Road',
-        line2: 'My Village',
-        town: 'My Town',
-        county: 'North Yorkshire',
-        postcode: 'AB12 3CD'
-      },
-      primaryContact: {
-        name: 'Jonny Pesticide',
-        telephone: '01234567890',
-        email: 'spray@everything.biz'
-      },
-      addressActivities: ['use', 'store'],
-      quantity: { quantityType: 'area', quantity: '67' },
-      professionalSectors: ['agriculture-horticulture', 'amenity'],
-      memberSchemes: ['Scheme A'],
-      additionalAddresses: [
-        {
-          address: {
-            line1: '1 Other St',
-            town: 'Othertown',
-            postcode: 'SW1A 2AA'
-          },
-          contact: {
-            name: 'Jane Doe',
-            telephone: '07700900000',
-            email: 'jane@example.com'
-          },
-          activity: ['use']
-        }
-      ]
-    }
+    businessActivities: ['manufacture', 'market'],
+    mainCustomer: 'professional',
+    businessName: 'Company 1',
+    address: {
+      addressLine1: '67 My Road',
+      addressLine2: 'My Village',
+      addressTown: 'My Town',
+      addressCounty: 'North Yorkshire',
+      addressPostcode: 'AB12 3CD'
+    },
+    primaryContact: {
+      contactName: 'Jonny Pesticide',
+      contactTelephone: '01234567890',
+      contactEmail: 'spray@everything.biz'
+    },
+    addressActivities: ['use', 'store'],
+    quantity: { quantityType: 'area', quantity: '67' },
+    professionalSectors: ['agriculture-horticulture', 'amenity'],
+    memberSchemes: ['Scheme A'],
+    additionalAddresses: [
+      {
+        address: {
+          addressLine1: '1 Other St',
+          addressTown: 'Othertown',
+          addressPostcode: 'SW1A 2AA'
+        },
+        contact: {
+          contactName: 'Jane Doe',
+          contactTelephone: '07700900000',
+          contactEmail: 'jane@example.com'
+        },
+        activity: ['use']
+      }
+    ]
   }
 
   describe('success', () => {
@@ -71,7 +70,7 @@ describe('POST /register', () => {
       expect(JSON.parse(response.payload)).toEqual({ reference: 'PP-ABC-123' })
     })
 
-    test('saves the mapped formSession data', async () => {
+    test('saves the registration data', async () => {
       mockSaveRegistration.mockResolvedValue({ reference: 'PP-XYZ-789' })
 
       await server.inject({
@@ -97,12 +96,12 @@ describe('POST /register', () => {
         memberSchemes,
         additionalAddresses,
         ...rest
-      } = validPayload.formSession
+      } = validPayload
 
       const response = await server.inject({
         method: 'POST',
         url: '/register',
-        payload: { formSession: rest }
+        payload: rest
       })
 
       expect(response.statusCode).toBe(201)
@@ -127,7 +126,7 @@ describe('POST /register', () => {
   })
 
   describe('validation failures', () => {
-    test('returns 400 when formSession is missing', async () => {
+    test('returns 400 when the payload is empty', async () => {
       const response = await server.inject({
         method: 'POST',
         url: '/register',
@@ -137,13 +136,21 @@ describe('POST /register', () => {
       expect(response.statusCode).toBe(400)
     })
 
+    test('returns 400 when the payload is wrapped in formSession', async () => {
+      const response = await server.inject({
+        method: 'POST',
+        url: '/register',
+        payload: { formSession: validPayload }
+      })
+
+      expect(response.statusCode).toBe(400)
+    })
+
     test('returns 400 when businessActivities is empty', async () => {
       const response = await server.inject({
         method: 'POST',
         url: '/register',
-        payload: {
-          formSession: { ...validPayload.formSession, businessActivities: [] }
-        }
+        payload: { ...validPayload, businessActivities: [] }
       })
 
       expect(response.statusCode).toBe(400)
@@ -151,16 +158,29 @@ describe('POST /register', () => {
     })
 
     test('returns 400 when businessName is missing', async () => {
-      const { businessName, ...rest } = validPayload.formSession
+      const { businessName, ...rest } = validPayload
 
       const response = await server.inject({
         method: 'POST',
         url: '/register',
-        payload: { formSession: rest }
+        payload: rest
       })
 
       expect(response.statusCode).toBe(400)
       expect(JSON.parse(response.payload).message).toMatch(/business name/i)
+    })
+
+    test('returns 400 when mainCustomer is missing', async () => {
+      const { mainCustomer, ...rest } = validPayload
+
+      const response = await server.inject({
+        method: 'POST',
+        url: '/register',
+        payload: rest
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(JSON.parse(response.payload).message).toMatch(/main customer/i)
     })
 
     test('returns 400 for invalid UK postcode', async () => {
@@ -168,13 +188,8 @@ describe('POST /register', () => {
         method: 'POST',
         url: '/register',
         payload: {
-          formSession: {
-            ...validPayload.formSession,
-            address: {
-              ...validPayload.formSession.address,
-              postcode: 'NOTVALID'
-            }
-          }
+          ...validPayload,
+          address: { ...validPayload.address, addressPostcode: 'NOTVALID' }
         }
       })
 
@@ -187,12 +202,10 @@ describe('POST /register', () => {
         method: 'POST',
         url: '/register',
         payload: {
-          formSession: {
-            ...validPayload.formSession,
-            primaryContact: {
-              ...validPayload.formSession.primaryContact,
-              email: 'not-an-email'
-            }
+          ...validPayload,
+          primaryContact: {
+            ...validPayload.primaryContact,
+            contactEmail: 'not-an-email'
           }
         }
       })
@@ -206,12 +219,10 @@ describe('POST /register', () => {
         method: 'POST',
         url: '/register',
         payload: {
-          formSession: {
-            ...validPayload.formSession,
-            primaryContact: {
-              ...validPayload.formSession.primaryContact,
-              telephone: 'abc'
-            }
+          ...validPayload,
+          primaryContact: {
+            ...validPayload.primaryContact,
+            contactTelephone: 'abc'
           }
         }
       })
@@ -225,10 +236,8 @@ describe('POST /register', () => {
         method: 'POST',
         url: '/register',
         payload: {
-          formSession: {
-            ...validPayload.formSession,
-            quantity: { quantityType: 'volume', quantity: '10' }
-          }
+          ...validPayload,
+          quantity: { quantityType: 'volume', quantity: '10' }
         }
       })
 
@@ -241,10 +250,8 @@ describe('POST /register', () => {
         method: 'POST',
         url: '/register',
         payload: {
-          formSession: {
-            ...validPayload.formSession,
-            quantity: { quantityType: 'area', quantity: 'lots' }
-          }
+          ...validPayload,
+          quantity: { quantityType: 'area', quantity: 'lots' }
         }
       })
 
@@ -256,12 +263,7 @@ describe('POST /register', () => {
       const response = await server.inject({
         method: 'POST',
         url: '/register',
-        payload: {
-          formSession: {
-            ...validPayload.formSession,
-            businessActivities: ['invalid-activity']
-          }
-        }
+        payload: { ...validPayload, businessActivities: ['invalid-activity'] }
       })
 
       expect(response.statusCode).toBe(400)
@@ -271,12 +273,7 @@ describe('POST /register', () => {
       const response = await server.inject({
         method: 'POST',
         url: '/register',
-        payload: {
-          formSession: {
-            ...validPayload.formSession,
-            professionalSectors: ['invalid-sector']
-          }
-        }
+        payload: { ...validPayload, professionalSectors: ['invalid-sector'] }
       })
 
       expect(response.statusCode).toBe(400)
@@ -287,19 +284,17 @@ describe('POST /register', () => {
         method: 'POST',
         url: '/register',
         payload: {
-          formSession: {
-            ...validPayload.formSession,
-            additionalAddresses: [
-              {
-                address: {
-                  line1: '1 Other St',
-                  town: 'Othertown',
-                  postcode: 'SW1A 2AA'
-                },
-                activity: ['use']
-              }
-            ]
-          }
+          ...validPayload,
+          additionalAddresses: [
+            {
+              address: {
+                addressLine1: '1 Other St',
+                addressTown: 'Othertown',
+                addressPostcode: 'SW1A 2AA'
+              },
+              activity: ['use']
+            }
+          ]
         }
       })
 
