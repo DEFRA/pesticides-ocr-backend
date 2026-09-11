@@ -1,6 +1,6 @@
 import { config } from '#/config.js'
 
-const COLLECTION = 'ocr-registration'
+export const COLLECTION = 'ocr-registration'
 
 // --- Basic reference lookup (EQ-366) ---------------------------------------
 
