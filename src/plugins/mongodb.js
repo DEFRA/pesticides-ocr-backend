@@ -44,4 +44,5 @@ async function createIndexes(db) {
   await db.collection('mongo-locks').createIndex({ id: 1 })
   await registrations.createIndex({ submittedAt: 1 })
   await registrations.createIndex({ reference: 1 }, { unique: true })
+  await db.collection('ocr-journey-starts').createIndex({ startedAt: 1 })
 }
