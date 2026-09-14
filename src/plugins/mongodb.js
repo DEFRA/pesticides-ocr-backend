@@ -1,6 +1,8 @@
 import { MongoClient } from 'mongodb'
 import { LockManager } from 'mongo-locks'
 
+import { JOURNEY_STARTS_COLLECTION } from '#/services/metrics/metrics.js'
+
 export const mongoDb = {
   plugin: {
     name: 'mongodb',
@@ -44,5 +46,5 @@ async function createIndexes(db) {
   await db.collection('mongo-locks').createIndex({ id: 1 })
   await registrations.createIndex({ submittedAt: 1 })
   await registrations.createIndex({ reference: 1 }, { unique: true })
-  await db.collection('ocr-journey-starts').createIndex({ startedAt: 1 })
+  await db.collection(JOURNEY_STARTS_COLLECTION).createIndex({ startedAt: 1 })
 }

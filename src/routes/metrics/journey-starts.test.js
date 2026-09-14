@@ -77,6 +77,23 @@ describe('#metricsRoutes — journey starts', () => {
         .collection(JOURNEY_STARTS_COLLECTION)
         .deleteMany({ startedAt: { $gte: marker } })
     })
+
+    test('stays public — still 204 even with an Authorization header', async () => {
+      // Regression guard: an accidental future `auth:` addition (or a default
+      // strategy) would turn this into a 401 for a bad token. It must not.
+      const marker = new Date()
+
+      const { statusCode } = await server.inject({
+        method: 'POST',
+        url: '/metrics/journey-starts',
+        headers: { authorization: 'Bearer not-a-real-token' }
+      })
+
+      expect(statusCode).toBe(204)
+      await server.db
+        .collection(JOURNEY_STARTS_COLLECTION)
+        .deleteMany({ startedAt: { $gte: marker } })
+    })
   })
 
   describe('GET /metrics/journey-starts', () => {

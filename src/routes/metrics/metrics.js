@@ -24,32 +24,49 @@ const querySchema = Joi.object({
   to: Joi.date().iso().optional()
 })
 
-export const metrics = [
-  {
-    method: 'GET',
-    path: '/metrics/registrations',
-    options: {
-      auth,
-      validate: {
-        query: querySchema
-      }
-    },
-    handler: async (request, h) => {
-      const result = await countRegistrations(request.db, {
-        from: request.query.from,
-        to: request.query.to
-      })
-      return h.response(result)
+// The two read endpoints differ only in which count function they call, so build
+// them from one shape rather than duplicating the options/handler.
+const countRoute = (path, count) => ({
+  method: 'GET',
+  path,
+  options: {
+    auth,
+    validate: {
+      query: querySchema
     }
   },
+  handler: async (request, h) => {
+    const result = await count(request.db, {
+      from: request.query.from,
+      to: request.query.to
+    })
+    return h.response(result)
+  }
+})
+
+export const metrics = [
+  countRoute('/metrics/registrations', countRegistrations),
+  countRoute('/metrics/journey-starts', countJourneyStarts),
   {
     // Public, unauthenticated beacon. The applicant journey has no bearer token,
-    // so this cannot be guarded like the read endpoints — it is the same trust
-    // model as the public POST /register. The frontend fires it once per session
-    // at the first journey page; we record a single timestamp (no PII) so
-    // completion rate can be measured consent-free (starts vs finishes).
+    // so this cannot be guarded like the read endpoints. The frontend fires it
+    // server-side, once per session, at the first journey page; we record a
+    // single timestamp (no PII) so completion rate can be measured consent-free
+    // (starts vs finishes).
+    //
+    // POC LIMITATION: unlike POST /register (which requires a full Joi payload +
+    // unique reference), this write is trivial and unauthenticated, so a script
+    // could inflate the "starts" count and skew completion rate. Acceptable for
+    // the POC because the backend is not browser-facing (the frontend calls it
+    // server-to-server). Before this KPI is relied on in production, add a
+    // server-side control here — e.g. IP/origin rate limiting or a per-session
+    // nonce minted by the frontend. The body is ignored (and not parsed) to keep
+    // the surface minimal.
     method: 'POST',
     path: '/metrics/journey-starts',
+    options: {
+      payload: { parse: false, maxBytes: 1024 }
+    },
     handler: async (request, h) => {
       try {
         await recordJourneyStart(request.db)
@@ -58,23 +75,6 @@ export const metrics = [
         request.log(['error'], err)
         throw Boom.internal('Failed to record journey start')
       }
-    }
-  },
-  {
-    method: 'GET',
-    path: '/metrics/journey-starts',
-    options: {
-      auth,
-      validate: {
-        query: querySchema
-      }
-    },
-    handler: async (request, h) => {
-      const result = await countJourneyStarts(request.db, {
-        from: request.query.from,
-        to: request.query.to
-      })
-      return h.response(result)
     }
   }
 ]

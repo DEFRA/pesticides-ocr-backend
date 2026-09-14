@@ -91,8 +91,10 @@ export async function countJourneyStarts(db, { from, to } = {}) {
 }
 
 // Record a single journey start. Called by the (public) beacon route when an
-// applicant begins the journey; de-duplication per session is the frontend's
-// job, so this simply appends one timestamped document.
+// applicant begins the journey. The frontend fires it once per session (yar
+// flag), but the backend keeps no correlation id, so it cannot collapse repeats
+// from retries or bots — treat the resulting count as a best-effort raw total,
+// not a precise unique-visitor figure.
 export async function recordJourneyStart(db) {
   await db
     .collection(JOURNEY_STARTS_COLLECTION)
