@@ -4,6 +4,10 @@
 // signature proves the beacon genuinely came from our journey — not a script
 // hitting the public endpoint directly — and the nonce lets the caller record
 // each session's event once (unique index) so replays can't inflate the count.
+//
+// WIRE-FORMAT CONTRACT: this must match the signer in pesticides-ocr-frontend
+// src/server/common/helpers/journey-beacon.js (same `<nonce>.<hmac>` shape,
+// sha256, hex digest, shared JOURNEY_TOKEN_SECRET). Keep the two in sync.
 
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
@@ -26,10 +30,12 @@ export function verifiedNonce(token, secret) {
   }
 
   const expected = createHmac('sha256', secret).update(nonce).digest('hex')
-  const given = Buffer.from(signature)
-  const want = Buffer.from(expected)
+  // Decode both hex strings to raw bytes for a byte-for-byte constant-time
+  // compare. A non-hex signature decodes to a different length and is rejected by
+  // the length check (timingSafeEqual throws on mismatched lengths).
+  const given = Buffer.from(signature, 'hex')
+  const want = Buffer.from(expected, 'hex')
 
-  // Length check first: timingSafeEqual throws on length mismatch.
   if (given.length !== want.length || !timingSafeEqual(given, want)) {
     return null
   }

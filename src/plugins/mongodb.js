@@ -55,11 +55,11 @@ async function createIndexes(db) {
   await journeyStarts.createIndex({ startedAt: 1 })
   await journeyNotEligible.createIndex({ endedAt: 1 })
 
-  // Signed per-session token — sparse (only present when the secret is
-  // configured) + unique so a replayed token for the same event is a no-op.
-  await journeyStarts.createIndex({ token: 1 }, { unique: true, sparse: true })
+  // Verified per-session nonce — sparse (only present when the secret is
+  // configured) + unique so a replayed nonce for the same event is a no-op.
+  await journeyStarts.createIndex({ nonce: 1 }, { unique: true, sparse: true })
   await journeyNotEligible.createIndex(
-    { token: 1 },
+    { nonce: 1 },
     { unique: true, sparse: true }
   )
 }

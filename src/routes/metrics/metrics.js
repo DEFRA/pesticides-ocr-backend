@@ -60,14 +60,14 @@ const countRoute = (path, count) => ({
 // record a single timestamp (no PII) so completion rate can be measured
 // consent-free.
 //
-// These beacons are public (the applicant journey has no bearer token), so a
-// script could otherwise hit them directly and inflate the counts. When
-// `metrics.journeyTokenSecret` is configured, each beacon must carry a valid
-// signed per-session token (minted + signed by the frontend under the shared
-// secret) — a direct/forged call is rejected, and the token's nonce is stored
-// under a unique index so a replay is counted once. Verification is gated on the
-// secret being set, so local/unconfigured tiers still accept unsigned beacons.
-// The body is ignored (and not parsed) to keep the surface minimal.
+// Because they're public a script could otherwise hit them directly and inflate
+// the counts. When `journeyToken.secret` is configured, each beacon must carry a
+// valid signed per-session token (minted + signed by the frontend under the
+// shared secret) — a direct/forged call is rejected (401), and the verified nonce
+// is stored under a unique index so a replay is counted once. Verification is
+// gated on the secret being set, so local/unconfigured tiers still accept
+// unsigned beacons (see warnIfJourneyTokenUnset). The body is ignored (and not
+// parsed) to keep the surface minimal.
 const beaconRoute = (path, record, label) => ({
   method: 'POST',
   path,
@@ -75,17 +75,17 @@ const beaconRoute = (path, record, label) => ({
     payload: { parse: false, maxBytes: MAX_BEACON_PAYLOAD_BYTES }
   },
   handler: async (request, h) => {
-    const secret = config.get('metrics.journeyTokenSecret')
-    let token
+    const secret = config.get('journeyToken.secret')
+    let nonce
     if (secret) {
-      token = verifiedNonce(request.headers[JOURNEY_TOKEN_HEADER], secret)
-      if (!token) {
+      nonce = verifiedNonce(request.headers[JOURNEY_TOKEN_HEADER], secret)
+      if (!nonce) {
         throw Boom.unauthorized('Invalid or missing journey token')
       }
     }
 
     try {
-      await record(request.db, token)
+      await record(request.db, nonce)
       return h.response().code(HTTP_NO_CONTENT)
     } catch (err) {
       request.log(['error'], err)
@@ -93,6 +93,22 @@ const beaconRoute = (path, record, label) => ({
     }
   }
 })
+
+// Fail-open guard: verification is gated on the secret being set (so local /
+// onboarding tiers still work), but a deployed tier reaching here with no secret
+// means the anti-spoofing control is silently off. Warn loudly at boot (mirrors
+// the auth plugin's missing-config warning) rather than letting it pass unnoticed.
+export function warnIfJourneyTokenUnset(server) {
+  if (
+    !config.get('journeyToken.secret') &&
+    config.get('cdpEnvironment') !== 'local'
+  ) {
+    server.log(
+      ['metrics', 'warn'],
+      'journey token secret is not configured — journey beacons will accept unsigned requests'
+    )
+  }
+}
 
 export const metrics = [
   countRoute('/metrics/registrations', countRegistrations),

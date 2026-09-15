@@ -10,6 +10,7 @@
 //   4. drop-outs     — derived: starts − (completions + not-eligible)
 
 import { COLLECTION } from '#/services/search/search.js'
+import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
 
 // Journey events recorded server-side, once per session, as the applicant moves
 // through the journey — a consent-free basis for completion rate. No PII: just a
@@ -106,16 +107,14 @@ export async function countJourneyNotEligible(db, { from, to } = {}) {
   })
 }
 
-const MONGO_DUPLICATE_KEY_ERROR = 11000
-
 // Append one timestamped journey event. Called by the (public) beacon routes.
-// When a signed session `token` is supplied it is stored under a unique index,
-// so a replayed or repeated token for the same event is a duplicate-key no-op —
+// When a verified session `nonce` is supplied it is stored under a unique index,
+// so a replayed or repeated nonce for the same event is a duplicate-key no-op —
 // each session's event counts once. A duplicate is therefore success, not error.
-async function recordEvent(db, collection, dateField, token) {
+async function recordEvent(db, collection, dateField, nonce) {
   const doc = { [dateField]: new Date() }
-  if (token) {
-    doc.token = token
+  if (nonce) {
+    doc.nonce = nonce
   }
   try {
     await db.collection(collection).insertOne(doc)
@@ -127,10 +126,10 @@ async function recordEvent(db, collection, dateField, token) {
   }
 }
 
-export async function recordJourneyStart(db, token) {
-  return recordEvent(db, JOURNEY_STARTS_COLLECTION, 'startedAt', token)
+export async function recordJourneyStart(db, nonce) {
+  return recordEvent(db, JOURNEY_STARTS_COLLECTION, 'startedAt', nonce)
 }
 
-export async function recordJourneyNotEligible(db, token) {
-  return recordEvent(db, JOURNEY_NOT_ELIGIBLE_COLLECTION, 'endedAt', token)
+export async function recordJourneyNotEligible(db, nonce) {
+  return recordEvent(db, JOURNEY_NOT_ELIGIBLE_COLLECTION, 'endedAt', nonce)
 }
