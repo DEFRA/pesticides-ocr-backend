@@ -19,6 +19,9 @@ import {
 const auth = requireRole(...getCaseOfficerRoles())
 
 const HTTP_NO_CONTENT = 204
+// Beacons ignore the request body; cap it small so an unauthenticated caller
+// can't stream a large payload at us.
+const MAX_BEACON_PAYLOAD_BYTES = 1024
 
 // Optional inclusive ISO date bounds. Unknown params and invalid dates are
 // rejected with 400 by the server-wide failAction (same as the /operators route).
@@ -64,7 +67,7 @@ const beaconRoute = (path, record, label) => ({
   method: 'POST',
   path,
   options: {
-    payload: { parse: false, maxBytes: 1024 }
+    payload: { parse: false, maxBytes: MAX_BEACON_PAYLOAD_BYTES }
   },
   handler: async (request, h) => {
     try {
