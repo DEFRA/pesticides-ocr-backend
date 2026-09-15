@@ -59,14 +59,27 @@ describe.each(cases)(
     test('records once for a valid token; a replay is an idempotent no-op', async () => {
       const token = signedToken('session-nonce-1')
 
+      // request.log(['metrics'], ...) surfaces on the server 'request' event.
+      const metricsLogs = []
+      const onRequest = (_request, event) => {
+        if (event.tags?.includes('metrics')) {
+          metricsLogs.push(event)
+        }
+      }
+      server.events.on('request', onRequest)
+
       expect((await post(token)).statusCode).toBe(204)
       const afterFirst = await server.db.collection(collection).countDocuments()
       expect(afterFirst).toBe(1)
+      expect(metricsLogs).toHaveLength(1) // logged the actual record
 
-      // Replaying the same token must not add a second document.
+      // Replaying the same token must not add a second document — nor log again.
       expect((await post(token)).statusCode).toBe(204)
       const afterReplay = await server.db.collection(collection).countDocuments()
       expect(afterReplay).toBe(1)
+      expect(metricsLogs).toHaveLength(1)
+
+      server.events.removeListener('request', onRequest)
     })
   }
 )

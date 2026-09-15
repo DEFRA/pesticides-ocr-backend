@@ -85,7 +85,13 @@ const beaconRoute = (path, record, label) => ({
     }
 
     try {
-      await record(request.db, nonce)
+      const recorded = await record(request.db, nonce)
+      // Log only actual records (a deduped replay returns false), so the backend
+      // log line mirrors a real DB insert. request.log routes through the ECS
+      // pino pipeline with the request's trace id (see plugins/logger-options).
+      if (recorded) {
+        request.log(['metrics'], `recorded ${label}`)
+      }
       return h.response().code(HTTP_NO_CONTENT)
     } catch (err) {
       request.log(['error'], err)
