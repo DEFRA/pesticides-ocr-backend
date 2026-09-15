@@ -106,18 +106,31 @@ export async function countJourneyNotEligible(db, { from, to } = {}) {
   })
 }
 
+const MONGO_DUPLICATE_KEY_ERROR = 11000
+
 // Append one timestamped journey event. Called by the (public) beacon routes.
-// The frontend fires each once per session (yar flag), but the backend keeps no
-// correlation id, so it cannot collapse repeats from retries or bots — treat the
-// resulting counts as best-effort raw totals, not precise unique-visitor figures.
-async function recordEvent(db, collection, dateField) {
-  await db.collection(collection).insertOne({ [dateField]: new Date() })
+// When a signed session `token` is supplied it is stored under a unique index,
+// so a replayed or repeated token for the same event is a duplicate-key no-op —
+// each session's event counts once. A duplicate is therefore success, not error.
+async function recordEvent(db, collection, dateField, token) {
+  const doc = { [dateField]: new Date() }
+  if (token) {
+    doc.token = token
+  }
+  try {
+    await db.collection(collection).insertOne(doc)
+  } catch (err) {
+    if (err.code === MONGO_DUPLICATE_KEY_ERROR) {
+      return
+    }
+    throw err
+  }
 }
 
-export async function recordJourneyStart(db) {
-  return recordEvent(db, JOURNEY_STARTS_COLLECTION, 'startedAt')
+export async function recordJourneyStart(db, token) {
+  return recordEvent(db, JOURNEY_STARTS_COLLECTION, 'startedAt', token)
 }
 
-export async function recordJourneyNotEligible(db) {
-  return recordEvent(db, JOURNEY_NOT_ELIGIBLE_COLLECTION, 'endedAt')
+export async function recordJourneyNotEligible(db, token) {
+  return recordEvent(db, JOURNEY_NOT_ELIGIBLE_COLLECTION, 'endedAt', token)
 }

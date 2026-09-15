@@ -49,8 +49,17 @@ async function createIndexes(db) {
   await db.collection('mongo-locks').createIndex({ id: 1 })
   await registrations.createIndex({ submittedAt: 1 })
   await registrations.createIndex({ reference: 1 }, { unique: true })
-  await db.collection(JOURNEY_STARTS_COLLECTION).createIndex({ startedAt: 1 })
-  await db
-    .collection(JOURNEY_NOT_ELIGIBLE_COLLECTION)
-    .createIndex({ endedAt: 1 })
+  const journeyStarts = db.collection(JOURNEY_STARTS_COLLECTION)
+  const journeyNotEligible = db.collection(JOURNEY_NOT_ELIGIBLE_COLLECTION)
+
+  await journeyStarts.createIndex({ startedAt: 1 })
+  await journeyNotEligible.createIndex({ endedAt: 1 })
+
+  // Signed per-session token — sparse (only present when the secret is
+  // configured) + unique so a replayed token for the same event is a no-op.
+  await journeyStarts.createIndex({ token: 1 }, { unique: true, sparse: true })
+  await journeyNotEligible.createIndex(
+    { token: 1 },
+    { unique: true, sparse: true }
+  )
 }

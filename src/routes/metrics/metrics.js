@@ -1,7 +1,9 @@
 import Joi from 'joi'
 import Boom from '@hapi/boom'
 
+import { config } from '#/config.js'
 import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
+import { verifiedNonce } from '#/services/metrics/journey-token.js'
 import {
   countRegistrations,
   countJourneyStarts,
@@ -22,6 +24,8 @@ const HTTP_NO_CONTENT = 204
 // Beacons ignore the request body; cap it small so an unauthenticated caller
 // can't stream a large payload at us.
 const MAX_BEACON_PAYLOAD_BYTES = 1024
+// The frontend sends its signed per-session token in this header.
+const JOURNEY_TOKEN_HEADER = 'x-journey-token'
 
 // Optional inclusive ISO date bounds. Unknown params and invalid dates are
 // rejected with 400 by the server-wide failAction (same as the /operators route).
@@ -56,13 +60,14 @@ const countRoute = (path, count) => ({
 // record a single timestamp (no PII) so completion rate can be measured
 // consent-free.
 //
-// POC LIMITATION: unlike POST /register (a full Joi payload + unique reference),
-// these writes are trivial and unauthenticated, so a script could inflate the
-// counts and skew the metric. Acceptable for the POC because the backend is not
-// browser-facing (the frontend calls it server-to-server). Before this KPI is
-// relied on in production, add a server-side control here — e.g. IP/origin rate
-// limiting or a signed per-session token minted by the frontend. The body is
-// ignored (and not parsed) to keep the surface minimal.
+// These beacons are public (the applicant journey has no bearer token), so a
+// script could otherwise hit them directly and inflate the counts. When
+// `metrics.journeyTokenSecret` is configured, each beacon must carry a valid
+// signed per-session token (minted + signed by the frontend under the shared
+// secret) — a direct/forged call is rejected, and the token's nonce is stored
+// under a unique index so a replay is counted once. Verification is gated on the
+// secret being set, so local/unconfigured tiers still accept unsigned beacons.
+// The body is ignored (and not parsed) to keep the surface minimal.
 const beaconRoute = (path, record, label) => ({
   method: 'POST',
   path,
@@ -70,8 +75,17 @@ const beaconRoute = (path, record, label) => ({
     payload: { parse: false, maxBytes: MAX_BEACON_PAYLOAD_BYTES }
   },
   handler: async (request, h) => {
+    const secret = config.get('metrics.journeyTokenSecret')
+    let token
+    if (secret) {
+      token = verifiedNonce(request.headers[JOURNEY_TOKEN_HEADER], secret)
+      if (!token) {
+        throw Boom.unauthorized('Invalid or missing journey token')
+      }
+    }
+
     try {
-      await record(request.db)
+      await record(request.db, token)
       return h.response().code(HTTP_NO_CONTENT)
     } catch (err) {
       request.log(['error'], err)
