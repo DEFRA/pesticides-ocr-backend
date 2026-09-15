@@ -5,13 +5,16 @@ import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
 import {
   countRegistrations,
   countJourneyStarts,
-  recordJourneyStart
+  countJourneyNotEligible,
+  recordJourneyStart,
+  recordJourneyNotEligible
 } from '#/services/metrics/metrics.js'
 
-// Case-officer performance metrics (EQ-283). Volumes come from the database —
-// the authoritative, consent-independent source (GA under-counts) — and the
-// read endpoints are protected by the same Entra case-officer auth as the
-// operators routes. The journey-start beacon is deliberately public (see below).
+// Backend journey tracking for the digital completion metric (EQ-472). Volumes
+// come from the database — the authoritative, consent-independent source (GA
+// under-counts). The read endpoints are protected by the same Entra case-officer
+// auth as the operators routes; the journey beacons are deliberately public
+// (see below).
 
 const auth = requireRole(...getCaseOfficerRoles())
 
@@ -24,7 +27,7 @@ const querySchema = Joi.object({
   to: Joi.date().iso().optional()
 })
 
-// The two read endpoints differ only in which count function they call, so build
+// The read endpoints differ only in which count function they call, so build
 // them from one shape rather than duplicating the options/handler.
 const countRoute = (path, count) => ({
   method: 'GET',
@@ -44,37 +47,44 @@ const countRoute = (path, count) => ({
   }
 })
 
+// Public, unauthenticated beacon. The applicant journey has no bearer token, so
+// these cannot be guarded like the read endpoints. The frontend fires them
+// server-side, once per session, as the applicant moves through the journey; we
+// record a single timestamp (no PII) so completion rate can be measured
+// consent-free.
+//
+// POC LIMITATION: unlike POST /register (a full Joi payload + unique reference),
+// these writes are trivial and unauthenticated, so a script could inflate the
+// counts and skew the metric. Acceptable for the POC because the backend is not
+// browser-facing (the frontend calls it server-to-server). Before this KPI is
+// relied on in production, add a server-side control here — e.g. IP/origin rate
+// limiting or a signed per-session token minted by the frontend. The body is
+// ignored (and not parsed) to keep the surface minimal.
+const beaconRoute = (path, record, label) => ({
+  method: 'POST',
+  path,
+  options: {
+    payload: { parse: false, maxBytes: 1024 }
+  },
+  handler: async (request, h) => {
+    try {
+      await record(request.db)
+      return h.response().code(HTTP_NO_CONTENT)
+    } catch (err) {
+      request.log(['error'], err)
+      throw Boom.internal(`Failed to record ${label}`)
+    }
+  }
+})
+
 export const metrics = [
   countRoute('/metrics/registrations', countRegistrations),
   countRoute('/metrics/journey-starts', countJourneyStarts),
-  {
-    // Public, unauthenticated beacon. The applicant journey has no bearer token,
-    // so this cannot be guarded like the read endpoints. The frontend fires it
-    // server-side, once per session, at the first journey page; we record a
-    // single timestamp (no PII) so completion rate can be measured consent-free
-    // (starts vs finishes).
-    //
-    // POC LIMITATION: unlike POST /register (which requires a full Joi payload +
-    // unique reference), this write is trivial and unauthenticated, so a script
-    // could inflate the "starts" count and skew completion rate. Acceptable for
-    // the POC because the backend is not browser-facing (the frontend calls it
-    // server-to-server). Before this KPI is relied on in production, add a
-    // server-side control here — e.g. IP/origin rate limiting or a per-session
-    // nonce minted by the frontend. The body is ignored (and not parsed) to keep
-    // the surface minimal.
-    method: 'POST',
-    path: '/metrics/journey-starts',
-    options: {
-      payload: { parse: false, maxBytes: 1024 }
-    },
-    handler: async (request, h) => {
-      try {
-        await recordJourneyStart(request.db)
-        return h.response().code(HTTP_NO_CONTENT)
-      } catch (err) {
-        request.log(['error'], err)
-        throw Boom.internal('Failed to record journey start')
-      }
-    }
-  }
+  countRoute('/metrics/journey-not-eligible', countJourneyNotEligible),
+  beaconRoute('/metrics/journey-starts', recordJourneyStart, 'journey start'),
+  beaconRoute(
+    '/metrics/journey-not-eligible',
+    recordJourneyNotEligible,
+    'not-eligible finish'
+  )
 ]

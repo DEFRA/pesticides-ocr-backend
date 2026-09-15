@@ -1,7 +1,10 @@
 import { MongoClient } from 'mongodb'
 import { LockManager } from 'mongo-locks'
 
-import { JOURNEY_STARTS_COLLECTION } from '#/services/metrics/metrics.js'
+import {
+  JOURNEY_STARTS_COLLECTION,
+  JOURNEY_NOT_ELIGIBLE_COLLECTION
+} from '#/services/metrics/metrics.js'
 
 export const mongoDb = {
   plugin: {
@@ -47,4 +50,7 @@ async function createIndexes(db) {
   await registrations.createIndex({ submittedAt: 1 })
   await registrations.createIndex({ reference: 1 }, { unique: true })
   await db.collection(JOURNEY_STARTS_COLLECTION).createIndex({ startedAt: 1 })
+  await db
+    .collection(JOURNEY_NOT_ELIGIBLE_COLLECTION)
+    .createIndex({ endedAt: 1 })
 }

@@ -1,16 +1,21 @@
-// Service-performance metrics for the case-officer dashboard (EQ-283).
+// Backend journey tracking for the digital completion metric (EQ-472).
 //
 // The database is the authoritative, consent-independent source for volume
 // metrics — Google Analytics under-counts (it only sees users who accept
-// analytics cookies), so the "number of registrants" figure and both sides of
-// completion rate (starts vs finishes) come from here.
+// analytics cookies), so all four EQ-472 numbers come from here:
+//   1. starts        — this module (`ocr-journey-starts`)
+//   2. completions   — registrations (`ocr-registration.submittedAt`)
+//   3. not-eligible  — this module (`ocr-journey-not-eligible`), users who exit
+//                      via the "You do not need to use this service" page
+//   4. drop-outs     — derived: starts − (completions + not-eligible)
 
 import { COLLECTION } from '#/services/search/search.js'
 
-// Journey "starts" recorded server-side, once per session, at the first journey
-// page — a consent-free denominator for completion rate. No PII: just a
-// timestamp. Finishes come from the registrations collection (`submittedAt`).
+// Journey events recorded server-side, once per session, as the applicant moves
+// through the journey — a consent-free basis for completion rate. No PII: just a
+// timestamp. Completions (finishes) come from the registrations collection.
 export const JOURNEY_STARTS_COLLECTION = 'ocr-journey-starts'
+export const JOURNEY_NOT_ELIGIBLE_COLLECTION = 'ocr-journey-not-eligible'
 
 // from/to are treated as inclusive calendar dates (UTC): the whole `from` day
 // through the whole `to` day. So a bare date `to` (e.g. 2026-04-01) includes
@@ -90,13 +95,29 @@ export async function countJourneyStarts(db, { from, to } = {}) {
   })
 }
 
-// Record a single journey start. Called by the (public) beacon route when an
-// applicant begins the journey. The frontend fires it once per session (yar
-// flag), but the backend keeps no correlation id, so it cannot collapse repeats
-// from retries or bots — treat the resulting count as a best-effort raw total,
-// not a precise unique-visitor figure.
+// Count "not-eligible" finishes from `endedAt` — applicants who exited via the
+// "You do not need to use this service" page (a valid journey completion).
+export async function countJourneyNotEligible(db, { from, to } = {}) {
+  return countByMonth(db, {
+    collection: JOURNEY_NOT_ELIGIBLE_COLLECTION,
+    dateField: 'endedAt',
+    from,
+    to
+  })
+}
+
+// Append one timestamped journey event. Called by the (public) beacon routes.
+// The frontend fires each once per session (yar flag), but the backend keeps no
+// correlation id, so it cannot collapse repeats from retries or bots — treat the
+// resulting counts as best-effort raw totals, not precise unique-visitor figures.
+async function recordEvent(db, collection, dateField) {
+  await db.collection(collection).insertOne({ [dateField]: new Date() })
+}
+
 export async function recordJourneyStart(db) {
-  await db
-    .collection(JOURNEY_STARTS_COLLECTION)
-    .insertOne({ startedAt: new Date() })
+  return recordEvent(db, JOURNEY_STARTS_COLLECTION, 'startedAt')
+}
+
+export async function recordJourneyNotEligible(db) {
+  return recordEvent(db, JOURNEY_NOT_ELIGIBLE_COLLECTION, 'endedAt')
 }
