@@ -1,6 +1,5 @@
 import { config } from '#/config.js'
-
-const COLLECTION = 'ocr-registration'
+import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 
 // --- Basic reference lookup (EQ-366) ---------------------------------------
 
@@ -16,7 +15,7 @@ function validateReferenceNumber(referenceNumber) {
 
 function getOneByReferenceNumber(db, referenceNumber) {
   return db
-    .collection(COLLECTION)
+    .collection(OCR_REGISTRATION_COLLECTION)
     .findOne({ reference: referenceNumber }, { projection: { _id: 0 } })
 }
 
@@ -170,7 +169,7 @@ export async function searchOperators(
   { query = '', limit = MAX_RESULTS } = {}
 ) {
   const docs = await db
-    .collection(COLLECTION)
+    .collection(OCR_REGISTRATION_COLLECTION)
     .find(buildSearchFilter(query), { projection: { _id: 0 } })
     .sort({ submittedAt: -1 })
     .limit(limit)

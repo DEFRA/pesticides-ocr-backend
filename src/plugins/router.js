@@ -3,6 +3,7 @@ import { search } from '#/routes/search/search.js'
 import { register } from '#/routes/registration.js'
 import { whoami } from '#/routes/whoami.js'
 import { operators } from '#/routes/operators/operators.js'
+import { metrics } from '#/routes/metrics/metrics.js'
 
 export const router = {
   plugin: {
@@ -14,6 +15,7 @@ export const router = {
           .concat(search)
           .concat([whoami])
           .concat(operators)
+          .concat(metrics)
       )
     }
   }
