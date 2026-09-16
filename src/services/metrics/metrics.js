@@ -9,7 +9,7 @@
 //                      via the "You do not need to use this service" page
 //   4. drop-outs     — derived: starts − (completions + not-eligible)
 
-import { COLLECTION } from '#/services/search/search.js'
+import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
 
 // Journey events recorded server-side, once per session, as the applicant moves
@@ -90,7 +90,7 @@ async function countByMonth(db, { collection, dateField, from, to } = {}) {
 // dashboard its month / year / life-of-service views.
 export async function countRegistrations(db, { from, to } = {}) {
   return countByMonth(db, {
-    collection: COLLECTION,
+    collection: OCR_REGISTRATION_COLLECTION,
     dateField: 'submittedAt',
     from,
     to

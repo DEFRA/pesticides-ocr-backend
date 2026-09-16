@@ -1,6 +1,7 @@
 import { MongoClient } from 'mongodb'
 import { LockManager } from 'mongo-locks'
 
+import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 import {
   JOURNEY_STARTS_COLLECTION,
   JOURNEY_NOT_ELIGIBLE_COLLECTION
@@ -44,7 +45,7 @@ export const mongoDb = {
 }
 
 async function createIndexes(db) {
-  const registrations = db.collection('ocr-registration')
+  const registrations = db.collection(OCR_REGISTRATION_COLLECTION)
 
   await db.collection('mongo-locks').createIndex({ id: 1 })
   await registrations.createIndex({ submittedAt: 1 })
