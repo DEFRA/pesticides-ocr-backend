@@ -1,7 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from 'vitest'
 import { createHmac } from 'node:crypto'
 
-import { config } from '#/config.js'
 import {
   JOURNEY_STARTS_COLLECTION,
   JOURNEY_NOT_ELIGIBLE_COLLECTION
@@ -30,9 +29,18 @@ describe.each(cases)(
   '#metricsRoutes — beacon token enforcement ($label)',
   ({ path, collection }) => {
     let server
+    let config
 
     beforeAll(async () => {
-      const { createServer } = await import('#/server.js')
+      // Import both dynamically so config (and its MONGO_URI) is read AFTER
+      // vitest-mongodb sets it. A static top-level `config` import loads the
+      // default localhost MONGO_URI before the in-memory server is up, which
+      // makes createServer hang on CI (no local mongod) — passes locally only.
+      const [{ createServer }, configModule] = await Promise.all([
+        import('#/server.js'),
+        import('#/config.js')
+      ])
+      config = configModule.config
       server = await createServer()
       await server.initialize()
       config.set('journeyToken.secret', SECRET)
