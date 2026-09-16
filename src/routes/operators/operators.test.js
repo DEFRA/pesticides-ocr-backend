@@ -21,11 +21,15 @@ const docs = [
     submittedAt: new Date('2026-03-11T09:30:00.000Z'),
     businessName: 'Pesticides Ltd',
     businessActivities: ['manufacture'],
-    address: { line1: 'Highfield Farm', town: 'Farmtown', postcode: 'PH1 1FT' },
+    address: {
+      addressLine1: 'Highfield Farm',
+      addressTown: 'Farmtown',
+      addressPostcode: 'PH1 1FT'
+    },
     primaryContact: {
-      name: 'John Smith',
-      telephone: '01234 567890',
-      email: 'john@pesticides.example'
+      contactName: 'John Smith',
+      contactTelephone: '01234 567890',
+      contactEmail: 'john@pesticides.example'
     },
     addressActivities: ['use'],
     quantity: { quantityType: 'amount', quantity: 80000 }
@@ -35,11 +39,15 @@ const docs = [
     submittedAt: new Date('2026-05-02T10:00:00.000Z'),
     businessName: 'Green Acres Growers',
     businessActivities: ['use-professional'],
-    address: { line1: '2 Meadow Lane', town: 'Cropwell', postcode: 'NG12 3AB' },
+    address: {
+      addressLine1: '2 Meadow Lane',
+      addressTown: 'Cropwell',
+      addressPostcode: 'NG12 3AB'
+    },
     primaryContact: {
-      name: 'Priya Patel',
-      telephone: '0115 900 1234',
-      email: 'priya@greenacres.example'
+      contactName: 'Priya Patel',
+      contactTelephone: '0115 900 1234',
+      contactEmail: 'priya@greenacres.example'
     },
     addressActivities: ['use', 'store'],
     quantity: { quantityType: 'area', quantity: 1500 }

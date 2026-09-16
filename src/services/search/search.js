@@ -91,18 +91,18 @@ function toIsoDate(value) {
 // address.line2/county are intentionally dropped (not shown on the grid).
 function mapAddress(address = {}) {
   return {
-    line1: address.line1 ?? '',
-    town: address.town ?? '',
-    postcode: address.postcode ?? '',
-    country: address.country ?? DEFAULT_COUNTRY
+    line1: address.addressLine1 ?? '',
+    town: address.addressTown ?? '',
+    postcode: address.addressPostcode ?? '',
+    country: address.addressCountry ?? DEFAULT_COUNTRY
   }
 }
 
 function mapContact(contact = {}) {
   return {
-    name: contact.name ?? '',
-    email: contact.email ?? '',
-    telephone: contact.telephone ?? ''
+    name: contact.contactName ?? '',
+    email: contact.contactEmail ?? '',
+    telephone: contact.contactTelephone ?? ''
   }
 }
 
@@ -148,9 +148,10 @@ export function buildSearchFilter(query) {
     $or: [
       { reference: rx },
       { businessName: rx },
-      { 'primaryContact.name': rx },
-      { 'address.town': rx },
-      { 'address.postcode': rx }
+      // Stored (payload) field names, not the Operator contract's — see mapAddress.
+      { 'primaryContact.contactName': rx },
+      { 'address.addressTown': rx },
+      { 'address.addressPostcode': rx }
     ]
   }
 }

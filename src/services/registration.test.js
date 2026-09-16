@@ -19,11 +19,16 @@ describe('saveRegistration', () => {
   const validData = {
     businessName: 'Test Co',
     businessActivities: ['manufacture'],
-    address: { line1: '1 Test St', town: 'Testville', postcode: 'TE1 1ST' },
+    mainCustomer: 'professional',
+    address: {
+      addressLine1: '1 Test St',
+      addressTown: 'Testville',
+      addressPostcode: 'TE1 1ST'
+    },
     primaryContact: {
-      name: 'Test User',
-      telephone: '01234567890',
-      email: 'test@test.com'
+      contactName: 'Test User',
+      contactTelephone: '01234567890',
+      contactEmail: 'test@test.com'
     },
     addressActivities: ['use'],
     quantity: { quantityType: 'area', quantity: '10' }
