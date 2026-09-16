@@ -18,6 +18,12 @@ import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
 export const JOURNEY_STARTS_COLLECTION = 'ocr-journey-starts'
 export const JOURNEY_NOT_ELIGIBLE_COLLECTION = 'ocr-journey-not-eligible'
 
+// Last hour/minute/second/millisecond of a day — the inclusive end-of-day bound.
+const END_OF_DAY_HOURS = 23
+const END_OF_DAY_MINUTES = 59
+const END_OF_DAY_SECONDS = 59
+const END_OF_DAY_MS = 999
+
 // from/to are treated as inclusive calendar dates (UTC): the whole `from` day
 // through the whole `to` day. So a bare date `to` (e.g. 2026-04-01) includes
 // same-day events rather than cutting off at midnight.
@@ -28,7 +34,12 @@ const startOfDay = (date) => {
 }
 const endOfDay = (date) => {
   const d = new Date(date)
-  d.setUTCHours(23, 59, 59, 999)
+  d.setUTCHours(
+    END_OF_DAY_HOURS,
+    END_OF_DAY_MINUTES,
+    END_OF_DAY_SECONDS,
+    END_OF_DAY_MS
+  )
   return d
 }
 
