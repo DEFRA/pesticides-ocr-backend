@@ -5,7 +5,7 @@
 // analytics cookies), so the "number of registrants" figure and the DB side of
 // completion rate / digital take-up come from here.
 
-import { COLLECTION } from '#/services/search/search.js'
+import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 
 // Last hour/minute/second/millisecond of a day — the inclusive end-of-day bound.
 const END_OF_DAY_HOURS = 23
@@ -65,7 +65,10 @@ export async function countRegistrations(db, { from, to } = {}) {
     }
   ]
 
-  const [result] = await db.collection(COLLECTION).aggregate(pipeline).toArray()
+  const [result] = await db
+    .collection(OCR_REGISTRATION_COLLECTION)
+    .aggregate(pipeline)
+    .toArray()
 
   return {
     total: result.total[0]?.count ?? 0,
