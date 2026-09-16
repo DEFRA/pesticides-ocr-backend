@@ -53,9 +53,9 @@ describe('#metricsRoutes — GET /metrics/registrations', () => {
   })
 
   test('403 for a token without the case_officer role', async () => {
-    expect(
-      (await get('/metrics/registrations', viewerToken)).statusCode
-    ).toBe(403)
+    expect((await get('/metrics/registrations', viewerToken)).statusCode).toBe(
+      403
+    )
   })
 
   test('200 returns the total and a per-month series', async () => {

@@ -56,7 +56,9 @@ describe.each(cases)(
       await server.initialize()
       // Deterministic regardless of what other test files leave behind.
       await server.db.collection(collection).deleteMany({})
-      await server.db.collection(collection).insertMany(seed.map((d) => ({ ...d })))
+      await server.db
+        .collection(collection)
+        .insertMany(seed.map((d) => ({ ...d })))
       officerToken = await mockToken(['case_officer'])
       viewerToken = await mockToken(['viewer'])
     })
@@ -78,7 +80,10 @@ describe.each(cases)(
         const marker = new Date()
         const before = await server.db.collection(collection).countDocuments()
 
-        const { statusCode } = await server.inject({ method: 'POST', url: path })
+        const { statusCode } = await server.inject({
+          method: 'POST',
+          url: path
+        })
 
         expect(statusCode).toBe(204)
         const after = await server.db.collection(collection).countDocuments()
@@ -141,7 +146,9 @@ describe.each(cases)(
       })
 
       test('400 for an unknown query parameter', async () => {
-        expect((await get(`${path}?foo=bar`, officerToken)).statusCode).toBe(400)
+        expect((await get(`${path}?foo=bar`, officerToken)).statusCode).toBe(
+          400
+        )
       })
 
       test('returns zeros when the range matches nothing', async () => {

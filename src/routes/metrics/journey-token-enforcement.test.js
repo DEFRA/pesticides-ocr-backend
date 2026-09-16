@@ -14,7 +14,11 @@ const signedToken = (nonce) =>
   `${nonce}.${createHmac('sha256', SECRET).update(nonce).digest('hex')}`
 
 const cases = [
-  { label: 'journey starts', path: '/metrics/journey-starts', collection: JOURNEY_STARTS_COLLECTION },
+  {
+    label: 'journey starts',
+    path: '/metrics/journey-starts',
+    collection: JOURNEY_STARTS_COLLECTION
+  },
   {
     label: 'journey not-eligible finishes',
     path: '/metrics/journey-not-eligible',
@@ -75,7 +79,9 @@ describe.each(cases)(
 
       // Replaying the same token must not add a second document — nor log again.
       expect((await post(token)).statusCode).toBe(204)
-      const afterReplay = await server.db.collection(collection).countDocuments()
+      const afterReplay = await server.db
+        .collection(collection)
+        .countDocuments()
       expect(afterReplay).toBe(1)
       expect(metricsLogs).toHaveLength(1)
 
