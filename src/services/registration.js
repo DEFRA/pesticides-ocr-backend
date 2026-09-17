@@ -1,10 +1,11 @@
 import { randomInt } from 'node:crypto'
 import { config } from '#/config.js'
 import { createLogger } from '#/common/helpers/logging/logger.js'
+import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
+import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 
 const logger = createLogger()
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-const MONGO_DUPLICATE_KEY_ERROR = 11000
 const MAX_REFERENCE_RETRIES = 10
 
 export function generateReference(prefix = config.get('referencePrefix')) {
@@ -14,7 +15,7 @@ export function generateReference(prefix = config.get('referencePrefix')) {
 }
 
 export async function saveRegistration(db, data, { prefix } = {}) {
-  const collection = db.collection('ocr-registration')
+  const collection = db.collection(OCR_REGISTRATION_COLLECTION)
 
   for (let attempt = 1; attempt <= MAX_REFERENCE_RETRIES; attempt++) {
     const reference = generateReference(prefix)

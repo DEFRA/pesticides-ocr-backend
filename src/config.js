@@ -220,6 +220,15 @@ export const config = convict({
         env: 'ENTRA_CASE_OFFICER_ROLE_VALUES'
       }
     }
+  },
+  journeyToken: {
+    secret: {
+      doc: 'Shared HMAC secret for verifying signed journey-tracking beacon tokens (EQ-472). Set via CDP Secrets — the SAME value as the frontend JOURNEY_TOKEN_SECRET, per tier; never committed. Empty = verification disabled (local/unconfigured tiers accept unsigned beacons).',
+      format: String,
+      default: '',
+      env: 'JOURNEY_TOKEN_SECRET',
+      sensitive: true
+    }
   }
 })
 
