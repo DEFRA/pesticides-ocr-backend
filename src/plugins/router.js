@@ -3,6 +3,7 @@ import { search } from '#/routes/search/search.js'
 import { register } from '#/routes/registration.js'
 import { whoami } from '#/routes/whoami.js'
 import { operators } from '#/routes/operators/operators.js'
+import { exports } from '#/routes/exports/exports.js'
 import { metrics, warnIfJourneyTokenUnset } from '#/routes/metrics/metrics.js'
 
 export const router = {
@@ -16,6 +17,7 @@ export const router = {
           .concat(search)
           .concat([whoami])
           .concat(operators)
+          .concat(exports)
           .concat(metrics)
       )
     }
