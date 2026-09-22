@@ -14,7 +14,6 @@ export const RATE_LIMIT_COLLECTION = EMAIL_VERIFICATION_RATE_LIMIT_COLLECTION
 
 const MS_PER_SECOND = 1000
 const SECONDS_PER_HOUR = 3600
-const NOTIFY_ERROR_STATUS_THRESHOLD = 400
 
 // This is a frontend-only gate: these endpoints drive the OTP step in the
 // UI, but POST /register is not checked against them (see
@@ -85,23 +84,12 @@ async function enforceStartRateLimit(db, { email, ip }) {
 }
 
 async function dispatchCode(email, code) {
-  let response
   try {
     // The Notify template references the code as ((otp)), so the
     // personalisation key must be `otp` — not `code`.
-    response = await sendEmail('emailVerificationOtp', email, { otp: code })
+    await sendEmail('emailVerificationOtp', email, { otp: code })
   } catch (err) {
     throw new EmailSendError(err.message)
-  }
-
-  // sendEmail() doesn't throw on Notify API failures — it resolves with the
-  // caught Error instead — so that case has to be detected here.
-  if (response instanceof Error) {
-    throw new EmailSendError(response.message)
-  }
-
-  if (response?.status >= NOTIFY_ERROR_STATUS_THRESHOLD) {
-    throw new EmailSendError('Failed to send verification email')
   }
 }
 
