@@ -9,3 +9,5 @@ export const OCR_REGISTRATION_COLLECTION = 'ocr-registration'
 export const JOURNEY_STARTS_COLLECTION = 'ocr-journey-starts'
 export const JOURNEY_NOT_ELIGIBLE_COLLECTION = 'ocr-journey-not-eligible'
 export const EMAIL_VERIFICATION_COLLECTION = 'email-verifications'
+export const EMAIL_VERIFICATION_RATE_LIMIT_COLLECTION =
+  'email-verification-rate-limits'
