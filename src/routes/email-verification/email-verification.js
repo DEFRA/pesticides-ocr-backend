@@ -2,6 +2,7 @@ import Joi from 'joi'
 import Boom from '@hapi/boom'
 
 import { config } from '#/config.js'
+import { HTTP_CREATED } from '#/common/constants/http-status.js'
 import {
   startVerification,
   confirmVerification,
@@ -17,7 +18,6 @@ import {
 } from '#/services/email-verification/email-verification.js'
 
 const MAX_EMAIL = 254
-const HTTP_CREATED = 201
 
 const { codeLength } = config.get('emailVerification')
 

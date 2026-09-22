@@ -5,7 +5,7 @@ import { convictValidateMongoUri } from '#/common/helpers/convict/validate-mongo
 import {
   MAGIC_NO_FOUR,
   MAGIC_NO_SIX
-} from './common/constants/common-constants'
+} from '#/common/constants/common-constants.js'
 
 convict.addFormat(convictValidateMongoUri)
 convict.addFormats(convictFormatWithValidator)
@@ -201,7 +201,7 @@ export const config = convict({
     codeTtlSeconds: {
       doc: 'How long a generated verification code remains valid for',
       format: 'nat',
-      default: 900,
+      default: 300,
       env: 'EMAIL_OTP_TTL_SECONDS'
     },
     maxAttempts: {
