@@ -2,6 +2,10 @@ import convict from 'convict'
 import convictFormatWithValidator from 'convict-format-with-validator'
 
 import { convictValidateMongoUri } from '#/common/helpers/convict/validate-mongo-uri.js'
+import {
+  MAGIC_NO_FOUR,
+  MAGIC_NO_SIX
+} from './common/constants/common-constants'
 
 convict.addFormat(convictValidateMongoUri)
 convict.addFormats(convictFormatWithValidator)
@@ -190,7 +194,7 @@ export const config = convict({
   emailVerification: {
     codeLength: {
       doc: 'Length of the generated one-time verification code',
-      format: [4, 6],
+      format: [MAGIC_NO_FOUR, MAGIC_NO_SIX],
       default: 6,
       env: 'EMAIL_OTP_LENGTH'
     },
