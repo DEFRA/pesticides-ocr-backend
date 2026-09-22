@@ -4,9 +4,13 @@ import { hmacHex, hmacHexEquals, randomHex } from '#/common/helpers/hmac.js'
 import { checkRateLimit } from '#/common/helpers/rate-limit.js'
 import { sendEmail } from '#/services/notify/notify.js'
 import { generateCode } from '#/services/email-verification/otp.js'
+import {
+  EMAIL_VERIFICATION_COLLECTION,
+  EMAIL_VERIFICATION_RATE_LIMIT_COLLECTION
+} from '#/common/constants/collections.js'
 
-export const COLLECTION = 'email-verifications'
-export const RATE_LIMIT_COLLECTION = 'email-verification-rate-limits'
+export const COLLECTION = EMAIL_VERIFICATION_COLLECTION
+export const RATE_LIMIT_COLLECTION = EMAIL_VERIFICATION_RATE_LIMIT_COLLECTION
 
 const MS_PER_SECOND = 1000
 const SECONDS_PER_HOUR = 3600
@@ -88,6 +92,12 @@ async function dispatchCode(email, code) {
     response = await sendEmail('emailVerificationOtp', email, { otp: code })
   } catch (err) {
     throw new EmailSendError(err.message)
+  }
+
+  // sendEmail() doesn't throw on Notify API failures — it resolves with the
+  // caught Error instead — so that case has to be detected here.
+  if (response instanceof Error) {
+    throw new EmailSendError(response.message)
   }
 
   if (response?.status >= NOTIFY_ERROR_STATUS_THRESHOLD) {

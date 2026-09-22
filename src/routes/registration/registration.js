@@ -1,6 +1,7 @@
 import Joi from 'joi'
 import Boom from '@hapi/boom'
 import { saveRegistration } from '#/services/registration/registration.js'
+import { HTTP_CREATED } from '#/common/constants/http-status.js'
 
 const businessActivitiesValues = [
   'manufacture',
@@ -19,8 +20,6 @@ const professionalSectorsValues = [
 ]
 
 const quantityTypeValues = ['area', 'amount']
-
-const HTTP_CREATED = 201
 
 const MAX_SHORT_TEXT = 100
 const MAX_BUSINESS_NAME = 200

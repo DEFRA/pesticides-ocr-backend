@@ -192,6 +192,17 @@ describe('startVerification', () => {
     )
   })
 
+  test('throws EmailSendError when Notify resolves with an Error (real Notify client behaviour)', async () => {
+    const db = makeFakeDb()
+    // notify.js's sendEmail() never rejects: it catches Notify API failures
+    // and resolves with the caught Error, so that's the shape to guard against.
+    mockSendEmail.mockResolvedValue(new Error('Notify API error'))
+
+    await expect(startVerification(db, { email: 'a@b.com' })).rejects.toThrow(
+      EmailSendError
+    )
+  })
+
   test('throws when no hash secret is configured', async () => {
     configValues.emailVerification.hashSecret = ''
     const db = makeFakeDb()
