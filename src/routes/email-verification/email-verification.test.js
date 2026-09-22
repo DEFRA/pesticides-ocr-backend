@@ -17,8 +17,13 @@ vi.mock(
   }
 )
 
-const {
-  VerificationNotFoundError,
+// These are imported inside beforeAll, not at module scope: importing the
+// service module here (even indirectly via importOriginal in the vi.mock
+// above) pulls in #/config.js, which freezes mongoUrl from process.env at
+// that instant. Doing this before the mongo-memory-server setup file's
+// beforeAll has set MONGO_URI locks the config to the default
+// 127.0.0.1:27017 for the rest of this file's module lifetime.
+let VerificationNotFoundError,
   CodeExpiredError,
   IncorrectCodeError,
   TooManyAttemptsError,
@@ -26,13 +31,23 @@ const {
   ResendNotAllowedError,
   RateLimitedError,
   EmailSendError
-} = await import('#/services/email-verification/email-verification.js')
 
 describe('email verification routes', () => {
   let server
   const VALID_ID = '507f1f77bcf86cd799439011'
 
   beforeAll(async () => {
+    ;({
+      VerificationNotFoundError,
+      CodeExpiredError,
+      IncorrectCodeError,
+      TooManyAttemptsError,
+      AlreadyVerifiedError,
+      ResendNotAllowedError,
+      RateLimitedError,
+      EmailSendError
+    } = await import('#/services/email-verification/email-verification.js'))
+
     const { createServer } = await import('#/server.js')
     server = await createServer()
     await server.initialize()
