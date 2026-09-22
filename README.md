@@ -111,11 +111,14 @@ git config --global core.autocrlf false
 
 ## API endpoints
 
-| Endpoint    | Method | Description                                          |
-| :---------- | :----- | :--------------------------------------------------- |
-| `/health`   | GET    | Health check                                         |
-| `/register` | POST   | Submit a pesticide registration application          |
-| `/whoami`   | GET    | Authenticated caller's identity (case-officer scope) |
+| Endpoint                                        | Method | Description                                          |
+| :---------------------------------------------- | :----- | :--------------------------------------------------- |
+| `/health`                                       | GET    | Health check                                         |
+| `/register`                                     | POST   | Submit a pesticide registration application          |
+| `/whoami`                                       | GET    | Authenticated caller's identity (case-officer scope) |
+| `/email-verifications`                          | POST   | Start email address verification (send OTP)          |
+| `/email-verifications/{verificationId}/confirm` | POST   | Confirm a verification code                          |
+| `/email-verifications/{verificationId}/resend`  | POST   | Resend a verification code                           |
 
 ### POST /register
 
@@ -159,6 +162,25 @@ Accepts a JSON body with a `formSession` object containing the registration form
 ```
 
 Reference numbers use the format `{PREFIX}-XXX-XXX` (uppercase alphanumeric). The prefix defaults to `PPP` and is configurable via the `REFERENCE_PREFIX` environment variable.
+
+### Email address verification (OTP)
+
+Verifies ownership of an email address entered during the submission
+journey, before the submission is completed. This is verification only —
+it does not authenticate the user or create an account. Full design in
+[docs/email-verification-design.md](./docs/email-verification-design.md).
+
+```
+POST /email-verifications                          { "email": "..." }        -> 201 { verificationId, expiresAt, ... }
+POST /email-verifications/{verificationId}/confirm  { "code": "482913" }      -> 200 { verified, email }
+POST /email-verifications/{verificationId}/resend   (no body)                 -> 201 { verificationId, expiresAt, ... }
+```
+
+Requires `EMAIL_OTP_HASH_SECRET` and `NOTIFY_TEMPLATE_EMAIL_VERIFICATION_OTP`
+to be set (see `.env.example`). Codes are never stored in plaintext or
+logged; records auto-expire via a Mongo TTL index. This is a **frontend-only
+gate** — `POST /register` is deliberately not checked against it; see the
+design doc for the accepted trade-off that implies.
 
 ## API authorisation (EQ-413)
 

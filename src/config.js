@@ -30,6 +30,11 @@ export const config = convict({
     format: Boolean,
     default: isDevelopment
   },
+  isProduction: {
+    doc: 'Whether the app is running in production mode, derived from NODE_ENV. Read by the Notify service to suppress verbose send logging.',
+    format: Boolean,
+    default: isProduction
+  },
   serviceVersion: {
     doc: 'The service version, this variable is injected into your docker container in CDP environments',
     format: String,
@@ -173,6 +178,71 @@ export const config = convict({
         format: String,
         default: '',
         env: 'NOTIFY_TEMPLATE_SUBMISSION_CONFIRMATION'
+      },
+      emailVerificationOtp: {
+        doc: 'Notify template ID for the email verification one-time-code email. The template body must reference the code as ((otp)).',
+        format: String,
+        default: 'ca8b5958-4ba0-4806-9e84-1143dfc3e841',
+        env: 'NOTIFY_TEMPLATE_EMAIL_VERIFICATION_OTP'
+      }
+    }
+  },
+  emailVerification: {
+    codeLength: {
+      doc: 'Length of the generated one-time verification code',
+      format: [4, 6],
+      default: 6,
+      env: 'EMAIL_OTP_LENGTH'
+    },
+    codeTtlSeconds: {
+      doc: 'How long a generated verification code remains valid for',
+      format: 'nat',
+      default: 900,
+      env: 'EMAIL_OTP_TTL_SECONDS'
+    },
+    maxAttempts: {
+      doc: 'Maximum incorrect code attempts allowed before a resend is required',
+      format: 'nat',
+      default: 5,
+      env: 'EMAIL_OTP_MAX_ATTEMPTS'
+    },
+    maxResends: {
+      doc: 'Maximum number of times a code can be resent for a single verification',
+      format: 'nat',
+      default: 5,
+      env: 'EMAIL_OTP_MAX_RESENDS'
+    },
+    resendCooldownSeconds: {
+      doc: 'Minimum time between resend requests for a single verification',
+      format: 'nat',
+      default: 60,
+      env: 'EMAIL_OTP_RESEND_COOLDOWN_SECONDS'
+    },
+    recordTtlSeconds: {
+      doc: 'How long a verification record (code/token hashes included) is retained before it is automatically deleted',
+      format: 'nat',
+      default: 86400,
+      env: 'EMAIL_OTP_RECORD_TTL_SECONDS'
+    },
+    hashSecret: {
+      doc: 'Server-side secret mixed into the HMAC used to hash verification codes at rest',
+      format: String,
+      default: '',
+      sensitive: true,
+      env: 'EMAIL_OTP_HASH_SECRET'
+    },
+    rateLimit: {
+      maxPerEmailPerHour: {
+        doc: 'Maximum verification starts/resends allowed per email address per hour',
+        format: 'nat',
+        default: 5,
+        env: 'EMAIL_OTP_RATE_LIMIT_EMAIL_PER_HOUR'
+      },
+      maxPerIpPerHour: {
+        doc: 'Maximum verification starts/resends allowed per caller IP per hour',
+        format: 'nat',
+        default: 20,
+        env: 'EMAIL_OTP_RATE_LIMIT_IP_PER_HOUR'
       }
     }
   },
