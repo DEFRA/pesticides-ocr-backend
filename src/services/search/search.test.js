@@ -13,6 +13,10 @@ vi.mock('#/config.js', () => ({
 }))
 
 describe('#validateReferenceNumber', () => {
+  beforeEach(() => {
+    configValues.referencePrefix = 'PPP'
+  })
+
   describe('Outside development', () => {
     beforeEach(() => {
       configValues.isDevelopment = false
@@ -49,16 +53,42 @@ describe('#validateReferenceNumber', () => {
       configValues.isDevelopment = true
     })
 
-    test('Should accept a SED reference', () => {
+    test('Should accept a seeded SED reference', () => {
       expect(validateReferenceNumber('SED-A1B-2C3')).toBe(true)
     })
 
-    test('Should reject a PPP reference', () => {
-      expect(validateReferenceNumber('PPP-A1B-2C3')).toBe(false)
+    // Registrations submitted locally are generated with referencePrefix, so
+    // they must stay searchable alongside the seed data.
+    test('Should accept a reference with the configured prefix', () => {
+      expect(validateReferenceNumber('PPP-A1B-2C3')).toBe(true)
     })
 
     test('Should reject lower case', () => {
       expect(validateReferenceNumber('sed-a1b-2c3')).toBe(false)
+    })
+
+    test('Should reject any other prefix', () => {
+      expect(validateReferenceNumber('ABC-A1B-2C3')).toBe(false)
+    })
+  })
+
+  describe('With a non-default referencePrefix', () => {
+    beforeEach(() => {
+      configValues.isDevelopment = false
+      configValues.referencePrefix = 'OCR'
+    })
+
+    test('Should accept the configured prefix', () => {
+      expect(validateReferenceNumber('OCR-A1B-2C3')).toBe(true)
+    })
+
+    test('Should reject the default prefix', () => {
+      expect(validateReferenceNumber('PPP-A1B-2C3')).toBe(false)
+    })
+
+    test('Should accept a configured prefix containing a digit', () => {
+      configValues.referencePrefix = 'OCR2'
+      expect(validateReferenceNumber('OCR2-A1B-2C3')).toBe(true)
     })
   })
 })

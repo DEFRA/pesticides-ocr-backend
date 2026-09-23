@@ -11,10 +11,11 @@ import { MongoClient } from 'mongodb'
 import { randomInt } from 'crypto'
 import { fileURLToPath } from 'url'
 import { generateReference } from '../src/services/registration/registration.js'
+import { SEED_REFERENCE_PREFIX } from '../src/common/constants/reference.js'
 
 const MONGO_URI = process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/'
 const MONGO_DATABASE = process.env.MONGO_DATABASE ?? 'pesticides-ocr-backend'
-export const SEED_PREFIX = 'SED'
+export const SEED_PREFIX = SEED_REFERENCE_PREFIX
 const MONGO_DUPLICATE_KEY_ERROR = 11000
 
 export const DEFAULT_COUNT = 10

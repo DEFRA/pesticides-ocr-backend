@@ -1,21 +1,69 @@
 import { config } from '#/config.js'
 import { getOneByReferenceNumber } from '#/common/helpers/ocr-search.js'
+import { SEED_REFERENCE_PREFIX } from '#/common/constants/reference.js'
+import { queryRegistrations } from './helpers/query-registrations.js'
+
+// Controller for GET /search. One endpoint, two ways to ask:
+//
+//   basic     /search?reference=PPP-A1B-2C3   exact lookup, one record
+//   advanced  /search?q=Norfolk               free-text match, newest first
+//
+// Both return stored registrations as-is. Presenting them (labels, defaults,
+// formatting) belongs to the consumer, so the case-officer view and the CSV
+// export can read the same rows without inheriting each other's shape.
+
+// Cap on the advanced result set, matching what the case-officer grid pages
+// through. The export deliberately bypasses it by asking for no cap.
+export const MAX_RESULTS = 500
 
 // --- Basic reference lookup (EQ-366) ---------------------------------------
-//
-// Reference-format validation for basic search. The collection access itself
-// (getOneByReferenceNumber) lives in the shared ocr-search helper so the
-// dashboard read API reuses the same lookup; it is re-exported here so the
-// /search route keeps a single import from its own service.
 
+const REFERENCE_PATTERN = /^([A-Z0-9]+)-[A-Z0-9]{3}-[A-Z0-9]{3}$/
+
+// The accepted prefix is the one registrations are generated with
+// (`referencePrefix`), so the validator can't disagree with the generator. In
+// development the seed script's prefix is accepted too, so seeded records stay
+// searchable alongside ones submitted locally.
 function validateReferenceNumber(referenceNumber) {
-  if (config.get('isDevelopment')) {
-    const referenceNumberPatternDev = /^SED-[A-Z0-9]{3}-[A-Z0-9]{3}$/
-    return referenceNumberPatternDev.test(referenceNumber)
+  const match = REFERENCE_PATTERN.exec(referenceNumber)
+  if (!match) {
+    return false
   }
 
-  const referenceNumberPattern = /^PPP-[A-Z0-9]{3}-[A-Z0-9]{3}$/
-  return referenceNumberPattern.test(referenceNumber)
+  const prefixes = [config.get('referencePrefix')]
+  if (config.get('isDevelopment')) {
+    prefixes.push(SEED_REFERENCE_PREFIX)
+  }
+  return prefixes.includes(match[1])
+}
+
+// --- Shared resolution for both consumers of the contract ------------------
+
+// /search and /export ask the same question and differ only in what they do
+// with the answer, so the "which rows?" decision lives here once rather than
+// being branched identically in both routes.
+//
+// Returns a tagged result instead of throwing, so this stays free of HTTP
+// concerns and each route maps the outcome to its own status codes: /search
+// 404s on a missing reference, while /export returns an empty file.
+//
+//   { invalidReference: true }  the reference is not a well-formed reference
+//   { single: doc | null }      a reference was given
+//   { list: [...] }             a free-text term was given (blank = everything)
+export async function resolveQuery(
+  db,
+  { reference, q } = {},
+  { limit = MAX_RESULTS } = {}
+) {
+  if (reference === undefined) {
+    return { list: await queryRegistrations(db, { query: q, limit }) }
+  }
+
+  if (!validateReferenceNumber(reference)) {
+    return { invalidReference: true }
+  }
+
+  return { single: await getOneByReferenceNumber(db, reference) }
 }
 
 export { getOneByReferenceNumber, validateReferenceNumber }

@@ -1,9 +1,8 @@
-import { queryOperators } from './query-operators.js'
-import { toOperator } from './operator-mapper.js'
+import { queryRegistrations } from './query-registrations.js'
 import { buildSearchFilter } from './search-filter.js'
-import { storedDoc } from '#/services/operators/operators.fixtures.js'
+import { storedDoc } from '#/services/search/search.fixtures.js'
 
-describe('#queryOperators', () => {
+describe('#queryRegistrations', () => {
   let cursor
   let sort
   let find
@@ -20,18 +19,23 @@ describe('#queryOperators', () => {
     db = { collection }
   })
 
-  test('queries ocr-registration newest-first with the given limit and maps to the Operator contract', async () => {
-    const result = await queryOperators(db, { query: '', limit: 5 })
+  test('queries ocr-registration newest-first with the given limit', async () => {
+    await queryRegistrations(db, { query: '', limit: 5 })
 
     expect(collection).toHaveBeenCalledWith('ocr-registration')
     expect(find).toHaveBeenCalledWith({}, { projection: { _id: 0 } })
     expect(sort).toHaveBeenCalledWith({ submittedAt: -1 })
     expect(cursor.limit).toHaveBeenCalledWith(5)
-    expect(result).toEqual([toOperator(storedDoc)])
+  })
+
+  test('returns the stored registrations unchanged, leaving presentation to the caller', async () => {
+    const result = await queryRegistrations(db, { query: '', limit: 5 })
+
+    expect(result).toEqual([storedDoc])
   })
 
   test('passes the built search filter for a non-blank query', async () => {
-    await queryOperators(db, { query: 'green', limit: 5 })
+    await queryRegistrations(db, { query: 'green', limit: 5 })
 
     expect(find).toHaveBeenCalledWith(buildSearchFilter('green'), {
       projection: { _id: 0 }
@@ -39,7 +43,7 @@ describe('#queryOperators', () => {
   })
 
   test('defaults to limit 0 (Mongo "no cap") when no limit is given', async () => {
-    await queryOperators(db, { query: '' })
+    await queryRegistrations(db, { query: '' })
 
     expect(cursor.limit).toHaveBeenCalledWith(0)
     expect(cursor.toArray).toHaveBeenCalled()
