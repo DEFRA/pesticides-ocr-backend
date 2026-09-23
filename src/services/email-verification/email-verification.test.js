@@ -203,7 +203,7 @@ describe('confirmVerification', () => {
       code: '482913'
     })
 
-    expect(result).toEqual({ verified: true, email: 'test@example.com' })
+    expect(result).toEqual({ verified: true })
 
     const stored = db._collection._docs.get(record._id.toString())
     expect(stored.status).toBe('verified')
@@ -219,7 +219,7 @@ describe('confirmVerification', () => {
       code: 'wrong'
     })
 
-    expect(result).toEqual({ verified: true, email: 'test@example.com' })
+    expect(result).toEqual({ verified: true })
   })
 
   test('increments attempts and throws on an incorrect code', async () => {
