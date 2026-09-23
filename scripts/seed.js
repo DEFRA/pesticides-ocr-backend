@@ -10,7 +10,7 @@
 import { MongoClient } from 'mongodb'
 import { randomInt } from 'crypto'
 import { fileURLToPath } from 'url'
-import { generateReference } from '../src/services/registration.js'
+import { generateReference } from '../src/services/registration/registration.js'
 
 const MONGO_URI = process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/'
 const MONGO_DATABASE = process.env.MONGO_DATABASE ?? 'pesticides-ocr-backend'

@@ -3,7 +3,7 @@ import Hapi from '@hapi/hapi'
 import { SignJWT } from 'jose'
 
 import { auth } from '#/auth/auth.js'
-import { whoami } from '#/routes/whoami.js'
+import { whoami } from '#/routes/whoami/whoami.js'
 
 // Mint a JWT for mock mode. The signature is irrelevant here — mock mode decodes
 // the token without verifying it — so any key works; only the claims matter.

@@ -1,6 +1,6 @@
 import Joi from 'joi'
 import Boom from '@hapi/boom'
-import { saveRegistration } from '#/services/registration.js'
+import { saveRegistration } from '#/services/registration/registration.js'
 
 const businessActivitiesValues = [
   'manufacture',

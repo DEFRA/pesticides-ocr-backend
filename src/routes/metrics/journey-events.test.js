@@ -4,7 +4,7 @@ import { SignJWT } from 'jose'
 import {
   JOURNEY_STARTS_COLLECTION,
   JOURNEY_NOT_ELIGIBLE_COLLECTION
-} from '#/services/metrics/metrics.js'
+} from '#/common/constants/collections.js'
 
 // Mock-mode tokens (ENVIRONMENT defaults to local under test): decoded but not
 // signature-verified. Mint tokens with/without the case-officer role.

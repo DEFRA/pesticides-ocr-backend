@@ -1,7 +1,10 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect, vi, beforeEach } from 'vitest'
 
-import { toCsv } from './operators-export.js'
+import { toCsv, exportOperators } from './export.js'
+import { buildSearchFilter } from '#/services/operators/helpers/search-filter.js'
+import { storedDoc } from '#/services/operators/operators.fixtures.js'
 
+// An already-mapped Operator record (the shape toCsv serialises).
 const operator = {
   reference: 'PPP-A1B-2C3',
   businessName: 'Pesticides Ltd',
@@ -65,5 +68,42 @@ describe('toCsv', () => {
     expect(cols[0]).toBe('"PPP-ZZZ-999"')
     // contact/address/status absent -> empty quoted cells, no crash
     expect(cols).toHaveLength(12)
+  })
+})
+
+describe('#exportOperators (GET /operators/export controller)', () => {
+  let cursor
+  let sort
+  let find
+  let collection
+  let db
+
+  beforeEach(() => {
+    // Chainable Mongo cursor stub: find().sort().limit().toArray()
+    cursor = { toArray: vi.fn().mockResolvedValue([storedDoc]) }
+    cursor.limit = vi.fn().mockReturnValue(cursor)
+    sort = vi.fn().mockReturnValue(cursor)
+    find = vi.fn().mockReturnValue({ sort })
+    collection = vi.fn().mockReturnValue({ find })
+    db = { collection }
+  })
+
+  test('exports the full matching set (limit 0) as CSV with the row count', async () => {
+    const { csv, rowCount } = await exportOperators(db, { query: '' })
+
+    expect(cursor.limit).toHaveBeenCalledWith(0)
+    expect(rowCount).toBe(1)
+    const lines = csv.split('\r\n')
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toBe(BOM + HEADER)
+    expect(lines[1]).toContain('"Pesticides Ltd"')
+  })
+
+  test('passes the built search filter for a non-blank query', async () => {
+    await exportOperators(db, { query: 'green' })
+
+    expect(find).toHaveBeenCalledWith(buildSearchFilter('green'), {
+      projection: { _id: 0 }
+    })
   })
 })

@@ -3,20 +3,12 @@ import Boom from '@hapi/boom'
 
 import { config } from '#/config.js'
 import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
-import { verifiedNonce } from '#/services/metrics/journey-token.js'
-import {
-  countRegistrations,
-  countJourneyStarts,
-  countJourneyNotEligible,
-  recordJourneyStart,
-  recordJourneyNotEligible
-} from '#/services/metrics/metrics.js'
+import { verifiedNonce } from '#/services/metrics/helpers/journey-token.js'
 
-// Backend journey tracking for the digital completion metric (EQ-472). Volumes
-// come from the database — the authoritative, consent-independent source (GA
-// under-counts). The read endpoints are protected by the same Entra case-officer
-// auth as the operators routes; the journey beacons are deliberately public
-// (see below).
+// Shared route shapes for the EQ-472 metrics endpoints. Volumes come from the
+// database — the authoritative, consent-independent source (GA under-counts).
+// The read endpoints are protected by the same Entra case-officer auth as the
+// operators routes; the journey beacons are deliberately public (see below).
 
 const auth = requireRole(...getCaseOfficerRoles())
 
@@ -36,7 +28,7 @@ const querySchema = Joi.object({
 
 // The read endpoints differ only in which count function they call, so build
 // them from one shape rather than duplicating the options/handler.
-const countRoute = (path, count) => ({
+export const countRoute = (path, count) => ({
   method: 'GET',
   path,
   options: {
@@ -68,7 +60,7 @@ const countRoute = (path, count) => ({
 // gated on the secret being set, so local/unconfigured tiers still accept
 // unsigned beacons (see warnIfJourneyTokenUnset). The body is ignored (and not
 // parsed) to keep the surface minimal.
-const beaconRoute = (path, record, label) => ({
+export const beaconRoute = (path, record, label) => ({
   method: 'POST',
   path,
   options: {
@@ -99,31 +91,3 @@ const beaconRoute = (path, record, label) => ({
     }
   }
 })
-
-// Fail-open guard: verification is gated on the secret being set (so local /
-// onboarding tiers still work), but a deployed tier reaching here with no secret
-// means the anti-spoofing control is silently off. Warn loudly at boot (mirrors
-// the auth plugin's missing-config warning) rather than letting it pass unnoticed.
-export function warnIfJourneyTokenUnset(server) {
-  if (
-    !config.get('journeyToken.secret') &&
-    config.get('cdpEnvironment') !== 'local'
-  ) {
-    server.log(
-      ['metrics', 'warn'],
-      'journey token secret is not configured — journey beacons will accept unsigned requests'
-    )
-  }
-}
-
-export const metrics = [
-  countRoute('/metrics/registrations', countRegistrations),
-  countRoute('/metrics/journey-starts', countJourneyStarts),
-  countRoute('/metrics/journey-not-eligible', countJourneyNotEligible),
-  beaconRoute('/metrics/journey-starts', recordJourneyStart, 'journey start'),
-  beaconRoute(
-    '/metrics/journey-not-eligible',
-    recordJourneyNotEligible,
-    'not-eligible finish'
-  )
-]
