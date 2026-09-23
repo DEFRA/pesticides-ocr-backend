@@ -4,7 +4,7 @@ import { createHmac } from 'node:crypto'
 import {
   JOURNEY_STARTS_COLLECTION,
   JOURNEY_NOT_ELIGIBLE_COLLECTION
-} from '#/services/metrics/metrics.js'
+} from '#/common/constants/collections.js'
 
 // When journeyToken.secret is set, both public beacons must carry a valid signed
 // token. Verify enforcement, rejection, and replay idempotency for each.

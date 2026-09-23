@@ -1,11 +1,11 @@
 import { MongoClient } from 'mongodb'
 import { LockManager } from 'mongo-locks'
 
-import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 import {
+  OCR_REGISTRATION_COLLECTION,
   JOURNEY_STARTS_COLLECTION,
   JOURNEY_NOT_ELIGIBLE_COLLECTION
-} from '#/services/metrics/metrics.js'
+} from '#/common/constants/collections.js'
 
 export const mongoDb = {
   plugin: {

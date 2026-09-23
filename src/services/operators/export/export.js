@@ -1,11 +1,14 @@
-// CSV serialisation for the operator export (EQ-369).
-//
-// Renders the Operator records (from searchOperators) as CSV for the case-officer
-// export/download. The column set mirrors the frontend export contract
-// (operators-data.js) so a backend export matches the dashboard grid.
+import { queryOperators } from '#/services/operators/helpers/query-operators.js'
 
-// Column heading -> value getter. Getters are null-safe so a record with a
-// missing contact/address/activities can't break the export.
+// Controller for GET /operators/export (EQ-369): the current (filtered) operator
+// set as a CSV download. Same query as the grid but uncapped (limit 0 = Mongo's
+// "no cap"), so the export is the full matching set, not one page. The CSV
+// serialisation lives here too — the export is its only consumer.
+
+// Column heading -> value getter. The column set mirrors the frontend export
+// contract (operators-data.js) so a backend export matches the dashboard grid.
+// Getters are null-safe so a record with a missing contact/address/activities
+// can't break the export.
 const CSV_COLUMNS = [
   ['Reference', (op) => op.reference],
   ['Business name', (op) => op.businessName],
@@ -38,12 +41,25 @@ function csvCell(value) {
   return `"${safe.replaceAll('"', '""')}"`
 }
 
-// Render operators as CSV (Export API). The first row is the column headings; an
-// empty list yields the header row only.
+// Render operators as CSV. The first row is the column headings; an empty list
+// yields the header row only. Exported for unit testing of the serialisation.
 export function toCsv(operators) {
   const header = CSV_COLUMNS.map(([name]) => csvCell(name)).join(',')
   const rows = operators.map((op) =>
     CSV_COLUMNS.map(([, get]) => csvCell(get(op))).join(',')
   )
   return UTF8_BOM + [header, ...rows].join('\r\n')
+}
+
+// Returns the row count alongside the CSV so the route can audit the bulk
+// download without re-querying. `limit: 0` means "no cap" — the export needs the
+// full matching set, not just the first page.
+//
+// POC caveat: the uncapped export buffers every matching row and builds the
+// whole CSV in memory. Fine at POC volumes; before this holds production data,
+// add a hard ceiling (e.g. MAX_EXPORT_ROWS) and/or stream the CSV. Tracked on
+// the EQ-385 hardening follow-up.
+export async function exportOperators(db, { query = '' } = {}) {
+  const operators = await queryOperators(db, { query, limit: 0 })
+  return { csv: toCsv(operators), rowCount: operators.length }
 }
