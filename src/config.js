@@ -218,6 +218,12 @@ export const config = convict({
         format: String,
         default: 'case_officer',
         env: 'ENTRA_CASE_OFFICER_ROLE_VALUES'
+      },
+      requiredScope: {
+        doc: 'Required OAuth scope the access token must carry in its `scp` claim (EQ-442). Use the SHORT scope name only (e.g. "access_as_user") — this is what Entra puts in `scp`. Do NOT paste the frontend\'s ENTRA_API_SCOPE App-ID-URI value (api://<client-id>/access_as_user); that never matches `scp`. Empty = not enforced (an ID token / no-scope token is accepted). Set once the frontend forwards a scoped access token.',
+        format: String,
+        default: '',
+        env: 'ENTRA_REQUIRED_SCOPE'
       }
     }
   },

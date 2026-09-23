@@ -192,3 +192,83 @@ describe('entraBearerScheme — mock mode (decode without verification)', () => 
     expect((await get(server, 'not-a-jwt')).statusCode).toBe(401)
   })
 })
+
+describe('entraBearerScheme — required scope (scp) enforcement', () => {
+  let server
+  let signingKey
+
+  beforeAll(async () => {
+    const trusted = await generateKeyPair('RS256')
+    signingKey = trusted.privateKey
+    server = await buildServer({
+      mode: 'live',
+      getKeySet: () => trusted.publicKey,
+      resolveEntra: () => ({
+        issuer: ISSUER,
+        audience: AUDIENCE,
+        jwksUri: 'x',
+        requiredScope: 'access_as_user'
+      })
+    })
+  })
+
+  function sign(claims) {
+    return new SignJWT(claims)
+      .setProtectedHeader({ alg: 'RS256' })
+      .setSubject('officer-1')
+      .setIssuer(ISSUER)
+      .setAudience(AUDIENCE)
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(signingKey)
+  }
+
+  test('200 when scp carries the required scope', async () => {
+    const token = await sign({
+      roles: ['case_officer'],
+      scp: 'access_as_user User.Read'
+    })
+    expect((await get(server, token)).statusCode).toBe(200)
+  })
+
+  test('403 (insufficient scope) when the token has no scp claim', async () => {
+    const token = await sign({ roles: ['case_officer'] })
+    expect((await get(server, token)).statusCode).toBe(403)
+  })
+
+  test('403 when scp does not include the required scope', async () => {
+    const token = await sign({ roles: ['case_officer'], scp: 'User.Read' })
+    const { statusCode, headers } = await get(server, token)
+    expect(statusCode).toBe(403)
+    // RFC 6750 insufficient_scope challenge.
+    expect(headers['www-authenticate']).toContain('insufficient_scope')
+  })
+
+  test('does not enforce scope when requiredScope is empty', async () => {
+    const openServer = await buildServer({
+      mode: 'mock',
+      resolveEntra: () => ({
+        issuer: ISSUER,
+        audience: AUDIENCE,
+        jwksUri: 'x',
+        requiredScope: ''
+      })
+    })
+    const token = await sign({ roles: ['case_officer'] }) // no scp
+    expect((await get(openServer, token)).statusCode).toBe(200)
+  })
+
+  test('enforces the scope in mock mode too (403 when scp is missing)', async () => {
+    const mockServer = await buildServer({
+      mode: 'mock',
+      resolveEntra: () => ({
+        issuer: ISSUER,
+        audience: AUDIENCE,
+        jwksUri: 'x',
+        requiredScope: 'access_as_user'
+      })
+    })
+    const token = await sign({ roles: ['case_officer'] }) // no scp
+    expect((await get(mockServer, token)).statusCode).toBe(403)
+  })
+})
