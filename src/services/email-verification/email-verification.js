@@ -133,8 +133,8 @@ export async function startVerification(db, { email, ip }) {
     expiresAt: new Date(now.getTime() + recordTtlSeconds * MS_PER_SECOND)
   }
 
-  const { insertedId } = await db.collection(COLLECTION).insertOne(record)
   await dispatchCode(normalizedEmail, code)
+  const { insertedId } = await db.collection(COLLECTION).insertOne(record)
 
   return buildStartResult({ ...record, _id: insertedId })
 }
@@ -166,7 +166,7 @@ export async function confirmVerification(db, { verificationId, code }) {
   // Idempotent: once verified, re-confirming (double form-submit, back/
   // forward navigation) just succeeds again without re-checking the code.
   if (record.status === 'verified') {
-    return { verified: true, email: record.email }
+    return { verified: true }
   }
 
   const { maxAttempts } = config.get('emailVerification')
@@ -190,12 +190,20 @@ export async function confirmVerification(db, { verificationId, code }) {
   )
 
   if (!isCorrect) {
-    const attempts = record.attempts + 1
-    await db
+    const updated = await db
       .collection(COLLECTION)
-      .updateOne({ _id: record._id }, { $set: { attempts } })
+      .findOneAndUpdate(
+        { _id: record._id, attempts: { $lt: maxAttempts } },
+        { $inc: { attempts: 1 } },
+        { returnDocument: 'after' }
+      )
+    if (!updated) {
+      throw new TooManyAttemptsError(
+        'Too many incorrect attempts. Request a new code.'
+      )
+    }
     throw new IncorrectCodeError('Incorrect code', {
-      remainingAttempts: Math.max(maxAttempts - attempts, 0)
+      remainingAttempts: Math.max(maxAttempts - updated.attempts, 0)
     })
   }
 
@@ -206,7 +214,7 @@ export async function confirmVerification(db, { verificationId, code }) {
       { $set: { status: 'verified', verifiedAt: now, attempts: 0 } }
     )
 
-  return { verified: true, email: record.email }
+  return { verified: true }
 }
 
 export async function resendVerification(db, { verificationId, ip }) {
@@ -244,6 +252,8 @@ export async function resendVerification(db, { verificationId, ip }) {
   const codeHash = hmacHex(secret, `${codeSalt}:${code}`)
   const otpExpiresAt = new Date(now.getTime() + codeTtlSeconds * MS_PER_SECOND)
 
+  await dispatchCode(record.email, code)
+
   const updated = await db.collection(COLLECTION).findOneAndUpdate(
     { _id: record._id },
     {
@@ -258,8 +268,6 @@ export async function resendVerification(db, { verificationId, ip }) {
     },
     { returnDocument: 'after' }
   )
-
-  await dispatchCode(record.email, code)
 
   return buildStartResult(updated)
 }
