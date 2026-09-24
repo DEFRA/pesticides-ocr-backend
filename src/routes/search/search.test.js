@@ -58,18 +58,20 @@ describe('#searchRoute', () => {
 
   describe('Authorisation', () => {
     test('401 when no bearer token is presented', async () => {
-      const { statusCode } = await get('/search?reference=PPP-A1B-2C3')
+      const { statusCode, headers } = await get('/search?reference=PPP-A1B-2C3')
 
       expect(statusCode).toBe(401)
+      expect(headers['cache-control']).toBe('no-store')
     })
 
     test('403 for a token without the case_officer role', async () => {
-      const { statusCode } = await get(
+      const { statusCode, headers } = await get(
         '/search?reference=PPP-A1B-2C3',
         viewerToken
       )
 
       expect(statusCode).toBe(403)
+      expect(headers['cache-control']).toBe('no-store')
     })
   })
 
@@ -221,6 +223,22 @@ describe('#searchRoute', () => {
 
       expect(statusCode).toBe(400)
     })
+
+    // Errors say something about the register too (a 404 says a reference
+    // doesn't exist), so they're kept out of shared caches like successes.
+    test.each([
+      ['a malformed reference', '/search?reference=not-a-reference', 400],
+      ['an unknown reference', '/search?reference=PPP-ZZZ-999', 404],
+      ['a request with neither parameter', '/search', 400]
+    ])(
+      'Should keep the error for %s out of shared caches',
+      async (_description, url, expectedStatus) => {
+        const { statusCode, headers } = await get(url, officerToken)
+
+        expect(statusCode).toBe(expectedStatus)
+        expect(headers['cache-control']).toBe('no-store')
+      }
+    )
 
     // "Everything" is asked for explicitly with a blank ?q=, never implied.
     test('Should return 400 when neither reference nor q is given', async () => {

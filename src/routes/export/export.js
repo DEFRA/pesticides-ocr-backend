@@ -4,7 +4,8 @@ import { config } from '#/config.js'
 import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
 import {
   searchQuerySchema,
-  failWithBadRequest
+  failWithBadRequest,
+  noStoreCache
 } from '#/common/helpers/search-query.js'
 import { resolveQuery } from '#/services/search/search.js'
 import { exportToCsv } from '#/services/export/export.js'
@@ -30,6 +31,7 @@ export const exportRegistrations = [
     path: '/export',
     options: {
       auth: requireRole(...getCaseOfficerRoles()),
+      cache: noStoreCache,
       validate: {
         query: searchQuerySchema,
         failAction: failWithBadRequest
@@ -80,7 +82,6 @@ export const exportRegistrations = [
           'content-disposition',
           'attachment; filename="ocr-registrations.csv"'
         )
-        .header('cache-control', 'no-store')
     }
   }
 ]

@@ -58,15 +58,17 @@ describe('#exportRoute', () => {
 
   describe('Authorisation', () => {
     test('401 when no bearer token is presented', async () => {
-      const { statusCode } = await get('/export')
+      const { statusCode, headers } = await get('/export')
 
       expect(statusCode).toBe(401)
+      expect(headers['cache-control']).toBe('no-store')
     })
 
     test('403 for a token without the case_officer role', async () => {
-      const { statusCode } = await get('/export', viewerToken)
+      const { statusCode, headers } = await get('/export', viewerToken)
 
       expect(statusCode).toBe(403)
+      expect(headers['cache-control']).toBe('no-store')
     })
   })
 
@@ -231,6 +233,16 @@ describe('#exportRoute', () => {
       )
 
       expect(statusCode).toBe(400)
+    })
+
+    test('keeps an error response out of shared caches too', async () => {
+      const { statusCode, headers } = await get(
+        '/export?reference=not-a-reference',
+        officerToken
+      )
+
+      expect(statusCode).toBe(400)
+      expect(headers['cache-control']).toBe('no-store')
     })
 
     // Exporting the whole register must be an explicit ask (?q=), never the

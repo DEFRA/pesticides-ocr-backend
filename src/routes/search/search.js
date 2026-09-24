@@ -3,7 +3,8 @@ import Boom from '@hapi/boom'
 import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
 import {
   searchQuerySchema,
-  failWithBadRequest
+  failWithBadRequest,
+  noStoreCache
 } from '#/common/helpers/search-query.js'
 import { resolveQuery } from '#/services/search/search.js'
 
@@ -20,6 +21,7 @@ export const search = [
     path: '/search',
     options: {
       auth: requireRole(...getCaseOfficerRoles()),
+      cache: noStoreCache,
       validate: {
         query: searchQuerySchema,
         failAction: failWithBadRequest
@@ -32,12 +34,8 @@ export const search = [
         return Boom.badRequest('Invalid reference number')
       }
 
-      // Responses carry whole registrations, so keep them out of any shared
-      // cache, matching /export.
-      const noStore = (response) => response.header('cache-control', 'no-store')
-
       if (result.list) {
-        return noStore(h.response(result.list))
+        return h.response(result.list)
       }
 
       if (!result.single) {
@@ -46,7 +44,7 @@ export const search = [
         )
       }
 
-      return noStore(h.response(result.single))
+      return h.response(result.single)
     }
   }
 ]

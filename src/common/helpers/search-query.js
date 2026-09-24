@@ -13,6 +13,12 @@ import { MAX_REFERENCE_LENGTH } from '#/common/constants/reference.js'
 // uses 100 on the same field — worth settling on one when that merges.)
 export const MAX_SEARCH_LENGTH = 100
 
+// Route cache settings for both routes. They return whole registrations, and
+// even their errors say something about the register (a 404 on a reference
+// says it doesn't exist), so every response, success or error, is no-store
+// rather than Hapi's default no-cache, which still lets a shared cache keep it.
+export const noStoreCache = { otherwise: 'no-store' }
+
 // Validation failures surface as a clean 400 rather than the raw Joi error.
 export const failWithBadRequest = (_request, _h, err) => {
   throw Boom.badRequest(err.message)
