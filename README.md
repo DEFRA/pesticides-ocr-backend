@@ -115,6 +115,8 @@ git config --global core.autocrlf false
 | :---------- | :----- | :--------------------------------------------------- |
 | `/health`   | GET    | Health check                                         |
 | `/register` | POST   | Submit a pesticide registration application          |
+| `/search`   | GET    | Find registrations by reference or free text         |
+| `/export`   | GET    | The same search, as a CSV download                   |
 | `/whoami`   | GET    | Authenticated caller's identity (case-officer scope) |
 
 ### POST /register
@@ -158,7 +160,23 @@ Accepts a JSON body with a `formSession` object containing the registration form
 { "reference": "PPP-ABC-123" }
 ```
 
-Reference numbers use the format `{PREFIX}-XXX-XXX` (uppercase alphanumeric). The prefix defaults to `PPP` and is configurable via the `REFERENCE_PREFIX` environment variable.
+Reference numbers use the format `{PREFIX}-XXX-XXX` (uppercase alphanumeric). The prefix defaults to `PPP` and is configurable via the `REFERENCE_PREFIX` environment variable, which must itself be upper-case letters or digits (the app refuses to start otherwise).
+
+### GET /search
+
+Case-officer bearer auth required (see [API authorisation](#api-authorisation-eq-413)). Takes exactly one of:
+
+| Query                    | Returns                                         |
+| ------------------------ | ----------------------------------------------- |
+| `?reference=PPP-ABC-123` | the stored registration, or `404`               |
+| `?q=Norfolk`             | matching registrations, newest first, up to 500 |
+| `?q=`                    | every registration, newest first, up to 500     |
+
+Neither, both, a malformed reference or an unknown parameter is a `400`. Registrations are returned as stored; display mapping is the caller's concern. In development, the seed data's `SED-` references are accepted alongside the configured prefix.
+
+### GET /export
+
+Same auth and query contract as `/search`, returned as a CSV download (`ocr-registrations.csv`). A reference exports one record, or just the header row if it doesn't exist. A term exports every match, up to `EXPORT_MAX_ROWS` (default 10000); a larger match is a `400` asking for a narrower search, rather than a truncated file.
 
 ## API authorisation (EQ-413)
 

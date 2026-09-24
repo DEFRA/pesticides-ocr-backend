@@ -13,7 +13,7 @@ import { queryRegistrations } from './helpers/query-registrations.js'
 // export can read the same rows without inheriting each other's shape.
 
 // Cap on the advanced result set, matching what the case-officer grid pages
-// through. The export deliberately bypasses it by asking for no cap.
+// through. The export asks for its own, larger bound (`export.maxRows`).
 export const MAX_RESULTS = 500
 
 // --- Basic reference lookup (EQ-366) ---------------------------------------

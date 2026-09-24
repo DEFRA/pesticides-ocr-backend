@@ -15,7 +15,7 @@ export function getOneByReferenceNumber(db, referenceNumber) {
 
 // Generic find over the collection. The caller supplies the filter (e.g. the
 // dashboard's multi-field search filter) so this stays API-agnostic. `limit: 0`
-// means "no cap" (Mongo), which the CSV export relies on to get the full set.
+// means "no cap" (Mongo), so callers should always pass a bound.
 export function findRegistrations(
   db,
   { filter = {}, sort = {}, limit = 0 } = {}

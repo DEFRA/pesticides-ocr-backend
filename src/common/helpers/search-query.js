@@ -1,17 +1,17 @@
 import Joi from 'joi'
 import Boom from '@hapi/boom'
 
+import { MAX_REFERENCE_LENGTH } from '#/common/constants/reference.js'
+
 // The query contract shared by GET /search and GET /export (EQ-366). Both ask
 // the same question — which registrations? — and differ only in what they do
 // with the answer, so they validate identically rather than drifting apart.
 
 // Both parameters are length-bounded so a caller can't push an oversized string
-// into the query. A reference is a fixed 11-character format, so 32 is already
-// generous; this keeps the bound the deleted /operators/{reference} route used
-// rather than widening it. (#14 uses 100 on the same field — worth settling on
-// one when that merges.)
+// into the query. The reference bound (MAX_REFERENCE_LENGTH, 32) keeps the one
+// the deleted /operators/{reference} route used rather than widening it. (#14
+// uses 100 on the same field — worth settling on one when that merges.)
 export const MAX_SEARCH_LENGTH = 100
-export const MAX_REFERENCE_LENGTH = 32
 
 // Validation failures surface as a clean 400 rather than the raw Joi error.
 export const failWithBadRequest = (_request, _h, err) => {

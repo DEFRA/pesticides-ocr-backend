@@ -15,6 +15,7 @@ const MAX_SEARCH_LENGTH = 100
 
 describe('#exportRoute', () => {
   let server
+  let config
   let officerToken
   let viewerToken
 
@@ -29,6 +30,7 @@ describe('#exportRoute', () => {
   beforeAll(async () => {
     // Dynamic import needed due to config being updated by vitest-mongodb
     const { createServer } = await import('#/server.js')
+    ;({ config } = await import('#/config.js'))
 
     server = await createServer()
     await server.initialize()
@@ -127,6 +129,81 @@ describe('#exportRoute', () => {
 
       expect(statusCode).toBe(200)
       expect(payload.split('\r\n')).toHaveLength(1)
+    })
+  })
+
+  // Two registrations are seeded, so a limit of 1 is exceeded and 2 is not.
+  describe('Row limit', () => {
+    let originalMaxRows
+
+    beforeEach(() => {
+      originalMaxRows = config.get('export.maxRows')
+    })
+
+    afterEach(() => {
+      config.set('export.maxRows', originalMaxRows)
+    })
+
+    test('400 rather than a truncated file when the match exceeds the limit', async () => {
+      config.set('export.maxRows', 1)
+
+      const { statusCode, result } = await get('/export?q=', officerToken)
+
+      expect(statusCode).toBe(400)
+      expect(result.message).toBe(
+        'The export is limited to 1 registrations. Narrow the search and try again.'
+      )
+    })
+
+    // Guards the +1: a limit of 0 must refuse, never become Mongo's limit(0),
+    // which means "no cap".
+    test('a limit of 0 refuses a term export rather than removing the cap', async () => {
+      config.set('export.maxRows', 0)
+
+      const { statusCode } = await get('/export?q=', officerToken)
+
+      expect(statusCode).toBe(400)
+    })
+
+    test('audit-logs a refusal without the search term', async () => {
+      config.set('export.maxRows', 1)
+      const audits = []
+      const onRequest = (_request, event) => {
+        if (event.tags?.includes('audit')) {
+          audits.push(event.data)
+        }
+      }
+      server.events.on('request', onRequest)
+      try {
+        await get('/export?q=green', officerToken)
+        await get('/export?q=', officerToken)
+      } finally {
+        server.events.removeListener('request', onRequest)
+      }
+
+      const refusal = audits.find((message) => message.includes('refused'))
+      expect(refusal).toContain('maxRows=1')
+      expect(refusal).not.toContain('green')
+    })
+
+    test('exports every row when the match is exactly the limit', async () => {
+      config.set('export.maxRows', 2)
+
+      const { statusCode, payload } = await get('/export?q=', officerToken)
+
+      expect(statusCode).toBe(200)
+      expect(payload.split('\r\n')).toHaveLength(3) // header + 2 registrations
+    })
+
+    test('a single-reference export is unaffected by the limit', async () => {
+      config.set('export.maxRows', 0)
+
+      const { statusCode } = await get(
+        '/export?reference=PPP-A1B-2C3',
+        officerToken
+      )
+
+      expect(statusCode).toBe(200)
     })
   })
 

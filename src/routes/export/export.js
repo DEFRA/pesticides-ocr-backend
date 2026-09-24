@@ -1,5 +1,6 @@
 import Boom from '@hapi/boom'
 
+import { config } from '#/config.js'
 import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
 import {
   searchQuerySchema,
@@ -15,15 +16,12 @@ import { exportToCsv } from '#/services/export/export.js'
 // The route is the composition point: it asks search for rows, then hands them
 // to the export service. Neither service imports the other.
 //
-// Unlike /search this is uncapped (limit 0 = Mongo's "no cap"), because an
-// export truncated at a page boundary would be quietly wrong.
-//
-// POC caveat: that uncapped read buffers every matching row and builds the
-// whole CSV in memory. Fine at POC volumes; before this holds production data,
-// add a hard ceiling (e.g. MAX_EXPORT_ROWS) and/or stream the CSV. Tracked on
-// the EQ-385 hardening follow-up.
-const NO_CAP = 0
-
+// Unlike /search this isn't capped at a page, because an export truncated at a
+// page boundary would be quietly wrong. But the rows and the CSV are built in
+// memory, so it is bounded by `export.maxRows`: a match larger than that is
+// refused with a 400 asking the caller to narrow the search, never cut short.
+// One extra row is read to tell "exactly the limit" from "over it". Streaming
+// the CSV would lift the bound; that is the EQ-385 hardening follow-up.
 export const exportRegistrations = [
   {
     method: 'GET',
@@ -36,12 +34,26 @@ export const exportRegistrations = [
       }
     },
     handler: async (request, h) => {
+      const maxRows = config.get('export.maxRows')
       const result = await resolveQuery(request.db, request.query, {
-        limit: NO_CAP
+        limit: maxRows + 1
       })
 
       if (result.invalidReference) {
         return Boom.badRequest('Invalid reference number')
+      }
+
+      const { subject, roles } = request.auth.credentials
+
+      if (result.list?.length > maxRows) {
+        // Audited too, so refusals show whether EXPORT_MAX_ROWS needs tuning.
+        request.log(
+          ['export', 'audit'],
+          `registrations export refused: subject=${subject} roles=${roles} over maxRows=${maxRows}`
+        )
+        return Boom.badRequest(
+          `The export is limited to ${maxRows} registrations. Narrow the search and try again.`
+        )
       }
 
       // A reference that matches nothing exports an empty file rather than
@@ -52,7 +64,6 @@ export const exportRegistrations = [
       // Audit the bulk PII download without logging the data itself: who, how
       // many rows, and whether a filter was applied (not the term — it may be
       // a name).
-      const { subject, roles } = request.auth.credentials
       request.log(
         ['export', 'audit'],
         `registrations export: subject=${subject} roles=${roles} rows=${rowCount} filtered=${Boolean(
