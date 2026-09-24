@@ -20,8 +20,10 @@ import { exportToCsv } from '#/services/export/export.js'
 // page boundary would be quietly wrong. But the rows and the CSV are built in
 // memory, so it is bounded by `export.maxRows`: a match larger than that is
 // refused with a 400 asking the caller to narrow the search, never cut short.
-// One extra row is read to tell "exactly the limit" from "over it". Streaming
-// the CSV would lift the bound; that is the EQ-385 hardening follow-up.
+// One extra row is read to tell "exactly the limit" from "over it". The limit
+// is at least 1 (positive-int config format), so there is no "0 = unlimited"
+// or "0 = disabled" case to get wrong. Streaming the CSV would lift the bound;
+// that is the EQ-385 hardening follow-up.
 export const exportRegistrations = [
   {
     method: 'GET',

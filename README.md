@@ -176,7 +176,7 @@ Neither, both, a malformed reference or an unknown parameter is a `400`. Registr
 
 ### GET /export
 
-Same auth and query contract as `/search`, returned as a CSV download (`ocr-registrations.csv`). A reference exports one record, or just the header row if it doesn't exist. A term exports every match, up to `EXPORT_MAX_ROWS` (default 10000); a larger match is a `400` asking for a narrower search, rather than a truncated file.
+Same auth and query contract as `/search`, returned as a CSV download (`ocr-registrations.csv`). A reference exports one record, or just the header row if it doesn't exist. A term exports every match, up to `EXPORT_MAX_ROWS` (default 10000, at least 1); a larger match is a `400` asking for a narrower search, rather than a truncated file.
 
 ## API authorisation (EQ-413)
 

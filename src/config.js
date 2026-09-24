@@ -3,9 +3,11 @@ import convictFormatWithValidator from 'convict-format-with-validator'
 
 import { convictValidateMongoUri } from '#/common/helpers/convict/validate-mongo-uri.js'
 import { convictValidateReferencePrefix } from '#/common/helpers/convict/validate-reference-prefix.js'
+import { convictValidatePositiveInt } from '#/common/helpers/convict/validate-positive-int.js'
 
 convict.addFormat(convictValidateMongoUri)
 convict.addFormat(convictValidateReferencePrefix)
+convict.addFormat(convictValidatePositiveInt)
 convict.addFormats(convictFormatWithValidator)
 
 const isProduction = process.env.NODE_ENV === 'production'
@@ -157,8 +159,8 @@ export const config = convict({
   },
   export: {
     maxRows: {
-      doc: 'Most registrations one GET /export may return. The export is built in memory, so this bounds the memory one request can take; a larger match is refused (asking the caller to narrow the search) rather than truncated. 0 refuses every free-text export; it never means unlimited.',
-      format: 'nat',
+      doc: 'Most registrations one GET /export may return. The export is built in memory, so this bounds the memory one request can take; a larger match is refused (asking the caller to narrow the search) rather than truncated. Must be at least 1: there is no "unlimited" or "disabled" value.',
+      format: 'positive-int',
       default: 10000,
       env: 'EXPORT_MAX_ROWS'
     }

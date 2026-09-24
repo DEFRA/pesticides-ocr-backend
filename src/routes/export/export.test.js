@@ -155,16 +155,6 @@ describe('#exportRoute', () => {
       )
     })
 
-    // Guards the +1: a limit of 0 must refuse, never become Mongo's limit(0),
-    // which means "no cap".
-    test('a limit of 0 refuses a term export rather than removing the cap', async () => {
-      config.set('export.maxRows', 0)
-
-      const { statusCode } = await get('/export?q=', officerToken)
-
-      expect(statusCode).toBe(400)
-    })
-
     test('audit-logs a refusal without the search term', async () => {
       config.set('export.maxRows', 1)
       const audits = []
@@ -175,15 +165,18 @@ describe('#exportRoute', () => {
       }
       server.events.on('request', onRequest)
       try {
-        await get('/export?q=green', officerToken)
-        await get('/export?q=', officerToken)
+        // Both seeded names contain 'e', so this term matches two rows and is
+        // refused at a limit of 1.
+        await get('/export?q=e', officerToken)
       } finally {
         server.events.removeListener('request', onRequest)
       }
 
-      const refusal = audits.find((message) => message.includes('refused'))
-      expect(refusal).toContain('maxRows=1')
-      expect(refusal).not.toContain('green')
+      // Exact match: the refusal records who and the limit, and nothing from
+      // the query.
+      expect(audits).toEqual([
+        'registrations export refused: subject=officer-1 roles=case_officer over maxRows=1'
+      ])
     })
 
     test('exports every row when the match is exactly the limit', async () => {
@@ -193,17 +186,6 @@ describe('#exportRoute', () => {
 
       expect(statusCode).toBe(200)
       expect(payload.split('\r\n')).toHaveLength(3) // header + 2 registrations
-    })
-
-    test('a single-reference export is unaffected by the limit', async () => {
-      config.set('export.maxRows', 0)
-
-      const { statusCode } = await get(
-        '/export?reference=PPP-A1B-2C3',
-        officerToken
-      )
-
-      expect(statusCode).toBe(200)
     })
   })
 
