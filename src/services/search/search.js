@@ -1,6 +1,5 @@
 import { config } from '#/config.js'
 import { getOneByReferenceNumber } from '#/common/helpers/ocr-search.js'
-import { SEED_REFERENCE_PREFIX } from '#/common/constants/reference.js'
 import { queryRegistrations } from './helpers/query-registrations.js'
 
 // Controller for GET /search. One endpoint, two ways to ask:
@@ -21,20 +20,10 @@ export const MAX_RESULTS = 500
 const REFERENCE_PATTERN = /^([A-Z0-9]+)-[A-Z0-9]{3}-[A-Z0-9]{3}$/
 
 // The accepted prefix is the one registrations are generated with
-// (`referencePrefix`), so the validator can't disagree with the generator. In
-// development the seed script's prefix is accepted too, so seeded records stay
-// searchable alongside ones submitted locally.
+// (`referencePrefix`), so the validator can't disagree with the generator.
 function validateReferenceNumber(referenceNumber) {
   const match = REFERENCE_PATTERN.exec(referenceNumber)
-  if (!match) {
-    return false
-  }
-
-  const prefixes = [config.get('referencePrefix')]
-  if (config.get('isDevelopment')) {
-    prefixes.push(SEED_REFERENCE_PREFIX)
-  }
-  return prefixes.includes(match[1])
+  return match !== null && match[1] === config.get('referencePrefix')
 }
 
 // --- Shared resolution for both consumers of the contract ------------------

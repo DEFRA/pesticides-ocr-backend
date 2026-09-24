@@ -8,7 +8,7 @@ import {
   noStoreCache
 } from '#/common/helpers/search-query.js'
 import { resolveQuery } from '#/services/search/search.js'
-import { exportToCsv } from '#/services/export/export.js'
+import { exportToCsv } from '#/services/export/index.js'
 
 // GET /export (EQ-369) — the same question as /search, answered as a CSV
 // download. It takes the identical query contract, so a reference exports one

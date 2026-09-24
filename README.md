@@ -172,7 +172,7 @@ Case-officer bearer auth required (see [API authorisation](#api-authorisation-eq
 | `?q=Norfolk`             | matching registrations, newest first, up to 500 |
 | `?q=`                    | every registration, newest first, up to 500     |
 
-Neither, both, a malformed reference or an unknown parameter is a `400`. Registrations are returned as stored; display mapping is the caller's concern. In development, the seed data's `SED-` references are accepted alongside the configured prefix.
+Neither, both, a malformed reference or an unknown parameter is a `400`. Registrations are returned as stored; display mapping is the caller's concern. A reference must use the configured `REFERENCE_PREFIX`, so seeded `SED-` records aren't found by reference.
 
 ### GET /export
 

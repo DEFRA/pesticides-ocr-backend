@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 
-import { toCsv, exportToCsv } from './export.js'
+import { toCsv, exportToCsv } from './index.js'
 import { storedDoc } from '#/services/search/search.fixtures.js'
 
 // The export is prefixed with a UTF-8 BOM so Excel reads it as UTF-8.
