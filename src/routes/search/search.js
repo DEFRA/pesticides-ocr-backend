@@ -8,13 +8,6 @@ import {
 } from '#/common/helpers/search-query.js'
 import { resolveQuery } from '#/services/search/search.js'
 
-// GET /search (EQ-366) — the register's single read endpoint. A reference gives
-// the exact record; a free-text term (?q=, blank = everything) gives the matches,
-// newest first; neither or both is a 400. This absorbed the former /operators
-// dashboard read, which asked the same question under a different name.
-//
-// Now behind the case-officer bearer auth: it returns whole registrations, so
-// it should never have been open.
 export const search = [
   {
     method: 'GET',

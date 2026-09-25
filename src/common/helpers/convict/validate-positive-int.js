@@ -9,7 +9,6 @@ export const convictValidatePositiveInt = {
       throw new Error('must be a whole number of at least 1')
     }
   },
-  // Number(), not parseInt: parseInt reads '10abc' as 10 and '1e4' as 1, which
-  // would pass validation with the wrong value instead of failing startup.
-  coerce: (value) => Number(value)
+  // Number, not parseInt, so '10abc' fails validation rather than becoming 10.
+  coerce: Number
 }

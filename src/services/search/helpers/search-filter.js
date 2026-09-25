@@ -1,5 +1,3 @@
-// Builds the dashboard's free-text search filter (EQ-385).
-
 // Escape a user-supplied string for safe use inside a RegExp (prevents the
 // search term being interpreted as a pattern / ReDoS).
 function escapeRegExp(value) {

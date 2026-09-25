@@ -8,9 +8,7 @@ import { MAX_REFERENCE_LENGTH } from '#/common/constants/reference.js'
 // with the answer, so they validate identically rather than drifting apart.
 
 // Both parameters are length-bounded so a caller can't push an oversized string
-// into the query. The reference bound (MAX_REFERENCE_LENGTH, 32) keeps the one
-// the deleted /operators/{reference} route used rather than widening it. (#14
-// uses 100 on the same field — worth settling on one when that merges.)
+// into the query.
 export const MAX_SEARCH_LENGTH = 100
 
 // Route cache settings for both routes. They return whole registrations, and
