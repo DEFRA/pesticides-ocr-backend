@@ -2,8 +2,12 @@ import convict from 'convict'
 import convictFormatWithValidator from 'convict-format-with-validator'
 
 import { convictValidateMongoUri } from '#/common/helpers/convict/validate-mongo-uri.js'
+import { convictValidateReferencePrefix } from '#/common/helpers/convict/validate-reference-prefix.js'
+import { convictValidatePositiveInt } from '#/common/helpers/convict/validate-positive-int.js'
 
 convict.addFormat(convictValidateMongoUri)
+convict.addFormat(convictValidateReferencePrefix)
+convict.addFormat(convictValidatePositiveInt)
 convict.addFormats(convictFormatWithValidator)
 
 const isProduction = process.env.NODE_ENV === 'production'
@@ -148,10 +152,18 @@ export const config = convict({
     }
   },
   referencePrefix: {
-    doc: 'Prefix used when generating registration reference numbers (e.g. PPP produces PP-XXX-XXX)',
-    format: String,
+    doc: 'Prefix used when generating registration reference numbers (e.g. PPP produces PPP-XXX-XXX). Upper-case letters and digits only, the alphabet /search validates references against.',
+    format: 'reference-prefix',
     default: 'PPP',
     env: 'REFERENCE_PREFIX'
+  },
+  export: {
+    maxRows: {
+      doc: 'Most registrations one GET /export may return. The export is built in memory, so this bounds the memory one request can take; a larger match is refused (asking the caller to narrow the search) rather than truncated. Must be at least 1: there is no "unlimited" or "disabled" value.',
+      format: 'positive-int',
+      default: 10000,
+      env: 'EXPORT_MAX_ROWS'
+    }
   },
   notify: {
     keyMode: {

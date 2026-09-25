@@ -2,9 +2,7 @@ import { health } from '#/routes/health.js'
 import { search } from '#/routes/search/search.js'
 import { register } from '#/routes/registration/registration.js'
 import { whoami } from '#/routes/whoami/whoami.js'
-import { operators } from '#/routes/operators/operators.js'
-import { operatorsExport } from '#/routes/operators/export.js'
-import { operatorsReference } from '#/routes/operators/reference.js'
+import { exportRegistrations } from '#/routes/export/index.js'
 import { metricsRegistrations } from '#/routes/metrics/registrations.js'
 import { metricsJourneyStarts } from '#/routes/metrics/journey-starts.js'
 import { metricsJourneyStartEvents } from '#/routes/metrics/journey-start-events.js'
@@ -22,9 +20,7 @@ export const router = {
           .concat(register)
           .concat(search)
           .concat([whoami])
-          .concat(operators)
-          .concat(operatorsExport)
-          .concat(operatorsReference)
+          .concat(exportRegistrations)
           .concat(metricsRegistrations)
           .concat(metricsJourneyStarts)
           .concat(metricsJourneyStartEvents)

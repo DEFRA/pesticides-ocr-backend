@@ -1,9 +1,7 @@
 import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 
-// Shared read access to the ocr-registration collection. Both the Search API
-// (basic reference lookup) and the Dashboard read API build on these, so the
-// collection access lives here once rather than in either service. Pure data
-// access: no HTTP concerns, no API-specific shaping (that stays in the services).
+// Read access to the ocr-registration collection: pure data access, no HTTP
+// concerns or response shaping.
 
 // Fetch one registration by its reference (raw stored document, `_id` omitted),
 // or null.
@@ -13,9 +11,8 @@ export function getOneByReferenceNumber(db, referenceNumber) {
     .findOne({ reference: referenceNumber }, { projection: { _id: 0 } })
 }
 
-// Generic find over the collection. The caller supplies the filter (e.g. the
-// dashboard's multi-field search filter) so this stays API-agnostic. `limit: 0`
-// means "no cap" (Mongo), which the CSV export relies on to get the full set.
+// Find over the collection with a caller-supplied filter. `limit: 0` means
+// "no cap" in Mongo.
 export function findRegistrations(
   db,
   { filter = {}, sort = {}, limit = 0 } = {}

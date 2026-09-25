@@ -1,7 +1,7 @@
-// Shared test fixture for the operators service: a representative stored
-// registration document (the shape EQ-365 persists into the ocr-registration
-// collection), used across the operators controller and helper tests to assert
-// the Operator mapping.
+// Shared test fixture for the search and export services: a representative
+// stored registration document (the shape EQ-365 persists into the
+// ocr-registration collection), used across the search helper tests and the
+// CSV export tests.
 export const storedDoc = {
   reference: 'PPP-A1B-2C3',
   submittedAt: new Date('2026-03-11T09:30:00.000Z'),

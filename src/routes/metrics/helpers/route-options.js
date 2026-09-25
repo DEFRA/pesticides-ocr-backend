@@ -8,7 +8,8 @@ import { verifiedNonce } from '#/services/metrics/helpers/journey-token.js'
 // Shared route shapes for the EQ-472 metrics endpoints. Volumes come from the
 // database — the authoritative, consent-independent source (GA under-counts).
 // The read endpoints are protected by the same Entra case-officer auth as the
-// operators routes; the journey beacons are deliberately public (see below).
+// search and export routes; the journey beacons are deliberately public (see
+// below).
 
 const auth = requireRole(...getCaseOfficerRoles())
 
@@ -20,7 +21,7 @@ const MAX_BEACON_PAYLOAD_BYTES = 1024
 const JOURNEY_TOKEN_HEADER = 'x-journey-token'
 
 // Optional inclusive ISO date bounds. Unknown params and invalid dates are
-// rejected with 400 by the server-wide failAction (same as the /operators route).
+// rejected with 400 by the server-wide failAction (same as the /search route).
 const querySchema = Joi.object({
   from: Joi.date().iso().optional(),
   to: Joi.date().iso().optional()

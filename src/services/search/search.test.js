@@ -13,11 +13,11 @@ vi.mock('#/config.js', () => ({
 }))
 
 describe('#validateReferenceNumber', () => {
-  describe('Outside development', () => {
-    beforeEach(() => {
-      configValues.isDevelopment = false
-    })
+  beforeEach(() => {
+    configValues.referencePrefix = 'PPP'
+  })
 
+  describe('With the default referencePrefix', () => {
     test.each(['PPP-A1B-2C3', 'PPP-000-000', 'PPP-ZZZ-999'])(
       'Should accept %s',
       (referenceNumber) => {
@@ -26,7 +26,7 @@ describe('#validateReferenceNumber', () => {
     )
 
     test.each([
-      ['the development prefix', 'SED-A1B-2C3'],
+      ['any other prefix', 'SED-A1B-2C3'],
       ['lower case', 'ppp-a1b-2c3'],
       ['a short group', 'PPP-AB-2C3'],
       ['a long group', 'PPP-A1B2-2C3'],
@@ -44,21 +44,24 @@ describe('#validateReferenceNumber', () => {
     })
   })
 
-  describe('In development', () => {
+  // Registrations are generated with referencePrefix, so the validator follows
+  // it rather than a hard-coded prefix.
+  describe('With a non-default referencePrefix', () => {
     beforeEach(() => {
-      configValues.isDevelopment = true
+      configValues.referencePrefix = 'OCR'
     })
 
-    test('Should accept a SED reference', () => {
-      expect(validateReferenceNumber('SED-A1B-2C3')).toBe(true)
+    test('Should accept the configured prefix', () => {
+      expect(validateReferenceNumber('OCR-A1B-2C3')).toBe(true)
     })
 
-    test('Should reject a PPP reference', () => {
+    test('Should reject the default prefix', () => {
       expect(validateReferenceNumber('PPP-A1B-2C3')).toBe(false)
     })
 
-    test('Should reject lower case', () => {
-      expect(validateReferenceNumber('sed-a1b-2c3')).toBe(false)
+    test('Should accept a configured prefix containing a digit', () => {
+      configValues.referencePrefix = 'OCR2'
+      expect(validateReferenceNumber('OCR2-A1B-2C3')).toBe(true)
     })
   })
 })
