@@ -13,7 +13,8 @@ export function resolveEntra() {
     tenantId: entra.tenantId,
     audience: entra.audience,
     issuer: entra.issuer || `${base}/v2.0`,
-    jwksUri: entra.jwksUri || `${base}/discovery/v2.0/keys`
+    jwksUri: entra.jwksUri || `${base}/discovery/v2.0/keys`,
+    requiredScope: entra.requiredScope
   }
 }
 

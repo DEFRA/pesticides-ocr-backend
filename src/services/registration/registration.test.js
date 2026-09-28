@@ -1,5 +1,8 @@
 import { describe, test, expect, vi } from 'vitest'
-import { saveRegistration, generateReference } from '#/services/registration.js'
+import {
+  saveRegistration,
+  generateReference
+} from '#/services/registration/registration.js'
 
 function makeDb(insertOne) {
   return { collection: () => ({ insertOne }) }

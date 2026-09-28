@@ -27,6 +27,12 @@ function toCredentials(payload) {
   }
 }
 
+// Entra records granted delegated scopes in the space-delimited `scp` claim.
+function tokenHasScope(payload, requiredScope) {
+  const scopes = typeof payload.scp === 'string' ? payload.scp.split(' ') : []
+  return scopes.includes(requiredScope)
+}
+
 // A Hapi auth scheme that authenticates a request from its `Authorization:
 // Bearer <jwt>` header.
 //
@@ -37,7 +43,7 @@ function toCredentials(payload) {
 //
 // options:
 //   mode        'mock' | 'live'
-//   resolveEntra () => { issuer, audience, jwksUri }
+//   resolveEntra () => { issuer, audience, jwksUri, requiredScope }
 //   getKeySet    () => key input for jose.jwtVerify (defaults to the remote
 //                JWKS; overridable in tests to avoid a network fetch)
 export function entraBearerScheme(_server, options = {}) {
@@ -50,10 +56,11 @@ export function entraBearerScheme(_server, options = {}) {
         throw Boom.unauthorized('Missing bearer token', 'Bearer')
       }
 
+      const { issuer, audience, requiredScope } = resolveEntra()
+
       let payload
       try {
         if (mode === 'live') {
-          const { issuer, audience } = resolveEntra()
           // Fail closed: without a configured issuer AND audience, jose would
           // skip those checks — never verify a token then.
           if (!issuer || !audience) {
@@ -73,6 +80,24 @@ export function entraBearerScheme(_server, options = {}) {
         // client can't probe why a token was rejected.
         request.log(['auth', 'error'], `Bearer token rejected: ${err.message}`)
         throw Boom.unauthorized('Invalid bearer token', 'Bearer')
+      }
+
+      // Config-gated scope check: when a required API scope is configured, the
+      // token must carry it in `scp`. Kept OUTSIDE the try/catch so an
+      // authenticated-but-insufficient token surfaces as 403 (insufficient
+      // scope), not the generic 401. Empty requiredScope = not enforced (accepts
+      // the no-scope path until the scoped access token lands, EQ-442).
+      if (requiredScope && !tokenHasScope(payload, requiredScope)) {
+        request.log(
+          ['auth'],
+          `Bearer token missing required scope '${requiredScope}'`
+        )
+        // RFC 6750 §3.1: a valid-but-insufficient-scope token → 403 with a
+        // WWW-Authenticate: Bearer error="insufficient_scope" challenge.
+        const err = Boom.forbidden('Token is missing the required scope')
+        err.output.headers['WWW-Authenticate'] =
+          'Bearer error="insufficient_scope"'
+        throw err
       }
 
       return h.authenticated({ credentials: toCredentials(payload) })

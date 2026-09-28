@@ -29,3 +29,41 @@ describe('config auth.mode default per environment', () => {
     }
   )
 })
+
+// A misconfigured value must stop the app at startup (config.validate strict),
+// not surface later as a broken endpoint.
+describe('config startup validation', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  async function loadConfigWith(name, value) {
+    vi.resetModules()
+    vi.stubEnv(name, value)
+    return import('#/config.js')
+  }
+
+  test('reads EXPORT_MAX_ROWS from the environment as a number', async () => {
+    const { config } = await loadConfigWith('EXPORT_MAX_ROWS', '250')
+    expect(config.get('export.maxRows')).toBe(250)
+  })
+
+  test.each(['0', '-1', 'abc', '10abc', '1.5'])(
+    'refuses to start with EXPORT_MAX_ROWS=%s',
+    async (value) => {
+      await expect(loadConfigWith('EXPORT_MAX_ROWS', value)).rejects.toThrow(
+        /export\.maxRows/
+      )
+    }
+  )
+
+  test.each(['ppp', 'P-P'])(
+    'refuses to start with REFERENCE_PREFIX=%s',
+    async (value) => {
+      await expect(loadConfigWith('REFERENCE_PREFIX', value)).rejects.toThrow(
+        /referencePrefix/
+      )
+    }
+  )
+})

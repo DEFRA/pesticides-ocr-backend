@@ -2,7 +2,7 @@ import { describe, test, expect, vi, beforeAll } from 'vitest'
 
 const mockSaveRegistration = vi.fn()
 
-vi.mock('#/services/registration.js', () => ({
+vi.mock('#/services/registration/registration.js', () => ({
   saveRegistration: mockSaveRegistration
 }))
 

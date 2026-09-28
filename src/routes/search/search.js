@@ -1,34 +1,42 @@
 import Boom from '@hapi/boom'
 import Joi from 'joi'
+
+import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
 import {
   getOneByReferenceNumber,
   validateReferenceNumber
 } from '#/services/search/search.js'
 
-// TODO: re-enable auth one e2e is ready
-// import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
-// const roleValues = getCaseOfficerRoles()
-
 export const search = [
   {
     method: 'GET',
     path: '/search',
+    options: {
+      auth: requireRole(...getCaseOfficerRoles()),
+      cache: noStoreCache,
+      validate: {
+        query: searchQuerySchema,
+        failAction: failWithBadRequest
+      }
+    },
     handler: async (request, h) => {
-      const { reference } = request.query
+      const result = await resolveQuery(request.db, request.query)
 
-      if (!validateReferenceNumber(reference)) {
+      if (result.invalidReference) {
         return Boom.badRequest('Invalid reference number')
       }
 
-      const entity = await getOneByReferenceNumber(request.db, reference)
+      if (result.list) {
+        return h.response(result.list)
+      }
 
-      if (!entity) {
+      if (!result.single) {
         return Boom.notFound(
           'No records found for the reference number provided'
         )
       }
 
-      return h.response(entity)
+      return h.response(result.single)
     },
     options: {
       validate: {

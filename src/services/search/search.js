@@ -1,187 +1,58 @@
 import { config } from '#/config.js'
-import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
+import { getOneByReferenceNumber } from '#/common/helpers/ocr-search.js'
+import { queryRegistrations } from './helpers/query-registrations.js'
+
+// Controller for GET /search. One endpoint, two ways to ask:
+//
+//   basic     /search?reference=PPP-A1B-2C3   exact lookup, one record
+//   advanced  /search?q=Norfolk               free-text match, newest first
+//
+// Both return stored registrations as-is. Presenting them (labels, defaults,
+// formatting) belongs to the consumer, so the case-officer view and the CSV
+// export can read the same rows without inheriting each other's shape.
+
+// Cap on the advanced result set, matching what the case-officer grid pages
+// through. The export asks for its own, larger bound (`export.maxRows`).
+export const MAX_RESULTS = 500
 
 // --- Basic reference lookup (EQ-366) ---------------------------------------
 
+const REFERENCE_PATTERN = /^([A-Z0-9]+)-[A-Z0-9]{3}-[A-Z0-9]{3}$/
+
+// The accepted prefix is the one registrations are generated with
+// (`referencePrefix`), so the validator can't disagree with the generator.
 function validateReferenceNumber(referenceNumber) {
-  if (config.get('isDevelopment')) {
-    const referenceNumberPatternDev = /^SED-[A-Z0-9]{3}-[A-Z0-9]{3}$/
-    return referenceNumberPatternDev.test(referenceNumber)
-  }
-
-  const referenceNumberPattern = /^PPP-[A-Z0-9]{3}-[A-Z0-9]{3}$/
-  return referenceNumberPattern.test(referenceNumber)
+  const match = REFERENCE_PATTERN.exec(referenceNumber)
+  return match !== null && match[1] === config.get('referencePrefix')
 }
 
-function getOneByReferenceNumber(db, referenceNumber) {
-  return db
-    .collection(OCR_REGISTRATION_COLLECTION)
-    .findOne({ reference: referenceNumber }, { projection: { _id: 0 } })
-}
+// --- Shared resolution for both consumers of the contract ------------------
 
-// --- Operator dashboard read (EQ-385) --------------------------------------
+// /search and /export ask the same question and differ only in what they do
+// with the answer, so the "which rows?" decision lives here once rather than
+// being branched identically in both routes.
 //
-// The dashboard's contract is the frontend Operator shape (see the frontend
-// stub operators-data.js): a flat, display-ready record. Stored registrations
-// use a different shape — coded activity slugs, a structured quantity, no
-// country / status / mainCustomer. `toOperator` is the single seam that maps one
-// to the other, so the frontend can drop its stub and become a thin adapter.
-
-// Cap the grid result set until real pagination lands (EQ-385 follow-up).
-// Exported so callers/tests reference the single source of truth, not a literal.
-export const MAX_RESULTS = 500
-
-// --- POC mapping defaults --------------------------------------------------
-// Fields the Operator contract needs but the register journey does not (yet)
-// persist. These are the EQ-385 "data-model mapping" open decisions — confirm
-// with HSE/Yankui before production. Isolated in this mapper so a decision
-// changes one place.
-//   - status:       no approval/status workflow exists; treated as Registered.
-//   - country:      the register journey captures postcode/county but not a
-//                   country; left blank until the field is added.
-//   - mainCustomer: the journey DOES collect it (a /main-customer step), but the
-//                   backend schema/write (EQ-365) does not store it yet, so it is
-//                   read forward-compatibly and defaulted until the write lands.
-const DEFAULT_STATUS = 'Registered'
-const DEFAULT_COUNTRY = ''
-const DEFAULT_MAIN_CUSTOMER = 'N/A'
-
-// Coded slug -> display label. Stored values are the register-form codes; the
-// grid shows human labels. Unknown codes fall back to the raw slug.
-const BUSINESS_ACTIVITY_LABELS = {
-  manufacture: 'Manufacture, process or import',
-  market: 'Place on the market or distribute',
-  'seller-professional': 'Sell professional PPPs',
-  'seller-amateur': 'Sell amateur PPPs',
-  'use-professional': 'Use professional PPPs'
-}
-
-const ADDRESS_ACTIVITY_LABELS = {
-  use: 'Use plant protection products (PPPs) or adjuvants',
-  store: 'Store plant protection products (PPPs) or adjuvants',
-  records: 'Keep records of plant protection products (PPPs)'
-}
-
-const labelFor = (map) => (code) => map[code] ?? code
-
-// Format the structured stored quantity into the grid's display string. The
-// journey records only a number + type (not a specific unit), so `amount` is
-// rendered as "N litres or kilograms" and `area` as hectares.
-function formatQuantity(quantity) {
-  if (!quantity || typeof quantity.quantity !== 'number') {
-    return ''
-  }
-  const amount = quantity.quantity.toLocaleString('en-GB')
-  if (quantity.quantityType === 'area') {
-    return `${amount} hectares`
-  }
-  return `${amount} litres or kilograms`
-}
-
-// `submittedAt` (a Date) -> yyyy-mm-dd, matching the contract's registeredDate.
-function toIsoDate(value) {
-  const date = value ? new Date(value) : null
-  return date && !Number.isNaN(date.getTime())
-    ? date.toISOString().slice(0, 10)
-    : ''
-}
-
-// The Operator contract carries only line1/town/postcode/country; the stored
-// address.line2/county are intentionally dropped (not shown on the grid).
-function mapAddress(address = {}) {
-  return {
-    line1: address.addressLine1 ?? '',
-    town: address.addressTown ?? '',
-    postcode: address.addressPostcode ?? '',
-    country: address.addressCountry ?? DEFAULT_COUNTRY
-  }
-}
-
-function mapContact(contact = {}) {
-  return {
-    name: contact.contactName ?? '',
-    email: contact.contactEmail ?? '',
-    telephone: contact.contactTelephone ?? ''
-  }
-}
-
-// Map a stored registration document onto the frontend Operator contract.
-// Stored fields with no place in the contract are intentionally omitted:
-// address.line2/county (see mapAddress), and additionalAddresses /
-// professionalSectors / memberSchemes — see the EQ-385 data-model decision.
-export function toOperator(doc) {
-  return {
-    reference: doc.reference ?? '',
-    businessName: doc.businessName ?? '',
-    activities: (doc.businessActivities ?? []).map(
-      labelFor(BUSINESS_ACTIVITY_LABELS)
-    ),
-    mainCustomer: doc.mainCustomer ?? DEFAULT_MAIN_CUSTOMER,
-    address: mapAddress(doc.address),
-    contact: mapContact(doc.primaryContact),
-    addressActivities: (doc.addressActivities ?? []).map(
-      labelFor(ADDRESS_ACTIVITY_LABELS)
-    ),
-    quantity: formatQuantity(doc.quantity),
-    registeredDate: toIsoDate(doc.submittedAt),
-    status: doc.status ?? DEFAULT_STATUS
-  }
-}
-
-// Escape a user-supplied string for safe use inside a RegExp (prevents the
-// search term being interpreted as a pattern / ReDoS).
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
-}
-
-// Build the Mongo filter for a search term: case-insensitive match across the
-// contract's searchable fields. A blank/absent term matches everything.
-// Exported for unit testing of the filter shape / regex escaping.
-export function buildSearchFilter(query) {
-  const term = (query ?? '').trim()
-  if (!term) {
-    return {}
-  }
-  const rx = new RegExp(escapeRegExp(term), 'i')
-  return {
-    $or: [
-      { reference: rx },
-      { businessName: rx },
-      // Stored (payload) field names, not the Operator contract's — see mapAddress.
-      { 'primaryContact.contactName': rx },
-      { 'address.addressTown': rx },
-      { 'address.addressPostcode': rx }
-    ]
-  }
-}
-
-// List/search operators. Blank query returns all matching (capped at
-// MAX_RESULTS for the paged grid). `limit` is passed straight to Mongo, whose
-// `.limit(0)` means "no cap" — the CSV export (EQ-369) relies on that to get the
-// full matching set, not just the first page.
+// Returns a tagged result instead of throwing, so this stays free of HTTP
+// concerns and each route maps the outcome to its own status codes: /search
+// 404s on a missing reference, while /export returns an empty file.
 //
-// POC caveat: the uncapped export buffers every matching row and builds the
-// whole CSV in memory. Fine at POC volumes; before this holds production data,
-// add a hard ceiling (e.g. MAX_EXPORT_ROWS) and/or stream the CSV. Tracked on
-// the EQ-385 hardening follow-up.
-export async function searchOperators(
+//   { invalidReference: true }  the reference is not a well-formed reference
+//   { single: doc | null }      a reference was given
+//   { list: [...] }             a free-text term was given (blank = everything)
+export async function resolveQuery(
   db,
-  { query = '', limit = MAX_RESULTS } = {}
+  { reference, q } = {},
+  { limit = MAX_RESULTS } = {}
 ) {
-  const docs = await db
-    .collection(OCR_REGISTRATION_COLLECTION)
-    .find(buildSearchFilter(query), { projection: { _id: 0 } })
-    .sort({ submittedAt: -1 })
-    .limit(limit)
-    .toArray()
-  return docs.map(toOperator)
-}
+  if (reference === undefined) {
+    return { list: await queryRegistrations(db, { query: q, limit }) }
+  }
 
-// Fetch a single operator by registration reference, or null if not found.
-// Reuses getOneByReferenceNumber for the data access (one lookup, one place).
-export async function getOperatorByReference(db, reference) {
-  const doc = await getOneByReferenceNumber(db, reference)
-  return doc ? toOperator(doc) : null
+  if (!validateReferenceNumber(reference)) {
+    return { invalidReference: true }
+  }
+
+  return { single: await getOneByReferenceNumber(db, reference) }
 }
 
 export { getOneByReferenceNumber, validateReferenceNumber }

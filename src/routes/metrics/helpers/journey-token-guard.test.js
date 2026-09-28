@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, afterEach } from 'vitest'
 
 import { config } from '#/config.js'
-import { warnIfJourneyTokenUnset } from '#/routes/metrics/metrics.js'
+import { warnIfJourneyTokenUnset } from '#/routes/metrics/helpers/journey-token-guard.js'
 
 const originalEnv = config.get('cdpEnvironment')
 const originalSecret = config.get('journeyToken.secret')

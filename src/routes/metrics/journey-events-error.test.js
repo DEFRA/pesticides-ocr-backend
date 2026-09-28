@@ -1,19 +1,24 @@
 import { describe, test, expect, beforeAll, afterAll, vi } from 'vitest'
 
 // Force both beacons' writes to fail so the shared beaconRoute error branch
-// (try/catch → Boom.internal → 500) is covered for each caller. Keep every other
-// export real: server startup (createIndexes) needs the collection constants and
-// the GET routes need the real count functions.
-vi.mock('#/services/metrics/metrics.js', async (importOriginal) => {
-  const actual = await importOriginal()
-  return {
-    ...actual,
-    recordJourneyStart: vi.fn().mockRejectedValue(new Error('db unavailable')),
+// (try/catch → Boom.internal → 500) is covered for each caller. Only the two
+// write controllers are mocked; the read controllers and server startup
+// (createIndexes) keep using the real modules.
+vi.mock(
+  '#/services/metrics/journey-start-events/journey-start-events.js',
+  () => ({
+    recordJourneyStart: vi.fn().mockRejectedValue(new Error('db unavailable'))
+  })
+)
+
+vi.mock(
+  '#/services/metrics/journey-not-eligible-events/journey-not-eligible-events.js',
+  () => ({
     recordJourneyNotEligible: vi
       .fn()
       .mockRejectedValue(new Error('db unavailable'))
-  }
-})
+  })
+)
 
 describe('#metricsRoutes — beacon failure', () => {
   let server
