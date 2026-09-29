@@ -53,7 +53,7 @@ function getHashSecret() {
   return secret
 }
 
-async function enforceStartRateLimit(db, { email, ip }) {
+async function enforceStartRateLimit(db, { email }) {
   const { rateLimit } = config.get('emailVerification')
 
   const emailCheck = await checkRateLimit(db, {
@@ -66,20 +66,6 @@ async function enforceStartRateLimit(db, { email, ip }) {
     throw new RateLimitedError(
       'Too many verification requests for this email address. Try again later.'
     )
-  }
-
-  if (ip) {
-    const ipCheck = await checkRateLimit(db, {
-      collection: RATE_LIMIT_COLLECTION,
-      key: `ip:${ip}`,
-      windowSeconds: SECONDS_PER_HOUR,
-      max: rateLimit.maxPerIpPerHour
-    })
-    if (ipCheck.limited) {
-      throw new RateLimitedError(
-        'Too many verification requests. Try again later.'
-      )
-    }
   }
 }
 
@@ -106,9 +92,9 @@ function buildStartResult(record) {
   }
 }
 
-export async function startVerification(db, { email, ip }) {
+export async function startVerification(db, { email }) {
   const normalizedEmail = normalizeEmail(email)
-  await enforceStartRateLimit(db, { email: normalizedEmail, ip })
+  await enforceStartRateLimit(db, { email: normalizedEmail })
 
   const { codeLength, codeTtlSeconds, recordTtlSeconds } =
     config.get('emailVerification')
@@ -217,7 +203,7 @@ export async function confirmVerification(db, { verificationId, code }) {
   return { verified: true }
 }
 
-export async function resendVerification(db, { verificationId, ip }) {
+export async function resendVerification(db, { verificationId }) {
   const record = await findVerification(db, verificationId)
   const { codeLength, codeTtlSeconds, maxResends, resendCooldownSeconds } =
     config.get('emailVerification')
@@ -244,7 +230,7 @@ export async function resendVerification(db, { verificationId, ip }) {
     )
   }
 
-  await enforceStartRateLimit(db, { email: record.email, ip })
+  await enforceStartRateLimit(db, { email: record.email })
 
   const secret = getHashSecret()
   const code = generateCode(codeLength)
