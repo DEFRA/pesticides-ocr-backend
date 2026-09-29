@@ -10,8 +10,8 @@
   "scripts": {
     "db:seed": "node --env-file-if-exists=.env scripts/seed.js",
     "db:seed:delete": "node --env-file-if-exists=.env scripts/delete-seed.js",
-    "dev": "AWS_EMF_ENVIRONMENT=Local NODE_ENV=development npm run server:watch",
-    "dev:debug": "AWS_EMF_ENVIRONMENT=Local NODE_ENV=development npm run server:debug",
+    "dev": "cross-env AWS_EMF_ENVIRONMENT=Local NODE_ENV=development npm run server:watch",
+    "dev:debug": "cross-env AWS_EMF_ENVIRONMENT=Local NODE_ENV=development npm run server:debug",
     "docker:dev": "npm run dev",
     "format": "prettier --write \"**/*.{cjs,js,json,md}\"",
     "format:check": "prettier --check \"**/*.{cjs,js,json,md}\"",
@@ -22,9 +22,9 @@
     "server:debug": "node --watch --inspect-brk=0.0.0.0 --env-file-if-exists=.env ./src",
     "server:watch": "node --watch --inspect=0.0.0.0 --env-file-if-exists=.env ./src",
     "setup:husky": "node -e \"try { (await import('husky')).default() } catch (e) { if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e }\" --input-type module",
-    "start": "NODE_ENV=production node . --env-file-if-exists=.env",
-    "test": "TZ=UTC vitest run --coverage",
-    "test:watch": "TZ=UTC vitest"
+    "start": "cross-env NODE_ENV=production node . --env-file-if-exists=.env",
+    "test": "cross-env TZ=UTC vitest run --coverage",
+    "test:watch": "cross-env TZ=UTC vitest"
   },
   "imports": {
     "#/*": "./src/*"
@@ -58,6 +58,7 @@
   },
   "devDependencies": {
     "@vitest/coverage-v8": "4.1.11",
+    "cross-env": "10.1.0",
     "eslint": "9.39.5",
     "husky": "9.1.7",
     "neostandard": "0.13.0",
