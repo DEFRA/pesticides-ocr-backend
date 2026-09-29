@@ -76,8 +76,7 @@ describe('email verification routes', () => {
       expect(response.statusCode).toBe(201)
       expect(JSON.parse(response.payload).verificationId).toBe(VALID_ID)
       expect(mockStart).toHaveBeenCalledWith(expect.anything(), {
-        email: 'a@b.com',
-        ip: expect.any(String)
+        email: 'a@b.com'
       })
     })
 
@@ -236,8 +235,7 @@ describe('email verification routes', () => {
 
       expect(response.statusCode).toBe(201)
       expect(mockResend).toHaveBeenCalledWith(expect.anything(), {
-        verificationId: VALID_ID,
-        ip: expect.any(String)
+        verificationId: VALID_ID
       })
     })
 

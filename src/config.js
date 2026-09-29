@@ -253,12 +253,6 @@ export const config = convict({
         format: 'nat',
         default: 5,
         env: 'EMAIL_OTP_RATE_LIMIT_EMAIL_PER_HOUR'
-      },
-      maxPerIpPerHour: {
-        doc: 'Maximum verification starts/resends allowed per caller IP per hour',
-        format: 'nat',
-        default: 20,
-        env: 'EMAIL_OTP_RATE_LIMIT_IP_PER_HOUR'
       }
     }
   },
