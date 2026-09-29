@@ -127,8 +127,7 @@ export const emailVerification = [
     handler: (request, h) =>
       handle(request, async () => {
         const result = await startVerification(request.db, {
-          email: request.payload.email,
-          ip: request.info.remoteAddress
+          email: request.payload.email
         })
         return h.response(result).code(HTTP_CREATED)
       })
@@ -164,8 +163,7 @@ export const emailVerification = [
     handler: (request, h) =>
       handle(request, async () => {
         const result = await resendVerification(request.db, {
-          verificationId: request.params.verificationId,
-          ip: request.info.remoteAddress
+          verificationId: request.params.verificationId
         })
         return h.response(result).code(HTTP_CREATED)
       })

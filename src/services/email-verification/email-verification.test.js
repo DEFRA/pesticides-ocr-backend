@@ -16,7 +16,7 @@ const { mockGenerateCode, mockSendEmail, mockCheckRateLimit, configValues } =
         resendCooldownSeconds: 60,
         recordTtlSeconds: 86400,
         hashSecret: 'test-secret',
-        rateLimit: { maxPerEmailPerHour: 5, maxPerIpPerHour: 20 }
+        rateLimit: { maxPerEmailPerHour: 5 }
       }
     }
   }))
@@ -129,8 +129,7 @@ describe('startVerification', () => {
     const db = makeFakeDb()
 
     const result = await startVerification(db, {
-      email: 'Test@Example.com',
-      ip: '1.2.3.4'
+      email: 'Test@Example.com'
     })
 
     expect(result.email).toBe('test@example.com')
@@ -160,18 +159,6 @@ describe('startVerification', () => {
       RateLimitedError
     )
     expect(mockSendEmail).not.toHaveBeenCalled()
-  })
-
-  test('throws RateLimitedError when the per-IP limit is hit', async () => {
-    const db = makeFakeDb()
-    mockCheckRateLimit.mockImplementation(async (_db, { key }) => ({
-      limited: key.startsWith('ip:'),
-      count: 99
-    }))
-
-    await expect(
-      startVerification(db, { email: 'a@b.com', ip: '1.2.3.4' })
-    ).rejects.toThrow(RateLimitedError)
   })
 
   test('throws EmailSendError when Notify rejects', async () => {

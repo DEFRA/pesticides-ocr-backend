@@ -111,13 +111,13 @@ git config --global core.autocrlf false
 
 ## API endpoints
 
-| Endpoint    | Method | Description                                          |
-| :---------- | :----- | :--------------------------------------------------- |
-| `/health`   | GET    | Health check                                         |
-| `/register` | POST   | Submit a pesticide registration application          |
-| `/search`   | GET    | Find registrations by reference or free text         |
-| `/export`   | GET    | The same search, as a CSV download                   |
-| `/whoami`   | GET    | Authenticated caller's identity (case-officer scope) |
+| Endpoint                                        | Method | Description                                          |
+| :---------------------------------------------- | :----- | :--------------------------------------------------- |
+| `/health`                                       | GET    | Health check                                         |
+| `/register`                                     | POST   | Submit a pesticide registration application          |
+| `/search`                                       | GET    | Find registrations by reference or free text         |
+| `/export`                                       | GET    | The same search, as a CSV download                   |
+| `/whoami`                                       | GET    | Authenticated caller's identity (case-officer scope) |
 | Endpoint                                        | Method | Description                                          |
 | :---------------------------------------------- | :----- | :--------------------------------------------------- |
 | `/health`                                       | GET    | Health check                                         |
