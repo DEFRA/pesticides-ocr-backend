@@ -9,7 +9,8 @@ export default defineConfig({
     // Server + in-memory Mongo spin-up in a beforeAll can exceed vitest's default
     // 10s hook timeout on a cold/contended CI runner (fine locally). Give the
     // integration tests' hooks headroom so they don't flake.
-    hookTimeout: 30000,
+    testTimeout: 30000, // 30 seconds for individual tests
+    hookTimeout: 180000, // 3 minutes for setup/teardown hooks
     coverage: {
       provider: 'v8',
       reportsDirectory: './coverage',

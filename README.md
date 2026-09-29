@@ -119,6 +119,9 @@ git config --global core.autocrlf false
 | `/export`    | GET       | The same search, as a CSV download                        |
 | `/whoami`    | GET       | Authenticated caller's identity (case-officer scope)      |
 | `/metrics/*` | GET, POST | Journey metrics (see [Journey metrics](#journey-metrics)) |
+| `/email-verifications`                          | POST   | Start email address verification (send OTP)          |
+| `/email-verifications/{verificationId}/confirm` | POST   | Confirm a verification code                          |
+| `/email-verifications/{verificationId}/resend`  | POST   | Resend a verification code 
 
 ### POST /register
 

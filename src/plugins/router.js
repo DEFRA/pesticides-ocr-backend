@@ -10,6 +10,7 @@ import { metricsJourneyNotEligible } from '#/routes/metrics/journey-not-eligible
 import { metricsJourneyNotEligibleEvents } from '#/routes/metrics/journey-not-eligible-events.js'
 import { metricsJourneys } from '#/routes/metrics/journeys/index.js'
 import { warnIfJourneyTokenUnset } from '#/routes/metrics/helpers/journey-token-guard.js'
+import { emailVerification } from '#/routes/email-verification/email-verification.js'
 
 export const router = {
   plugin: {
@@ -28,6 +29,7 @@ export const router = {
           .concat(metricsJourneyNotEligible)
           .concat(metricsJourneyNotEligibleEvents)
           .concat(metricsJourneys)
+          .concat(emailVerification)
       )
     }
   }
