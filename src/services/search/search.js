@@ -1,21 +1,45 @@
 import { config } from '#/config.js'
-import { getOneByReferenceNumber } from '#/common/helpers/ocr-search.js'
+import {
+  getOneByReferenceNumber,
+  findRegistrationsPage
+} from '#/common/helpers/ocr-search.js'
 import { queryRegistrations } from './helpers/query-registrations.js'
+import { buildCriteriaFilter } from './helpers/search-filter.js'
 
-// Controller for GET /search. One endpoint, two ways to ask:
-//
-//   basic     /search?reference=PPP-A1B-2C3   exact lookup, one record
-//   advanced  /search?q=Norfolk               free-text match, newest first
-//
-// Both return stored registrations as-is. Presenting them (labels, defaults,
-// formatting) belongs to the consumer, so the case-officer view and the CSV
-// export can read the same rows without inheriting each other's shape.
+const searchSort = { submittedAt: -1, reference: 1 }
 
-// Cap on the advanced result set, matching what the case-officer grid pages
-// through. The export asks for its own, larger bound (`export.maxRows`).
-export const MAX_RESULTS = 500
+const registerProjection = {
+  reference: 1,
+  submittedAt: 1,
+  status: 1,
+  businessName: 1,
+  businessActivities: 1,
+  mainCustomer: 1,
+  address: 1,
+  primaryContact: 1,
+  addressActivities: 1,
+  quantity: 1
+}
 
-// --- Basic reference lookup (EQ-366) ---------------------------------------
+export async function searchRegistrations(db, criteria, { page, pageSize }) {
+  const { records, total } = await findRegistrationsPage(db, {
+    filter: buildCriteriaFilter(criteria),
+    sort: searchSort,
+    projection: registerProjection,
+    skip: (page - 1) * pageSize,
+    limit: pageSize
+  })
+
+  return {
+    data: records,
+    pagination: {
+      page,
+      pageSize,
+      totalRecords: total,
+      totalPages: Math.ceil(total / pageSize)
+    }
+  }
+}
 
 const REFERENCE_PATTERN = /^([A-Z0-9]+)-[A-Z0-9]{3}-[A-Z0-9]{3}$/
 
@@ -26,24 +50,7 @@ function validateReferenceNumber(referenceNumber) {
   return match !== null && match[1] === config.get('referencePrefix')
 }
 
-// --- Shared resolution for both consumers of the contract ------------------
-
-// /search and /export ask the same question and differ only in what they do
-// with the answer, so the "which rows?" decision lives here once rather than
-// being branched identically in both routes.
-//
-// Returns a tagged result instead of throwing, so this stays free of HTTP
-// concerns and each route maps the outcome to its own status codes: /search
-// 404s on a missing reference, while /export returns an empty file.
-//
-//   { invalidReference: true }  the reference is not a well-formed reference
-//   { single: doc | null }      a reference was given
-//   { list: [...] }             a free-text term was given (blank = everything)
-export async function resolveQuery(
-  db,
-  { reference, q } = {},
-  { limit = MAX_RESULTS } = {}
-) {
+export async function resolveQuery(db, { reference, q } = {}, { limit } = {}) {
   if (reference === undefined) {
     return { list: await queryRegistrations(db, { query: q, limit }) }
   }
