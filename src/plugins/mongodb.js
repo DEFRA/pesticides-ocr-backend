@@ -50,6 +50,7 @@ async function createIndexes(db) {
   await db.collection('mongo-locks').createIndex({ id: 1 })
   await registrations.createIndex({ submittedAt: 1 })
   await registrations.createIndex({ reference: 1 }, { unique: true })
+  await registrations.createIndex({ submittedAt: -1, reference: 1 })
   const journeyStarts = db.collection(JOURNEY_STARTS_COLLECTION)
   const journeyNotEligible = db.collection(JOURNEY_NOT_ELIGIBLE_COLLECTION)
 
