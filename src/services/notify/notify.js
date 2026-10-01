@@ -24,29 +24,30 @@ async function sendEmail(templateName, emailAddress, personalisation) {
     throw new Error(`Unknown template '${templateName}'`)
   }
 
-  return getClient()
-    .sendEmail(templateId, emailAddress, { personalisation })
-    .then((response) => {
-      if (!config.get('isProduction')) {
-        console.log(
-          `Email sent to ${emailAddress} using template '${templateName}' (ID: ${templateId}). Response:`,
-          response
-        )
-      }
-      return response
+  try {
+    const response = await getClient().sendEmail(templateId, emailAddress, {
+      personalisation
     })
-    .catch((error) => {
-      if (!config.get('isProduction')) {
-        console.error(
-          `Error sending email to ${emailAddress} using template '${templateName}' (ID: ${templateId}):`
-        )
-        for (const [key, value] of Object.entries(error.response.data.errors)) {
-          console.error(`  ${key}:`, value)
-        }
-      }
 
-      return error
-    })
+    if (!config.get('isProduction')) {
+      console.log(
+        `Email sent to ${emailAddress} using template '${templateName}' (ID: ${templateId}). Response:`,
+        response
+      )
+    }
+    return response
+  } catch (error) {
+    if (!config.get('isProduction')) {
+      console.error(
+        `Error sending email to ${emailAddress} using template '${templateName}' (ID: ${templateId}):`
+      )
+      for (const [key, value] of Object.entries(error.response.data.errors)) {
+        console.error(`  ${key}:`, value)
+      }
+    }
+
+    throw error
+  }
 }
 
 export { sendEmail }

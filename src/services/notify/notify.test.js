@@ -81,9 +81,7 @@ describe('failure', () => {
 
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const response = await sendEmail(...emailArgs())
-
-    expect(response.status).toBe(400)
+    await expect(sendEmail(...emailArgs())).rejects.toBe(failedSendEmailMock)
     expect(console.error).toHaveBeenCalledTimes(2)
   })
 
@@ -92,9 +90,7 @@ describe('failure', () => {
 
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    const response = await sendEmail(...emailArgs())
-
-    expect(response.status).toBe(400)
+    await expect(sendEmail(...emailArgs())).rejects.toBe(failedSendEmailMock)
     expect(console.error).not.toHaveBeenCalled()
   })
 
