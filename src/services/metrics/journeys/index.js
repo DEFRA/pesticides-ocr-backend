@@ -72,7 +72,7 @@ export async function summariseJourneys(db, { from, to } = {}) {
     )
   ]
     .filter(Boolean)
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
 
   const monthly = months.map((month) => ({
     month,
