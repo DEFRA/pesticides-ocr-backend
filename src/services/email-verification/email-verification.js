@@ -185,20 +185,20 @@ export async function confirmVerification(db, { verificationId, code }) {
   )
 
   if (!isCorrect) {
-    const updated = await db
+    const attemptUpdate = await db
       .collection(COLLECTION)
       .findOneAndUpdate(
         { _id: record._id, attempts: { $lt: maxAttempts } },
         { $inc: { attempts: 1 } },
         { returnDocument: 'after' }
       )
-    if (!updated) {
+    if (!attemptUpdate) {
       throw new TooManyAttemptsError(
         'Too many incorrect attempts. Request a new code.'
       )
     }
     throw new IncorrectCodeError('Incorrect code', {
-      remainingAttempts: Math.max(maxAttempts - updated.attempts, 0)
+      remainingAttempts: Math.max(maxAttempts - attemptUpdate.attempts, 0)
     })
   }
 
