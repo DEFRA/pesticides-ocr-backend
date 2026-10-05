@@ -12,4 +12,32 @@ describe('#searchQuerySchema', () => {
 
     expect(error.message).toBe('"pageSize" must be less than or equal to 5')
   })
+
+  test('accepts exactly the maximum number of wildcards', () => {
+    const { error } = searchQuerySchema(5).validate({ q: 'a*b*c*d*e*f' })
+
+    expect(error).toBeUndefined()
+  })
+
+  test('rejects one wildcard over the maximum', () => {
+    const { error } = searchQuerySchema(5).validate({ q: 'a*b*c*d*e*f*g' })
+
+    expect(error.message).toBe('"q" must contain no more than 5 * wildcards')
+  })
+
+  test('counts a run of wildcards as one', () => {
+    const { error } = searchQuerySchema(5).validate({ q: 'a**b***c*d*e*f' })
+
+    expect(error).toBeUndefined()
+  })
+
+  test('ignores a blank criterion next to a valid one', () => {
+    const { value, error } = searchQuerySchema(5).validate({
+      reference: 'ABC',
+      town: '  '
+    })
+
+    expect(error).toBeUndefined()
+    expect(value).toEqual({ reference: 'ABC', page: 1, pageSize: 5 })
+  })
 })

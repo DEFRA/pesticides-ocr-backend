@@ -81,6 +81,12 @@ describe('buildCriteriaFilter', () => {
     expect(pattern.test('PPP-ABC-124')).toBe(false)
   })
 
+  test('collapses a run of * into a single wildcard', () => {
+    const pattern = buildCriteriaFilter({ reference: 'PPP-***-123' }).$and[0]
+      .reference
+    expect(pattern.source).toBe('PPP-.*-123')
+  })
+
   test('escapes every other regex metacharacter', () => {
     const pattern = buildCriteriaFilter({ organisationName: 'a.b(c' }).$and[0]
       .businessName

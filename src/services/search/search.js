@@ -50,6 +50,12 @@ function validateReferenceNumber(referenceNumber) {
   return match !== null && match[1] === config.get('referencePrefix')
 }
 
+// Resolves an /export query to its rows. Returns a tagged result instead of
+// throwing, so the route maps each outcome to its own response:
+//
+//   { invalidReference: true }  the reference is not a well-formed reference
+//   { single: doc | null }      a reference was given
+//   { list: [...] }             a free-text term was given (blank = everything)
 export async function resolveQuery(db, { reference, q } = {}, { limit } = {}) {
   if (reference === undefined) {
     return { list: await queryRegistrations(db, { query: q, limit }) }

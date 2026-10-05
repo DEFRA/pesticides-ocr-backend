@@ -191,6 +191,32 @@ describe('#searchRoute', () => {
       ])
     })
 
+    test('treats a run of * as a single wildcard', async () => {
+      const single = await get(
+        `/search?reference=${encodeURIComponent('PPP-*-01*')}`
+      )
+      const run = await get(
+        `/search?reference=${encodeURIComponent('PPP-***-01**')}`
+      )
+
+      expect(run.result).toEqual(single.result)
+    })
+
+    test('accepts exactly 5 wildcards', async () => {
+      const { statusCode } = await get(
+        `/search?q=${encodeURIComponent('P*P*P*-*A*C')}`
+      )
+
+      expect(statusCode).toBe(200)
+    })
+
+    test('ignores a blank criterion next to a valid one', async () => {
+      const { statusCode, result } = await get('/search?reference=ABC&town=')
+
+      expect(statusCode).toBe(200)
+      expect(result.pagination.totalRecords).toBe(30)
+    })
+
     test('matches regex metacharacters literally', async () => {
       const { result } = await get(`/search?q=${encodeURIComponent('Gr.en')}`)
 
@@ -353,7 +379,7 @@ describe('#searchRoute', () => {
     test.each([
       ['a blank q', 'q='],
       ['a whitespace q', 'q=%20%20'],
-      ['an empty criterion', 'reference='],
+      ['only an empty criterion', 'reference='],
       ['a wildcard-only term', 'q=**'],
       ['too many wildcards', 'organisationName=a*b*c*d*e*f*g'],
       ['an over-long term', `q=${'x'.repeat(101)}`],

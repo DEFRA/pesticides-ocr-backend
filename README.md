@@ -116,7 +116,7 @@ git config --global core.autocrlf false
 | `/health`   | GET    | Health check                                         |
 | `/register` | POST   | Submit a pesticide registration application          |
 | `/search`   | GET    | Partial-match search of the register, paginated      |
-| `/export`   | GET    | The same search, as a CSV download                   |
+| `/export`   | GET    | A reference or free-text match, as a CSV download    |
 | `/whoami`   | GET    | Authenticated caller's identity (case-officer scope) |
 
 ### POST /register
@@ -178,9 +178,9 @@ Case-officer bearer auth required (see [API authorisation](#api-authorisation-eq
 | `page`             | page number (default 1)       |
 | `pageSize`         | results per page (default 10) |
 
-At least one criterion is required, blank ones don't count, and every one supplied must match, so there is no way to list the whole register. Matching is case-insensitive and partial (`reference=ABC` finds `PPP-ABC-123`, and a full reference finds just that registration); `*` stands for any run of characters (`reference=PPP-*-123`), up to 5 per term. Results are newest `submittedAt` first, ties broken by reference, so pages are stable.
+At least one criterion is required, blank ones are ignored, and every one supplied must match. Matching is case-insensitive and partial (`reference=ABC` finds `PPP-ABC-123`, and a full reference finds just that registration); `*` stands for any run of characters (`reference=PPP-*-123`), up to 5 per term, and a run of `*` counts as one. Results are newest `submittedAt` first, ties broken by reference, so pages are stable.
 
-`pageSize` is capped by `SEARCH_MAX_PAGE_SIZE` (default 100, at least 1) and `page` at 10000. A missing criterion, an invalid or out-of-range `page` or `pageSize`, a blank or wildcard-only term, or an unknown parameter is a `400` whose message lists every problem. A page past the last is an empty `data` list with the same totals.
+`pageSize` is capped by `SEARCH_MAX_PAGE_SIZE` (default 100, at least 1) and `page` at 10000. A missing criterion, an invalid or out-of-range `page` or `pageSize`, a wildcard-only term, or an unknown parameter is a `400` whose message lists every problem. A page past the last is an empty `data` list with the same totals.
 
 ```json
 {

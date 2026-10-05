@@ -1,16 +1,13 @@
+import {
+  searchFields,
+  WILDCARD,
+  collapseWildcards
+} from '#/common/helpers/search-terms.js'
+
 // Escape a user-supplied string for safe use inside a RegExp (prevents the
 // search term being interpreted as a pattern / ReDoS).
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
-}
-
-export const searchFields = {
-  reference: 'reference',
-  organisationName: 'businessName',
-  applicantName: 'primaryContact.contactName',
-  email: 'primaryContact.contactEmail',
-  town: 'address.addressTown',
-  postcode: 'address.addressPostcode'
 }
 
 const anyField = (matcher) =>
@@ -24,10 +21,11 @@ export function buildSearchFilter(query) {
   return { $or: anyField(new RegExp(escapeRegExp(term), 'i')) }
 }
 
-export const wildcard = '*'
-
 function toPartialMatch(term) {
-  const pattern = term.split(wildcard).map(escapeRegExp).join('.*')
+  const pattern = collapseWildcards(term)
+    .split(WILDCARD)
+    .map(escapeRegExp)
+    .join('.*')
   return new RegExp(pattern, 'i')
 }
 
