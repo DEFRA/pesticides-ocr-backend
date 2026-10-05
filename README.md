@@ -115,8 +115,8 @@ git config --global core.autocrlf false
 | :---------- | :----- | :--------------------------------------------------- |
 | `/health`   | GET    | Health check                                         |
 | `/register` | POST   | Submit a pesticide registration application          |
-| `/search`   | GET    | Find registrations by reference or free text         |
-| `/export`   | GET    | The same search, as a CSV download                   |
+| `/search`   | GET    | Partial-match search of the register, paginated      |
+| `/export`   | GET    | A reference or free-text match, as a CSV download    |
 | `/whoami`   | GET    | Authenticated caller's identity (case-officer scope) |
 
 ### POST /register
@@ -164,19 +164,51 @@ Reference numbers use the format `{PREFIX}-XXX-XXX` (uppercase alphanumeric). Th
 
 ### GET /search
 
-Case-officer bearer auth required (see [API authorisation](#api-authorisation-eq-413)). Takes exactly one of:
+Case-officer bearer auth required (see [API authorisation](#api-authorisation-eq-413)): no token is a `401`, a token without the case-officer role a `403`. Searches the register on one or more partial criteria, a page at a time.
 
-| Query                    | Returns                                         |
-| ------------------------ | ----------------------------------------------- |
-| `?reference=PPP-ABC-123` | the stored registration, or `404`               |
-| `?q=Norfolk`             | matching registrations, newest first, up to 500 |
-| `?q=`                    | every registration, newest first, up to 500     |
+| Query              | Searches                      |
+| ------------------ | ----------------------------- |
+| `q`                | any of the fields below       |
+| `reference`        | registration reference        |
+| `organisationName` | business name                 |
+| `applicantName`    | primary contact's name        |
+| `email`            | primary contact's email       |
+| `town`             | address town                  |
+| `postcode`         | address postcode              |
+| `page`             | page number (default 1)       |
+| `pageSize`         | results per page (default 10) |
 
-Neither, both, a malformed reference or an unknown parameter is a `400`. Registrations are returned as stored; display mapping is the caller's concern. A reference must use the configured `REFERENCE_PREFIX`, so seeded `SED-` records aren't found by reference.
+At least one criterion is required, blank ones are ignored, and every one supplied must match. Matching is case-insensitive and partial (`reference=ABC` finds `PPP-ABC-123`, and a full reference finds just that registration); `*` stands for any run of characters (`reference=PPP-*-123`), up to 5 per term, and a run of `*` counts as one. Results are newest `submittedAt` first, ties broken by reference, so pages are stable.
+
+`pageSize` is capped by `SEARCH_MAX_PAGE_SIZE` (default 100, at least 1) and `page` at 10000. A missing criterion, an invalid or out-of-range `page` or `pageSize`, a wildcard-only term, or an unknown parameter is a `400` whose message lists every problem. A page past the last is an empty `data` list with the same totals.
+
+```json
+{
+  "data": [
+    {
+      "reference": "PPP-ABC-123",
+      "submittedAt": "2026-08-11T09:30:00.000Z",
+      "businessName": "Example Organisation",
+      "primaryContact": {
+        "contactName": "Jane Doe",
+        "contactEmail": "jane.doe@example.com"
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 10,
+    "totalRecords": 142,
+    "totalPages": 15
+  }
+}
+```
+
+Rows are registrations as stored, limited to the fields the register shows (reference, submittedAt, status, business name, activities, main customer, address, primary contact, address activities, quantity); display mapping is the caller's concern.
 
 ### GET /export
 
-Same auth and query contract as `/search`, returned as a CSV download (`ocr-registrations.csv`). A reference exports one record, or just the header row if it doesn't exist. A term exports every match, up to `EXPORT_MAX_ROWS` (default 10000, at least 1); a larger match is a `400` asking for a narrower search, rather than a truncated file.
+Same auth as `/search`, returned as a CSV download (`ocr-registrations.csv`). Takes exactly one of `?reference=` (one exact reference, using the configured `REFERENCE_PREFIX`) or `?q=` (a literal free-text match on the same fields as `/search`; blank exports the whole register). A reference exports one record, or just the header row if it doesn't exist. A term exports every match, up to `EXPORT_MAX_ROWS` (default 10000, at least 1); a larger match is a `400` asking for a narrower search, rather than a truncated file.
 
 ## API authorisation (EQ-413)
 

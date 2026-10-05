@@ -1,12 +1,11 @@
-import Boom from '@hapi/boom'
-
+import { config } from '#/config.js'
 import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
 import {
   searchQuerySchema,
   failWithBadRequest,
   noStoreCache
 } from '#/common/helpers/search-query.js'
-import { resolveQuery } from '#/services/search/search.js'
+import { searchRegistrations } from '#/services/search/search.js'
 
 export const search = [
   {
@@ -16,28 +15,17 @@ export const search = [
       auth: requireRole(...getCaseOfficerRoles()),
       cache: noStoreCache,
       validate: {
-        query: searchQuerySchema,
+        query: searchQuerySchema(config.get('search.maxPageSize')),
+        options: { abortEarly: false },
         failAction: failWithBadRequest
       }
     },
     handler: async (request, h) => {
-      const result = await resolveQuery(request.db, request.query)
+      const { page, pageSize, ...criteria } = request.query
 
-      if (result.invalidReference) {
-        return Boom.badRequest('Invalid reference number')
-      }
-
-      if (result.list) {
-        return h.response(result.list)
-      }
-
-      if (!result.single) {
-        return Boom.notFound(
-          'No records found for the reference number provided'
-        )
-      }
-
-      return h.response(result.single)
+      return h.response(
+        await searchRegistrations(request.db, criteria, { page, pageSize })
+      )
     }
   }
 ]

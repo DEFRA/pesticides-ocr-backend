@@ -1,5 +1,6 @@
 import {
   findRegistrations,
+  findRegistrationsPage,
   getOneByReferenceNumber
 } from '#/common/helpers/ocr-search.js'
 
@@ -75,5 +76,53 @@ describe('#findRegistrations', () => {
     expect(find).toHaveBeenCalledWith({}, { projection: { _id: 0 } })
     expect(sort).toHaveBeenCalledWith({})
     expect(cursor.limit).toHaveBeenCalledWith(0)
+  })
+})
+
+describe('#findRegistrationsPage', () => {
+  let cursor
+  let find
+  let countDocuments
+  let collection
+  let db
+
+  beforeEach(() => {
+    cursor = { toArray: vi.fn().mockResolvedValue([{ reference: 'PPP-A' }]) }
+    cursor.sort = vi.fn().mockReturnValue(cursor)
+    cursor.skip = vi.fn().mockReturnValue(cursor)
+    cursor.limit = vi.fn().mockReturnValue(cursor)
+    find = vi.fn().mockReturnValue(cursor)
+    countDocuments = vi.fn().mockResolvedValue(42)
+    collection = vi.fn().mockReturnValue({ find, countDocuments })
+    db = { collection }
+  })
+
+  test('reads one page and counts every match of the same filter', async () => {
+    const filter = { reference: /ABC/i }
+
+    const result = await findRegistrationsPage(db, {
+      filter,
+      sort: { submittedAt: -1 },
+      projection: { reference: 1 },
+      skip: 20,
+      limit: 10
+    })
+
+    expect(collection).toHaveBeenCalledWith('ocr-registration')
+    expect(find).toHaveBeenCalledWith(filter, {
+      projection: { reference: 1, _id: 0 }
+    })
+    expect(cursor.sort).toHaveBeenCalledWith({ submittedAt: -1 })
+    expect(cursor.skip).toHaveBeenCalledWith(20)
+    expect(cursor.limit).toHaveBeenCalledWith(10)
+    expect(countDocuments).toHaveBeenCalledWith(filter)
+    expect(result).toEqual({ records: [{ reference: 'PPP-A' }], total: 42 })
+  })
+
+  test('always leaves out the _id, even with no projection given', async () => {
+    await findRegistrationsPage(db)
+
+    expect(find).toHaveBeenCalledWith({}, { projection: { _id: 0 } })
+    expect(cursor.skip).toHaveBeenCalledWith(0)
   })
 })
