@@ -62,6 +62,16 @@ function makeFakeDb() {
     return doc
   }
 
+  function matchesFilter(doc, filter) {
+    return Object.entries(filter).every(([key, expected]) => {
+      if (key === '_id') return doc._id.toString() === expected.toString()
+      if (expected && typeof expected === 'object' && '$lt' in expected) {
+        return doc[key] < expected.$lt
+      }
+      return doc[key] === expected
+    })
+  }
+
   const collection = {
     async insertOne(doc) {
       const _id = doc._id ?? new ObjectId()
@@ -74,7 +84,7 @@ function makeFakeDb() {
     },
     async updateOne(filter, update) {
       const doc = docs.get(filter._id.toString())
-      if (!doc) {
+      if (!doc || !matchesFilter(doc, filter)) {
         return { matchedCount: 0 }
       }
       applyUpdate(doc, update)
@@ -82,11 +92,16 @@ function makeFakeDb() {
     },
     async findOneAndUpdate(filter, update) {
       const doc = docs.get(filter._id.toString())
-      if (!doc) {
+      if (!doc || !matchesFilter(doc, filter)) {
         return null
       }
       applyUpdate(doc, update)
       return { ...doc }
+    },
+    async deleteOne(filter) {
+      const key = filter._id.toString()
+      const existed = docs.delete(key)
+      return { deletedCount: existed ? 1 : 0 }
     },
     _docs: docs
   }
@@ -161,13 +176,14 @@ describe('startVerification', () => {
     expect(mockSendEmail).not.toHaveBeenCalled()
   })
 
-  test('throws EmailSendError when Notify rejects', async () => {
+  test('throws EmailSendError when Notify rejects, and leaves no record behind', async () => {
     const db = makeFakeDb()
     mockSendEmail.mockRejectedValue(new Error('network error'))
 
     await expect(startVerification(db, { email: 'a@b.com' })).rejects.toThrow(
       EmailSendError
     )
+    expect(db._collection._docs.size).toBe(0)
   })
 
   test('throws when no hash secret is configured', async () => {
@@ -195,6 +211,36 @@ describe('confirmVerification', () => {
     const stored = db._collection._docs.get(record._id.toString())
     expect(stored.status).toBe('verified')
     expect(stored.verifiedAt).toBeInstanceOf(Date)
+  })
+
+  test('throws CodeExpiredError when the code was rotated by a concurrent resend', async () => {
+    const db = makeFakeDb()
+    const record = insertRecord(db)
+    const staleCodeHash = record.codeHash
+
+    // Simulate a resend racing in between confirm's read and its write:
+    // the stored codeHash moves on right after findVerification reads it,
+    // but before the success-path update lands.
+    const realFindOne = db._collection.findOne.bind(db._collection)
+    db._collection.findOne = async (filter) => {
+      const found = await realFindOne(filter)
+      db._collection._docs.get(record._id.toString()).codeHash = hmacHex(
+        'test-secret',
+        'new-salt:111111'
+      )
+      return found
+    }
+
+    await expect(
+      confirmVerification(db, {
+        verificationId: record._id.toString(),
+        code: '482913'
+      })
+    ).rejects.toThrow(CodeExpiredError)
+
+    const stored = db._collection._docs.get(record._id.toString())
+    expect(stored.status).toBe('pending')
+    expect(stored.codeHash).not.toBe(staleCodeHash)
   })
 
   test('is idempotent once already verified — no code re-check needed', async () => {
@@ -302,6 +348,22 @@ describe('resendVerification', () => {
     expect(stored.attempts).toBe(0)
     expect(stored.resendCount).toBe(1)
     expect(stored.codeHash).not.toBe(record.codeHash)
+  })
+
+  test('reverts the code rotation when Notify rejects', async () => {
+    const db = makeFakeDb()
+    const record = insertRecord(db, { attempts: 3 })
+    mockGenerateCode.mockReturnValue('111111')
+    mockSendEmail.mockRejectedValue(new Error('network error'))
+
+    await expect(
+      resendVerification(db, { verificationId: record._id.toString() })
+    ).rejects.toThrow(EmailSendError)
+
+    const stored = db._collection._docs.get(record._id.toString())
+    expect(stored.codeHash).toBe(record.codeHash)
+    expect(stored.attempts).toBe(3)
+    expect(stored.resendCount).toBe(0)
   })
 
   test('throws ResendNotAllowedError within the cooldown window', async () => {

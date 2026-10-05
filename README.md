@@ -118,11 +118,6 @@ git config --global core.autocrlf false
 | `/search`                                       | GET    | Find registrations by reference or free text         |
 | `/export`                                       | GET    | The same search, as a CSV download                   |
 | `/whoami`                                       | GET    | Authenticated caller's identity (case-officer scope) |
-| Endpoint                                        | Method | Description                                          |
-| :---------------------------------------------- | :----- | :--------------------------------------------------- |
-| `/health`                                       | GET    | Health check                                         |
-| `/register`                                     | POST   | Submit a pesticide registration application          |
-| `/whoami`                                       | GET    | Authenticated caller's identity (case-officer scope) |
 | `/email-verifications`                          | POST   | Start email address verification (send OTP)          |
 | `/email-verifications/{verificationId}/confirm` | POST   | Confirm a verification code                          |
 | `/email-verifications/{verificationId}/resend`  | POST   | Resend a verification code                           |
@@ -196,7 +191,7 @@ it does not authenticate the user or create an account. Full design in
 
 ```
 POST /email-verifications                          { "email": "..." }        -> 201 { verificationId, expiresAt, ... }
-POST /email-verifications/{verificationId}/confirm  { "code": "482913" }      -> 200 { verified, email }
+POST /email-verifications/{verificationId}/confirm  { "code": "482913" }      -> 200 { verified }
 POST /email-verifications/{verificationId}/resend   (no body)                 -> 201 { verificationId, expiresAt, ... }
 ```
 

@@ -119,8 +119,17 @@ export async function startVerification(db, { email }) {
     expiresAt: new Date(now.getTime() + recordTtlSeconds * MS_PER_SECOND)
   }
 
-  await dispatchCode(normalizedEmail, code)
   const { insertedId } = await db.collection(COLLECTION).insertOne(record)
+
+  try {
+    await dispatchCode(normalizedEmail, code)
+  } catch (err) {
+    await db
+      .collection(COLLECTION)
+      .deleteOne({ _id: insertedId })
+      .catch(() => {})
+    throw err
+  }
 
   return buildStartResult({ ...record, _id: insertedId })
 }
@@ -193,12 +202,20 @@ export async function confirmVerification(db, { verificationId, code }) {
     })
   }
 
-  await db
+  // Guard against a resend racing this confirm: if the code was rotated
+  // between the read above and this write, codeHash no longer matches and
+  // the update is a no-op — the code the caller just verified is stale.
+  const updated = await db
     .collection(COLLECTION)
-    .updateOne(
-      { _id: record._id },
-      { $set: { status: 'verified', verifiedAt: now, attempts: 0 } }
+    .findOneAndUpdate(
+      { _id: record._id, codeHash: record.codeHash },
+      { $set: { status: 'verified', verifiedAt: now, attempts: 0 } },
+      { returnDocument: 'after' }
     )
+
+  if (!updated) {
+    throw new CodeExpiredError('Code has expired. Request a new one.')
+  }
 
   return { verified: true }
 }
@@ -238,8 +255,6 @@ export async function resendVerification(db, { verificationId }) {
   const codeHash = hmacHex(secret, `${codeSalt}:${code}`)
   const otpExpiresAt = new Date(now.getTime() + codeTtlSeconds * MS_PER_SECOND)
 
-  await dispatchCode(record.email, code)
-
   const updated = await db.collection(COLLECTION).findOneAndUpdate(
     { _id: record._id },
     {
@@ -254,6 +269,28 @@ export async function resendVerification(db, { verificationId }) {
     },
     { returnDocument: 'after' }
   )
+
+  try {
+    await dispatchCode(record.email, code)
+  } catch (err) {
+    await db
+      .collection(COLLECTION)
+      .updateOne(
+        { _id: record._id },
+        {
+          $set: {
+            codeSalt: record.codeSalt,
+            codeHash: record.codeHash,
+            otpExpiresAt: record.otpExpiresAt,
+            attempts: record.attempts,
+            lastSentAt: record.lastSentAt
+          },
+          $inc: { resendCount: -1 }
+        }
+      )
+      .catch(() => {})
+    throw err
+  }
 
   return buildStartResult(updated)
 }
