@@ -85,6 +85,17 @@ describe('failure', () => {
     expect(console.error).toHaveBeenCalledTimes(2)
   })
 
+  test('Send email failure without a response body (e.g. network error)', async () => {
+    configValues.isProduction = false
+    const networkError = new Error('ECONNREFUSED')
+    mockSendEmail.mockRejectedValue(networkError)
+
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(sendEmail(...emailArgs())).rejects.toBe(networkError)
+    expect(console.error).toHaveBeenCalledWith('  ', 'ECONNREFUSED')
+  })
+
   test('No console error in production', async () => {
     mockSendEmail.mockRejectedValue(failedSendEmailMock)
 
