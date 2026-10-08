@@ -20,9 +20,8 @@ function mockToken(roles) {
 
 const at = (iso) => new Date(`${iso}T10:00:00Z`)
 
-// A December 2025 start that never finishes, starts in March and April 2026,
-// and a May registration with no start that month, as when a journey starts on
-// the last day of one month and finishes the next.
+// December 2025 never finishes; May and June finish more journeys than they
+// start, as when a journey crosses a month end.
 const starts = [
   '2025-12-30',
   '2026-03-02',
@@ -30,13 +29,16 @@ const starts = [
   '2026-03-04',
   '2026-03-05',
   '2026-04-01',
-  '2026-04-02'
+  '2026-04-02',
+  '2026-06-01'
 ].map((day) => ({ startedAt: at(day) }))
 const registrations = [
   '2026-03-10',
   '2026-03-11',
   '2026-04-03',
-  '2026-05-01'
+  '2026-05-01',
+  '2026-06-02',
+  '2026-06-03'
 ].map((day, i) => ({ reference: `PPP-AAA-00${i}`, submittedAt: at(day) }))
 const notEligible = [{ endedAt: at('2026-03-06') }]
 
@@ -102,7 +104,7 @@ describe('#metricsRoutes — GET /metrics/journeys', () => {
     const { statusCode, result } = await get('/metrics/journeys', officerToken)
 
     expect(statusCode).toBe(200)
-    expect(result).toMatchObject(figures(7, 4, 1, 2, 0.7143, 0.5714))
+    expect(result).toMatchObject(figures(8, 6, 1, 1, 0.875, 0.75))
   })
 
   test('gives the same figures per year', async () => {
@@ -110,18 +112,19 @@ describe('#metricsRoutes — GET /metrics/journeys', () => {
 
     expect(result.byYear).toEqual([
       { year: '2025', ...figures(1, 0, 0, 1, 0, 0) },
-      { year: '2026', ...figures(6, 4, 1, 1, 0.8333, 0.6667) }
+      { year: '2026', ...figures(7, 6, 1, 0, 1, 0.8571) }
     ])
   })
 
-  test('gives the same figures per month, with drop-outs never below zero', async () => {
+  test('gives the same figures per month, with drop-outs never below zero and rates never above 1', async () => {
     const { result } = await get('/metrics/journeys', officerToken)
 
     expect(result.byMonth).toEqual([
       { month: '2025-12', ...figures(1, 0, 0, 1, 0, 0) },
       { month: '2026-03', ...figures(4, 2, 1, 1, 0.75, 0.5) },
       { month: '2026-04', ...figures(2, 1, 0, 1, 0.5, 0.5) },
-      { month: '2026-05', ...figures(0, 1, 0, 0, null, null) }
+      { month: '2026-05', ...figures(0, 1, 0, 0, null, null) },
+      { month: '2026-06', ...figures(1, 2, 0, 0, 1, 1) }
     ])
   })
 

@@ -249,7 +249,7 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
 }
 ```
 
-A journey is finished when it reaches either end point: a saved registration (`registrations`) or the "You do not need to use this service" page (`notEligible`). Drop-outs are starts minus finished, floored at zero. The completion rate is finished ÷ starts, the GDS completion rate; the registration rate is registrations ÷ starts. Rates are `null` with no starts. A journey can start in one month and finish in the next, so monthly drop-outs are approximate, and periods before start tracking began have no starts to compare against.
+A journey is finished when it reaches either end point: a saved registration (`registrations`) or the "You do not need to use this service" page (`notEligible`). Drop-outs are starts minus finished, floored at zero. The completion rate is finished ÷ starts, the GDS completion rate; the registration rate is registrations ÷ starts. Rates are capped at 1, and are `null` with no starts. A journey can start in one month and finish in the next, and start events are best-effort, so monthly figures are approximate; periods before start tracking began have no starts to compare against.
 
 ## API authorisation (EQ-413)
 

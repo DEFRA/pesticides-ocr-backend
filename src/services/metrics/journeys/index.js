@@ -2,24 +2,16 @@ import { countJourneyStarts } from '#/services/metrics/journey-starts/journey-st
 import { countJourneyNotEligible } from '#/services/metrics/journey-not-eligible/journey-not-eligible.js'
 import { countRegistrations } from '#/services/metrics/registrations/registrations.js'
 
-// Controller for GET /metrics/journeys (EQ-472, EQ-283): the digital completion
-// metric in one response, so every report derives it the same way. Counted from
-// the database for every applicant, whether or not they accepted analytics
-// cookies, so it covers the journeys Google Analytics can't see.
-//
-// A journey is finished when it reaches either end point: a saved registration
-// or the "You do not need to use this service" page. The completion rate is
-// finished ÷ started; the registration rate counts registrations alone.
-
 const RATE_DECIMAL_PLACES = 4
 const YEAR_LENGTH = 4
 
 const rate = (count, starts) =>
-  starts ? Number((count / starts).toFixed(RATE_DECIMAL_PLACES)) : null
+  starts
+    ? Number(Math.min(1, count / starts).toFixed(RATE_DECIMAL_PLACES))
+    : null
 
-// A journey can start in one period and finish in the next, so a single
-// period's drop-outs can come out negative; they are floored at zero. Rates are
-// null when there are no starts to divide by.
+// Finishes can outnumber starts (a journey crossing a period end, or a start
+// that wasn't recorded), so drop-outs floor at zero and rates cap at 1.
 function summarise({ starts, registrations, notEligible }) {
   const finished = registrations + notEligible
   return {
@@ -36,8 +28,7 @@ function summarise({ starts, registrations, notEligible }) {
 const countFor = (series, month) =>
   series.byMonth.find((entry) => entry.month === month)?.count ?? 0
 
-// Each year's totals, summed from the monthly counts (months arrive sorted, so
-// the years do too).
+// Months arrive sorted, so the years do too.
 function byYear(monthly) {
   const years = new Map()
   for (const { month, starts, registrations, notEligible } of monthly) {
@@ -62,8 +53,7 @@ export async function summariseJourneys(db, { from, to } = {}) {
     countJourneyNotEligible(db, { from, to })
   ])
 
-  // A document without its date field has no month; it still counts in the
-  // totals but can't be placed in a period.
+  // A document without its date field counts in the totals but has no month.
   const months = [
     ...new Set(
       [starts, registrations, notEligible].flatMap((series) =>
