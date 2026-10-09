@@ -17,6 +17,22 @@ function getClient() {
   return client
 }
 
+function logSendEmailError(error, { emailAddress, templateName, templateId }) {
+  console.error(
+    `Error sending email to ${emailAddress} using template '${templateName}' (ID: ${templateId}):`
+  )
+
+  const errors = error.response?.data?.errors
+  if (!errors) {
+    console.error('  ', error.message ?? error)
+    return
+  }
+
+  for (const [key, value] of Object.entries(errors)) {
+    console.error(`  ${key}:`, value)
+  }
+}
+
 async function sendEmail(templateName, emailAddress, personalisation) {
   const templateId = notifyConfig.templates[templateName]
 
@@ -24,29 +40,25 @@ async function sendEmail(templateName, emailAddress, personalisation) {
     throw new Error(`Unknown template '${templateName}'`)
   }
 
-  return getClient()
-    .sendEmail(templateId, emailAddress, { personalisation })
-    .then((response) => {
-      if (!config.get('isProduction')) {
-        console.log(
-          `Email sent to ${emailAddress} using template '${templateName}' (ID: ${templateId}). Response:`,
-          response
-        )
-      }
-      return response
+  try {
+    const response = await getClient().sendEmail(templateId, emailAddress, {
+      personalisation
     })
-    .catch((error) => {
-      if (!config.get('isProduction')) {
-        console.error(
-          `Error sending email to ${emailAddress} using template '${templateName}' (ID: ${templateId}):`
-        )
-        for (const [key, value] of Object.entries(error.response.data.errors)) {
-          console.error(`  ${key}:`, value)
-        }
-      }
 
-      return error
-    })
+    if (!config.get('isProduction')) {
+      console.log(
+        `Email sent to ${emailAddress} using template '${templateName}' (ID: ${templateId}). Response:`,
+        response
+      )
+    }
+    return response
+  } catch (error) {
+    if (!config.get('isProduction')) {
+      logSendEmailError(error, { emailAddress, templateName, templateId })
+    }
+
+    throw error
+  }
 }
 
 export { sendEmail }
