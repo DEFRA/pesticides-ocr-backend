@@ -118,6 +118,7 @@ git config --global core.autocrlf false
 | `/search`   | GET    | Partial-match search of the register, paginated      |
 | `/export`   | GET    | A reference or free-text match, as a CSV download    |
 | `/whoami`   | GET    | Authenticated caller's identity (case-officer scope) |
+| `/metrics/*` | GET, POST | Journey metrics (see [Journey metrics](#journey-metrics)) |
 
 ### POST /register
 
@@ -209,6 +210,78 @@ Rows are registrations as stored, limited to the fields the register shows (refe
 ### GET /export
 
 Same auth as `/search`, returned as a CSV download (`ocr-registrations.csv`). Takes exactly one of `?reference=` (one exact reference, using the configured `REFERENCE_PREFIX`) or `?q=` (a literal free-text match on the same fields as `/search`; blank exports the whole register). A reference exports one record, or just the header row if it doesn't exist. A term exports every match, up to `EXPORT_MAX_ROWS` (default 10000, at least 1); a larger match is a `400` asking for a narrower search, rather than a truncated file.
+
+### Journey metrics
+
+The digital completion metric, counted from the database for every applicant whether or not they accepted analytics cookies. Google Analytics only sees applicants who accept, so these are the totals to report; GA shows how consenting applicants move through the journey.
+
+The frontend records two journey events, each at most once per session:
+
+| Endpoint                             | Records                                                    |
+| ------------------------------------ | ---------------------------------------------------------- |
+| `POST /metrics/journey-starts`       | a journey start (the first question after the start page)  |
+| `POST /metrics/journey-not-eligible` | an exit via the "You do not need to use this service" page |
+
+These are public, as applicants aren't signed in. When `JOURNEY_TOKEN_SECRET` is set (the same value on the frontend), each must carry the frontend's signed per-session token in an `x-journey-token` header: a missing or forged token is a `401`, and a repeated one is stored once. Only a timestamp is stored, plus the token's session nonce when the token is required. Both return `204`.
+
+The read endpoints need case-officer bearer auth and accept optional inclusive `?from=` and `?to=` ISO dates:
+
+| Endpoint                            | Returns                                                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------- |
+| `GET /metrics/journeys`             | the completion metric: starts, finishes, drop-outs and rates, by year and month |
+| `GET /metrics/journey-starts`       | `{ total, byMonth }` of journey starts                                          |
+| `GET /metrics/registrations`        | `{ total, byMonth }` of completed registrations                                 |
+| `GET /metrics/journey-not-eligible` | `{ total, byMonth }` of not-eligible exits                                      |
+
+`GET /metrics/journeys` returns the overall figures (the life of the service, or the `from`/`to` period), plus the same per year and per month:
+
+```json
+{
+  "starts": 6,
+  "registrations": 3,
+  "notEligible": 1,
+  "finished": 4,
+  "dropOuts": 2,
+  "completionRate": 0.6667,
+  "registrationRate": 0.5,
+  "byYear": [
+    {
+      "year": "2026",
+      "starts": 6,
+      "registrations": 3,
+      "notEligible": 1,
+      "finished": 4,
+      "dropOuts": 2,
+      "completionRate": 0.6667,
+      "registrationRate": 0.5
+    }
+  ],
+  "byMonth": [
+    {
+      "month": "2026-03",
+      "starts": 4,
+      "registrations": 2,
+      "notEligible": 1,
+      "finished": 3,
+      "dropOuts": 1,
+      "completionRate": 0.75,
+      "registrationRate": 0.5
+    },
+    {
+      "month": "2026-04",
+      "starts": 2,
+      "registrations": 1,
+      "notEligible": 0,
+      "finished": 1,
+      "dropOuts": 1,
+      "completionRate": 0.5,
+      "registrationRate": 0.5
+    }
+  ]
+}
+```
+
+A journey is finished when it reaches either end point: a saved registration (`registrations`) or the "You do not need to use this service" page (`notEligible`). Drop-outs are starts minus finished, floored at zero. The completion rate is finished ÷ starts, the GDS completion rate; the registration rate is registrations ÷ starts. Rates are capped at 1, and are `null` with no starts. A journey can start in one month and finish in the next, and start events are best-effort, so monthly figures are approximate; periods before start tracking began have no starts to compare against.
 
 ## API authorisation (EQ-413)
 
