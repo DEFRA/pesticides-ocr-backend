@@ -12,12 +12,12 @@ import { randomInt } from 'crypto'
 import { fileURLToPath } from 'url'
 import { generateReference } from '../src/services/registration/registration.js'
 import { OCR_REGISTRATION_COLLECTION } from '../src/common/constants/collections.js'
+import { MONGO_DUPLICATE_KEY_ERROR } from '../src/common/constants/mongo.js'
 
 const MONGO_URI =
   process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/?directConnection=true'
 const MONGO_DATABASE = process.env.MONGO_DATABASE ?? 'pesticides-ocr-backend'
 export const SEED_PREFIX = 'SED'
-const MONGO_DUPLICATE_KEY_ERROR = 11000
 
 export const DEFAULT_COUNT = 10
 

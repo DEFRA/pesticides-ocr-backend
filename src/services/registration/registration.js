@@ -23,7 +23,8 @@ export async function saveRegistration(db, data, { prefix } = {}) {
       const result = await collection.insertOne({
         ...data,
         reference,
-        submittedAt: new Date()
+        submittedAt: new Date(),
+        isDeleted: false
       })
       return { ...result, reference }
     } catch (err) {
