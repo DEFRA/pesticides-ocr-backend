@@ -10,7 +10,8 @@ import { MongoClient } from 'mongodb'
 import { fileURLToPath } from 'url'
 import { SEED_PREFIX } from './seed.js'
 
-const MONGO_URI = process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/'
+const MONGO_URI =
+  process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/?directConnection=true'
 const MONGO_DATABASE = process.env.MONGO_DATABASE ?? 'pesticides-ocr-backend'
 
 export async function deleteSeed(

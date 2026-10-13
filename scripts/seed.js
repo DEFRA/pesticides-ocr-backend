@@ -12,7 +12,8 @@ import { randomInt } from 'crypto'
 import { fileURLToPath } from 'url'
 import { generateReference } from '../src/services/registration/registration.js'
 
-const MONGO_URI = process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/'
+const MONGO_URI =
+  process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/?directConnection=true'
 const MONGO_DATABASE = process.env.MONGO_DATABASE ?? 'pesticides-ocr-backend'
 export const SEED_PREFIX = 'SED'
 const MONGO_DUPLICATE_KEY_ERROR = 11000
