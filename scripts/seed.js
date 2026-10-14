@@ -11,6 +11,7 @@ import { MongoClient } from 'mongodb'
 import { randomInt } from 'crypto'
 import { fileURLToPath } from 'url'
 import { generateReference } from '../src/services/registration/registration.js'
+import { OCR_REGISTRATION_COLLECTION } from '../src/common/constants/collections.js'
 
 const MONGO_URI =
   process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/?directConnection=true'
@@ -149,7 +150,7 @@ export async function seed(
   try {
     await client.connect()
     const db = client.db(mongoDatabase)
-    const collection = db.collection('ocr-registration')
+    const collection = db.collection(OCR_REGISTRATION_COLLECTION)
 
     await collection.createIndex({ reference: 1 }, { unique: true })
 

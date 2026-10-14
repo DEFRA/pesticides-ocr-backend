@@ -9,6 +9,7 @@
 import { MongoClient } from 'mongodb'
 import { fileURLToPath } from 'url'
 import { SEED_PREFIX } from './seed.js'
+import { OCR_REGISTRATION_COLLECTION } from '../src/common/constants/collections.js'
 
 const MONGO_URI =
   process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/?directConnection=true'
@@ -23,7 +24,7 @@ export async function deleteSeed(
   try {
     await client.connect()
     const db = client.db(mongoDatabase)
-    const collection = db.collection('ocr-registration')
+    const collection = db.collection(OCR_REGISTRATION_COLLECTION)
 
     const result = await collection.deleteMany({
       reference: { $regex: `^${SEED_PREFIX}-` }
