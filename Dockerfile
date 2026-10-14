@@ -13,6 +13,8 @@ EXPOSE ${PORT} ${PORT_DEBUG}
 
 COPY --chown=node:node package*.json ./
 RUN npm install
+# npm run dev uses node --watch, which crashes on start if .env is missing.
+RUN touch .env
 COPY --chown=node:node ./src ./src
 
 CMD [ "npm", "run", "docker:dev" ]
