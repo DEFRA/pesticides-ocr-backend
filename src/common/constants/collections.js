@@ -4,6 +4,7 @@
 export const OCR_REGISTRATION_COLLECTION = 'ocr-registration'
 export const OCR_REGISTRATION_HISTORY_COLLECTION = 'ocr-registration_history'
 export const AUDIT_HISTORY_COLLECTION = 'audit_history'
+export const MONGO_LOCKS_COLLECTION = 'mongo-locks'
 
 // Journey events recorded server-side, once per session, as the applicant moves
 // through the journey — a consent-free basis for the completion rate (EQ-472).

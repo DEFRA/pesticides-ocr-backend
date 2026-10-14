@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from 'vitest'
 import { SignJWT } from 'jose'
+import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 
 // Mock-mode tokens (ENVIRONMENT defaults to local under test): decoded but not
 // signature-verified. Mint tokens with/without the case-officer role.
@@ -30,7 +31,7 @@ describe('#metricsRoutes — GET /metrics/registrations', () => {
     server = await createServer()
     await server.initialize()
     await server.db
-      .collection('ocr-registration')
+      .collection(OCR_REGISTRATION_COLLECTION)
       .insertMany(docs.map((doc) => ({ ...doc })))
     officerToken = await mockToken(['case_officer'])
     viewerToken = await mockToken(['viewer'])

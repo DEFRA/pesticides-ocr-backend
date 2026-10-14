@@ -2,6 +2,7 @@ import {
   findRegistrations,
   getOneByReferenceNumber
 } from '#/common/helpers/ocr-search.js'
+import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 
 describe('#getOneByReferenceNumber', () => {
   let findOne
@@ -20,7 +21,7 @@ describe('#getOneByReferenceNumber', () => {
 
     const result = await getOneByReferenceNumber(db, 'PPP-A1B-2C3')
 
-    expect(collection).toHaveBeenCalledWith('ocr-registration')
+    expect(collection).toHaveBeenCalledWith(OCR_REGISTRATION_COLLECTION)
     expect(findOne).toHaveBeenCalledWith(
       { reference: 'PPP-A1B-2C3' },
       { projection: { _id: 0 } }
@@ -59,7 +60,7 @@ describe('#findRegistrations', () => {
       limit: 5
     })
 
-    expect(collection).toHaveBeenCalledWith('ocr-registration')
+    expect(collection).toHaveBeenCalledWith(OCR_REGISTRATION_COLLECTION)
     expect(find).toHaveBeenCalledWith(
       { reference: 'PPP-A1B-2C3' },
       { projection: { _id: 0 } }

@@ -1,4 +1,5 @@
 import { SignJWT } from 'jose'
+import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 
 // The API runs in mock auth mode under test (ENVIRONMENT defaults to local), so
 // tokens are decoded but not signature-verified.
@@ -38,7 +39,7 @@ describe('#exportRoute', () => {
     officerToken = await mockToken(['case_officer'])
     viewerToken = await mockToken(['viewer'])
 
-    await server.db.collection('ocr-registration').insertMany([
+    await server.db.collection(OCR_REGISTRATION_COLLECTION).insertMany([
       {
         reference: 'PPP-A1B-2C3',
         businessName: 'Pesticides Ltd',
@@ -212,7 +213,7 @@ describe('#exportRoute', () => {
       // Prove the spy would have caught a query had one been made
       await get('/export?reference=PPP-A1B-2C3', officerToken)
 
-      expect(collection).toHaveBeenCalledWith('ocr-registration')
+      expect(collection).toHaveBeenCalledWith(OCR_REGISTRATION_COLLECTION)
 
       collection.mockRestore()
     })

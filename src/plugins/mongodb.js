@@ -3,6 +3,7 @@ import { LockManager } from 'mongo-locks'
 
 import {
   OCR_REGISTRATION_COLLECTION,
+  MONGO_LOCKS_COLLECTION,
   JOURNEY_STARTS_COLLECTION,
   JOURNEY_NOT_ELIGIBLE_COLLECTION
 } from '#/common/constants/collections.js'
@@ -20,7 +21,7 @@ export const mongoDb = {
 
       const databaseName = options.databaseName
       const db = client.db(databaseName)
-      const locker = new LockManager(db.collection('mongo-locks'))
+      const locker = new LockManager(db.collection(MONGO_LOCKS_COLLECTION))
 
       await createIndexes(db)
 
@@ -47,7 +48,7 @@ export const mongoDb = {
 async function createIndexes(db) {
   const registrations = db.collection(OCR_REGISTRATION_COLLECTION)
 
-  await db.collection('mongo-locks').createIndex({ id: 1 })
+  await db.collection(MONGO_LOCKS_COLLECTION).createIndex({ id: 1 })
   await registrations.createIndex({ submittedAt: 1 })
   await registrations.createIndex({ reference: 1 }, { unique: true })
   const journeyStarts = db.collection(JOURNEY_STARTS_COLLECTION)

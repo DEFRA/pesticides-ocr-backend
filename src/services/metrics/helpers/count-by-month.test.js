@@ -1,4 +1,8 @@
 import { countByMonth } from './count-by-month.js'
+import {
+  JOURNEY_STARTS_COLLECTION,
+  JOURNEY_NOT_ELIGIBLE_COLLECTION
+} from '#/common/constants/collections.js'
 
 describe('#countByMonth', () => {
   let facet
@@ -27,16 +31,16 @@ describe('#countByMonth', () => {
 
   test('aggregates the requested collection', async () => {
     await countByMonth(db, {
-      collection: 'ocr-journey-starts',
+      collection: JOURNEY_STARTS_COLLECTION,
       dateField: 'startedAt'
     })
 
-    expect(collection).toHaveBeenCalledWith('ocr-journey-starts')
+    expect(collection).toHaveBeenCalledWith(JOURNEY_STARTS_COLLECTION)
   })
 
   test('omits the $match stage entirely when neither bound is given', async () => {
     await countByMonth(db, {
-      collection: 'ocr-journey-starts',
+      collection: JOURNEY_STARTS_COLLECTION,
       dateField: 'startedAt'
     })
 
@@ -45,7 +49,7 @@ describe('#countByMonth', () => {
 
   test('groups by year-month over the given date field', async () => {
     await countByMonth(db, {
-      collection: 'ocr-journey-starts',
+      collection: JOURNEY_STARTS_COLLECTION,
       dateField: 'startedAt'
     })
 
@@ -58,7 +62,7 @@ describe('#countByMonth', () => {
 
   test('bounds `from` at the very start of that UTC day', async () => {
     await countByMonth(db, {
-      collection: 'ocr-journey-starts',
+      collection: JOURNEY_STARTS_COLLECTION,
       dateField: 'startedAt',
       from: '2026-03-11'
     })
@@ -70,7 +74,7 @@ describe('#countByMonth', () => {
 
   test('bounds `to` at the very end of that UTC day, so same-day events count', async () => {
     await countByMonth(db, {
-      collection: 'ocr-journey-starts',
+      collection: JOURNEY_STARTS_COLLECTION,
       dateField: 'startedAt',
       to: '2026-04-01'
     })
@@ -82,7 +86,7 @@ describe('#countByMonth', () => {
 
   test('applies both bounds inclusively over the same field', async () => {
     await countByMonth(db, {
-      collection: 'ocr-journey-not-eligible',
+      collection: JOURNEY_NOT_ELIGIBLE_COLLECTION,
       dateField: 'endedAt',
       from: '2026-03-11',
       to: '2026-04-01'
@@ -106,7 +110,7 @@ describe('#countByMonth', () => {
     })
 
     const result = await countByMonth(db, {
-      collection: 'ocr-journey-starts',
+      collection: JOURNEY_STARTS_COLLECTION,
       dateField: 'startedAt'
     })
 
@@ -123,7 +127,7 @@ describe('#countByMonth', () => {
     stubDb({ total: [], byMonth: [] })
 
     const result = await countByMonth(db, {
-      collection: 'ocr-journey-starts',
+      collection: JOURNEY_STARTS_COLLECTION,
       dateField: 'startedAt'
     })
 

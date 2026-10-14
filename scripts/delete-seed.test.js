@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { OCR_REGISTRATION_COLLECTION } from '../src/common/constants/collections.js'
 
 const { mockCollection, mockDb, mockClient } = vi.hoisted(() => {
   const mockCollection = { deleteMany: vi.fn() }
@@ -70,7 +71,7 @@ describe('deleteSeed', () => {
 
   test('uses the correct collection name', async () => {
     await deleteSeed('mongodb://test', 'test-db')
-    expect(mockDb.collection).toHaveBeenCalledWith('ocr-registration')
+    expect(mockDb.collection).toHaveBeenCalledWith(OCR_REGISTRATION_COLLECTION)
   })
 })
 
