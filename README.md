@@ -329,7 +329,7 @@ docker compose up --build -d
 ```
 
 Mock AWS resources can be created when Floci starts up by editing the scripts in `./compose/floci/start.d/`.
-MongoDB records can also be created when Mongo starts by editing the scripts in `./compose/mongo/`.
+MongoDB records can also be created by editing the scripts in `./compose/mongo/`. They run only when the `mongodb-data` volume is first created, so run `docker compose down -v` to reset the data and run them again. The data is otherwise kept across `docker compose down`.
 
 ## Licence
 
