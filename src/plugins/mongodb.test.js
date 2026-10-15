@@ -1,7 +1,11 @@
 import { Db, MongoClient } from 'mongodb'
 import { LockManager } from 'mongo-locks'
 
-import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
+import {
+  OCR_REGISTRATION_COLLECTION,
+  OCR_REGISTRATION_HISTORY_COLLECTION
+} from '#/common/constants/collections.js'
+import { HISTORY_VERSION_INDEX } from '#/common/constants/history.js'
 
 describe('#mongoDb', () => {
   let server
@@ -27,6 +31,19 @@ describe('#mongoDb', () => {
 
     test('MongoDb should have expected namespace', () => {
       expect(server.db.namespace).toBe('pesticides-ocr-backend')
+    })
+
+    test('Should create a unique reference + version index on the history', async () => {
+      const indexes = await server.db
+        .collection(OCR_REGISTRATION_HISTORY_COLLECTION)
+        .indexes()
+
+      expect(indexes).toContainEqual(
+        expect.objectContaining({
+          key: HISTORY_VERSION_INDEX.key,
+          ...HISTORY_VERSION_INDEX.options
+        })
+      )
     })
   })
 
