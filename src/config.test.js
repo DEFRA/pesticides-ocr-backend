@@ -58,6 +58,20 @@ describe('config startup validation', () => {
     }
   )
 
+  test('reads SEARCH_MAX_PAGE_SIZE from the environment as a number', async () => {
+    const { config } = await loadConfigWith('SEARCH_MAX_PAGE_SIZE', '50')
+    expect(config.get('search.maxPageSize')).toBe(50)
+  })
+
+  test.each(['0', '-1', 'abc', '1.5'])(
+    'refuses to start with SEARCH_MAX_PAGE_SIZE=%s',
+    async (value) => {
+      await expect(
+        loadConfigWith('SEARCH_MAX_PAGE_SIZE', value)
+      ).rejects.toThrow(/search\.maxPageSize/)
+    }
+  )
+
   test.each(['ppp', 'P-P'])(
     'refuses to start with REFERENCE_PREFIX=%s',
     async (value) => {

@@ -24,3 +24,20 @@ export function findRegistrations(
     .limit(limit)
     .toArray()
 }
+
+export async function findRegistrationsPage(
+  db,
+  { filter = {}, sort = {}, projection = {}, skip = 0, limit = 0 } = {}
+) {
+  const collection = db.collection(OCR_REGISTRATION_COLLECTION)
+  const [records, total] = await Promise.all([
+    collection
+      .find(filter, { projection: { ...projection, _id: 0 } })
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .toArray(),
+    collection.countDocuments(filter)
+  ])
+  return { records, total }
+}

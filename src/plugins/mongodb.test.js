@@ -1,6 +1,8 @@
 import { Db, MongoClient } from 'mongodb'
 import { LockManager } from 'mongo-locks'
 
+import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
+
 describe('#mongoDb', () => {
   let server
 
@@ -25,6 +27,25 @@ describe('#mongoDb', () => {
 
     test('MongoDb should have expected namespace', () => {
       expect(server.db.namespace).toBe('pesticides-ocr-backend')
+    })
+  })
+
+  describe('Old submittedAt index', () => {
+    test('Should drop the old index when two instances start together', async () => {
+      const { createServer } = await import('#/server.js')
+      const first = await createServer()
+      await first.initialize()
+      const registrations = first.db.collection(OCR_REGISTRATION_COLLECTION)
+      await registrations.createIndex({ submittedAt: 1 })
+
+      const instances = await Promise.all([createServer(), createServer()])
+      await Promise.all(instances.map((instance) => instance.initialize()))
+
+      expect(await registrations.indexExists('submittedAt_1')).toBe(false)
+
+      await Promise.all(
+        [first, ...instances].map((instance) => instance.stop({ timeout: 0 }))
+      )
     })
   })
 
