@@ -1,6 +1,7 @@
 import { queryRegistrations } from './query-registrations.js'
 import { buildSearchFilter } from './search-filter.js'
 import { storedDoc } from '#/services/search/search.fixtures.js'
+import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 
 describe('#queryRegistrations', () => {
   let cursor
@@ -22,7 +23,7 @@ describe('#queryRegistrations', () => {
   test('queries ocr-registration newest-first with the given limit', async () => {
     await queryRegistrations(db, { query: '', limit: 5 })
 
-    expect(collection).toHaveBeenCalledWith('ocr-registration')
+    expect(collection).toHaveBeenCalledWith(OCR_REGISTRATION_COLLECTION)
     expect(find).toHaveBeenCalledWith({}, { projection: { _id: 0 } })
     expect(sort).toHaveBeenCalledWith({ submittedAt: -1 })
     expect(cursor.limit).toHaveBeenCalledWith(5)

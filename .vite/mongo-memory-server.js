@@ -1,18 +1,11 @@
-import { afterAll, beforeAll } from 'vitest'
-import { setup, teardown } from 'vitest-mongodb'
+import { setup as startMongo, teardown as stopMongo } from 'vitest-mongodb'
 
-beforeAll(async () => {
-  // Setup mongo mock
-  await setup({
-    binary: {
-      version: 'latest'
-    },
-    serverOptions: {},
-    autoStart: false
+export async function setup() {
+  await startMongo({
+    type: 'replSet',
+    serverOptions: { replSet: { count: 1, storageEngine: 'wiredTiger' } }
   })
   process.env.MONGO_URI = globalThis.__MONGO_URI__
-})
+}
 
-afterAll(async () => {
-  await teardown()
-})
+export const teardown = stopMongo

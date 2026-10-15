@@ -1,4 +1,5 @@
 import { SignJWT } from 'jose'
+import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 
 // The API runs in mock auth mode under test (ENVIRONMENT defaults to local), so
 // tokens are decoded but not signature-verified. These helpers mint tokens that
@@ -78,7 +79,7 @@ describe('#searchRoute', () => {
     viewerToken = await mockToken(['viewer'])
 
     await server.db
-      .collection('ocr-registration')
+      .collection(OCR_REGISTRATION_COLLECTION)
       .insertMany(
         [...abcRecords, greenAcres, greenfield].map((doc) => ({ ...doc }))
       )
@@ -400,7 +401,7 @@ describe('#searchRoute', () => {
 
       await get('/search?q=green')
 
-      expect(collection).toHaveBeenCalledWith('ocr-registration')
+      expect(collection).toHaveBeenCalledWith(OCR_REGISTRATION_COLLECTION)
 
       collection.mockRestore()
     })

@@ -23,6 +23,9 @@ services:
 
   mongodb:
     image: mongo:7.0.28
+    # The healthcheck initiates the replica set, then waits for it to elect a
+    # primary.
+    command: ['--replSet', 'rs0', '--bind_ip_all']
     networks:
       - cdp-tenant
     ports:
@@ -31,7 +34,14 @@ services:
       - ./compose/mongo:/docker-entrypoint-initdb.d:ro
       - mongodb-data:/data
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.hello().ok"]
+      test:
+        [
+          'CMD',
+          'mongosh',
+          '--quiet',
+          '--eval',
+          "try { rs.status() } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongodb:27017' }] }) } if (!db.hello().isWritablePrimary) quit(1)"
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -52,13 +62,13 @@ services:
       floci:
         condition: service_healthy
       mongodb:
-        condition: service_started
+        condition: service_healthy
     env_file:
       - 'compose/aws.env'
     environment:
       PORT: 3001
       NODE_ENV: development
-      MONGO_URI: mongodb://mongodb:27017/
+      MONGO_URI: mongodb://mongodb:27017/?directConnection=true
     networks:
       - cdp-tenant
     volumes:
