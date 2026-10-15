@@ -361,7 +361,7 @@ docker compose up --build -d
 ```
 
 Mock AWS resources can be created when Floci starts up by editing the scripts in `./compose/floci/start.d/`.
-MongoDB records can also be created when Mongo starts by editing the scripts in `./compose/mongo/`.
+MongoDB records can also be created by editing the scripts in `./compose/mongo/`. They run only when the `mongodb-data` volume is first created, so run `docker compose down -v` to reset the data and run them again. The data is otherwise kept across `docker compose down`.
 
 MongoDB runs as a single-member replica set (`rs0`), because multi-document transactions need a replica set, as on CDP. Connect with `directConnection=true` (the default `MONGO_URI`), so the same database works from inside Compose and from `npm run dev`. If your `.env` sets `MONGO_URI` without `directConnection=true`, add it, or the app and the seed scripts can't reach the Compose database. A standalone `mongod` still works for everything except transactions. The tests use an in-memory replica set, so they need no setup.
 

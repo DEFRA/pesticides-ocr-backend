@@ -32,7 +32,7 @@ services:
       - '27017:27017'
     volumes:
       - ./compose/mongo:/docker-entrypoint-initdb.d:ro
-      - mongodb-data:/data
+      - mongodb-data:/data/db
     healthcheck:
       test:
         [
