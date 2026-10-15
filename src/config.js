@@ -157,6 +157,14 @@ export const config = convict({
     default: 'PPP',
     env: 'REFERENCE_PREFIX'
   },
+  search: {
+    maxPageSize: {
+      doc: 'Largest pageSize one GET /search request may ask for; a larger value is a 400. Must be at least 1. The default pageSize (10) is lowered to this when the cap is smaller.',
+      format: 'positive-int',
+      default: 100,
+      env: 'SEARCH_MAX_PAGE_SIZE'
+    }
+  },
   export: {
     maxRows: {
       doc: 'Most registrations one GET /export may return. The export is built in memory, so this bounds the memory one request can take; a larger match is refused (asking the caller to narrow the search) rather than truncated. Must be at least 1: there is no "unlimited" or "disabled" value.',

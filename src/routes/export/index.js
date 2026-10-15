@@ -3,17 +3,13 @@ import Boom from '@hapi/boom'
 import { config } from '#/config.js'
 import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
 import {
-  searchQuerySchema,
+  exportQuerySchema,
   failWithBadRequest,
   noStoreCache
 } from '#/common/helpers/search-query.js'
 import { resolveQuery } from '#/services/search/search.js'
 import { exportToCsv } from '#/services/export/index.js'
 
-// GET /export (EQ-369) — the same question as /search, answered as a CSV
-// download. It takes the identical query contract, so a reference exports one
-// record and a free-text term exports every match.
-//
 // The route is the composition point: it asks search for rows, then hands them
 // to the export service. Neither service imports the other.
 //
@@ -33,7 +29,7 @@ export const exportRegistrations = [
       auth: requireRole(...getCaseOfficerRoles()),
       cache: noStoreCache,
       validate: {
-        query: searchQuerySchema,
+        query: exportQuerySchema,
         failAction: failWithBadRequest
       }
     },
