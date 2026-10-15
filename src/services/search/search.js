@@ -56,7 +56,11 @@ function validateReferenceNumber(referenceNumber) {
 //   { invalidReference: true }  the reference is not a well-formed reference
 //   { single: doc | null }      a reference was given
 //   { list: [...] }             a free-text term was given (blank = everything)
-export async function resolveQuery(db, { reference, q } = {}, { limit } = {}) {
+export async function resolveQuery(
+  db,
+  { reference, q } = {},
+  { limit = config.get('export.maxRows') } = {}
+) {
   if (reference === undefined) {
     return { list: await queryRegistrations(db, { query: q, limit }) }
   }

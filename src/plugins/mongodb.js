@@ -50,8 +50,12 @@ async function createIndexes(db) {
   await db.collection('mongo-locks').createIndex({ id: 1 })
   await registrations.createIndex({ reference: 1 }, { unique: true })
   await registrations.createIndex({ submittedAt: -1, reference: 1 })
-  if (await registrations.indexExists('submittedAt_1')) {
+  try {
     await registrations.dropIndex('submittedAt_1')
+  } catch (error) {
+    if (error.codeName !== 'IndexNotFound') {
+      throw error
+    }
   }
   const journeyStarts = db.collection(JOURNEY_STARTS_COLLECTION)
   const journeyNotEligible = db.collection(JOURNEY_NOT_ELIGIBLE_COLLECTION)

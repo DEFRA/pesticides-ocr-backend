@@ -1,5 +1,6 @@
 import {
   getOneByReferenceNumber,
+  resolveQuery,
   validateReferenceNumber
 } from '#/services/search/search.js'
 import { getOneByReferenceNumber as sharedLookup } from '#/common/helpers/ocr-search.js'
@@ -69,5 +70,19 @@ describe('#validateReferenceNumber', () => {
 describe('#getOneByReferenceNumber', () => {
   test('is the shared ocr-registration lookup, re-exported for the /search route', () => {
     expect(getOneByReferenceNumber).toBe(sharedLookup)
+  })
+})
+
+describe('#resolveQuery', () => {
+  test('Should cap a free text query at the export row limit when no limit is given', async () => {
+    configValues['export.maxRows'] = 25
+    const limit = vi.fn().mockReturnValue({ toArray: async () => [] })
+    const db = {
+      collection: () => ({ find: () => ({ sort: () => ({ limit }) }) })
+    }
+
+    await resolveQuery(db, { q: 'Farm' })
+
+    expect(limit).toHaveBeenCalledWith(25)
   })
 })
