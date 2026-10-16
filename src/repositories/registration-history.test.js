@@ -211,17 +211,26 @@ describe('#createRegistrationHistory', () => {
       )
     })
 
-    test("returns one registration's versions in order", async () => {
+    test("returns one registration's versions newest first", async () => {
       const versions = await history.list('PPP-AAA-001', { limit: 10 })
 
-      expect(versions.map(({ version }) => version)).toEqual([1, 2, 3])
+      expect(versions.map(({ version }) => version)).toEqual([3, 2, 1])
       expect(versions[0]).not.toHaveProperty('_id')
     })
 
-    test('applies the limit', async () => {
+    test('keeps the newest versions when there are more than the limit', async () => {
       const versions = await history.list('PPP-AAA-001', { limit: 2 })
 
-      expect(versions.map(({ version }) => version)).toEqual([1, 2])
+      expect(versions.map(({ version }) => version)).toEqual([3, 2])
+    })
+
+    test('gives the latest version with a limit of 1', async () => {
+      const [latest] = await history.list('PPP-AAA-001', { limit: 1 })
+
+      expect(latest).toMatchObject({
+        version: 3,
+        operation: HISTORY_OPERATION.DELETE
+      })
     })
 
     test.each([undefined, 0, -1, 1.5])(

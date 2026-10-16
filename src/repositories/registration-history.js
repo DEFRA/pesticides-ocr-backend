@@ -62,12 +62,13 @@ export function createRegistrationHistory({ db }) {
       )
     },
 
+    // Newest first, so a limit drops the oldest versions, not the latest.
     async list(reference, { limit, session } = {}) {
       assertReference(reference)
       assertLimit(limit)
       return history
         .find({ reference }, { projection: NO_ID, session })
-        .sort({ version: 1 })
+        .sort({ version: -1 })
         .limit(limit)
         .toArray()
     }
