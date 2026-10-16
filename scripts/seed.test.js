@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
+import { MONGO_DUPLICATE_KEY_ERROR } from '../src/common/constants/mongo.js'
 
 const { mockCollection, mockClient } = vi.hoisted(() => {
   const mockCollection = {
@@ -186,7 +187,10 @@ describe('seed', () => {
 
   test('retries silently on reference field duplicate key error', async () => {
     mockCollection.insertOne
-      .mockRejectedValueOnce({ code: 11000, keyPattern: { reference: 1 } })
+      .mockRejectedValueOnce({
+        code: MONGO_DUPLICATE_KEY_ERROR,
+        keyPattern: { reference: 1 }
+      })
       .mockResolvedValue({ insertedId: 'abc' })
 
     await seed(1, 'mongodb://test', 'test-db')
@@ -196,7 +200,7 @@ describe('seed', () => {
 
   test('throws on duplicate key error for a non-reference field', async () => {
     mockCollection.insertOne.mockRejectedValue({
-      code: 11000,
+      code: MONGO_DUPLICATE_KEY_ERROR,
       keyPattern: { referenceNumber: 1 }
     })
 

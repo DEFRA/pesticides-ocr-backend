@@ -1,4 +1,5 @@
 import { describe, test, expect, vi } from 'vitest'
+import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
 import {
   saveRegistration,
   generateReference
@@ -62,6 +63,15 @@ describe('saveRegistration', () => {
     )
   })
 
+  test('stores the registration as not deleted', async () => {
+    const insertOne = vi.fn().mockResolvedValue({ insertedId: 'abc' })
+    await saveRegistration(makeDb(insertOne), validData)
+
+    expect(insertOne).toHaveBeenCalledWith(
+      expect.objectContaining({ isDeleted: false })
+    )
+  })
+
   test('passes all provided data fields to insertOne', async () => {
     const insertOne = vi.fn().mockResolvedValue({ insertedId: 'abc' })
     await saveRegistration(makeDb(insertOne), validData)
@@ -76,7 +86,7 @@ describe('saveRegistration', () => {
 
   test('retries with a new reference on duplicate reference collision', async () => {
     const dupError = Object.assign(new Error('duplicate key'), {
-      code: 11000,
+      code: MONGO_DUPLICATE_KEY_ERROR,
       keyPattern: { reference: 1 }
     })
     const insertOne = vi
@@ -101,7 +111,7 @@ describe('saveRegistration', () => {
 
   test('rethrows duplicate key errors not on the reference field', async () => {
     const dupError = Object.assign(new Error('duplicate key'), {
-      code: 11000,
+      code: MONGO_DUPLICATE_KEY_ERROR,
       keyPattern: { someOtherField: 1 }
     })
     const insertOne = vi.fn().mockRejectedValue(dupError)
@@ -113,7 +123,7 @@ describe('saveRegistration', () => {
 
   test('throws after exhausting max retries on persistent reference collisions', async () => {
     const dupError = Object.assign(new Error('duplicate key'), {
-      code: 11000,
+      code: MONGO_DUPLICATE_KEY_ERROR,
       keyPattern: { reference: 1 }
     })
     const insertOne = vi.fn().mockRejectedValue(dupError)
