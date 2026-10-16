@@ -11,6 +11,23 @@ import {
 } from '#/common/constants/history.js'
 import { assertLimit, assertReference } from '#/repositories/guards.js'
 
+const actorSchema = Joi.object({
+  type: Joi.string()
+    .valid(...Object.values(ACTOR_TYPE))
+    .required(),
+  id: Joi.string()
+    .max(MAX_BY_ID_LENGTH)
+    .when('type', { is: ACTOR_TYPE.CASE_OFFICER, then: Joi.required() })
+}).required()
+const reasonSchema = Joi.string().max(MAX_REASON_LENGTH)
+const requestIdSchema = Joi.string().max(MAX_REQUEST_ID_LENGTH)
+
+const auditSchema = Joi.object({
+  by: actorSchema,
+  reason: reasonSchema,
+  requestId: requestIdSchema
+}).required()
+
 const entrySchema = Joi.object({
   reference: Joi.string().required(),
   version: Joi.number().integer().min(FIRST_VERSION).required(),
@@ -18,14 +35,9 @@ const entrySchema = Joi.object({
     .valid(...Object.values(HISTORY_OPERATION))
     .required(),
   at: Joi.date().required(),
-  by: Joi.object({
-    type: Joi.string()
-      .valid(...Object.values(ACTOR_TYPE))
-      .required(),
-    id: Joi.string().max(MAX_BY_ID_LENGTH)
-  }).required(),
-  reason: Joi.string().max(MAX_REASON_LENGTH),
-  requestId: Joi.string().max(MAX_REQUEST_ID_LENGTH),
+  by: actorSchema,
+  reason: reasonSchema,
+  requestId: requestIdSchema,
   // The snapshot must be of the same registration as the entry.
   snapshot: Joi.object({
     reference: Joi.string().valid(Joi.ref('...reference')).required()
@@ -35,6 +47,13 @@ const entrySchema = Joi.object({
 }).required()
 
 const NO_ID = { _id: 0 }
+
+export function assertAudit(audit) {
+  const { error } = auditSchema.validate(audit, { convert: false })
+  if (error) {
+    throw new TypeError(`Invalid audit details: ${error.message}`)
+  }
+}
 
 // Append-only: entries can be added and read, never changed or removed.
 export function createRegistrationHistory({ db }) {
