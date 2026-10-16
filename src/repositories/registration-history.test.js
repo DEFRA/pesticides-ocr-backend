@@ -152,6 +152,18 @@ describe('#createRegistrationHistory', () => {
       expect(await collection.countDocuments()).toBe(0)
     })
 
+    test.each([
+      ['no entry', undefined],
+      ['null', null],
+      ['a list', []],
+      ['text', 'entry']
+    ])('rejects %s as the entry', async (_label, value) => {
+      await expect(history.append(value)).rejects.toThrow(
+        'Invalid history entry'
+      )
+      expect(await collection.countDocuments()).toBe(0)
+    })
+
     test('joins a transaction through the session', async () => {
       await expect(
         withTransaction(client, async (session) => {

@@ -1,6 +1,10 @@
 import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 import { LIFECYCLE_FIELDS } from '#/common/constants/registration.js'
-import { assertLimit, assertReference } from '#/repositories/guards.js'
+import {
+  assertLimit,
+  assertObject,
+  assertReference
+} from '#/repositories/guards.js'
 import { withTransaction } from '#/repositories/mongo-transaction.js'
 
 const PROTECTED_FIELDS = new Set([
@@ -34,6 +38,7 @@ export function createAuditedRepository({ client, db }) {
 
   return {
     async create(registration, { session } = {}) {
+      assertObject(registration, 'registration')
       assertReference(registration.reference)
       assertNoProtectedFields(registration, ['reference', 'submittedAt'])
       const document = { ...registration, isDeleted: false }
@@ -66,6 +71,7 @@ export function createAuditedRepository({ client, db }) {
     // null when there's no such registration, or it's deleted.
     async update(reference, changes, { session } = {}) {
       assertReference(reference)
+      assertObject(changes, 'changes')
       assertNoProtectedFields(changes)
       return registrations.findOneAndUpdate(
         visible({ reference }, false),

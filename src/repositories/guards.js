@@ -12,3 +12,9 @@ export function assertLimit(limit) {
     throw new TypeError('limit must be a positive integer')
   }
 }
+
+export function assertObject(value, name) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`${name} must be an object`)
+  }
+}

@@ -32,7 +32,7 @@ const entrySchema = Joi.object({
   })
     .unknown()
     .required()
-})
+}).required()
 
 const NO_ID = { _id: 0 }
 
