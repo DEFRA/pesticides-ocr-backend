@@ -1,5 +1,10 @@
 import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 import { LIFECYCLE_FIELDS } from '#/common/constants/registration.js'
+import {
+  assertLimit,
+  assertObject,
+  assertReference
+} from '#/repositories/guards.js'
 import { withTransaction } from '#/repositories/mongo-transaction.js'
 
 const PROTECTED_FIELDS = new Set([
@@ -17,14 +22,6 @@ const NO_ID = { _id: 0 }
 const visible = (filter, includeDeleted) =>
   includeDeleted === true ? filter : { $and: [filter, NOT_DELETED] }
 
-// A non-string reference could be a query operator, like { $ne: '' }, that
-// matches someone else's registration.
-function assertReference(reference) {
-  if (typeof reference !== 'string') {
-    throw new TypeError('reference must be a string')
-  }
-}
-
 // A dotted path, like 'deletedBy.type', would set part of a protected field.
 function assertNoProtectedFields(fields, allowed = []) {
   const rejected = Object.keys(fields).filter((field) => {
@@ -41,6 +38,7 @@ export function createAuditedRepository({ client, db }) {
 
   return {
     async create(registration, { session } = {}) {
+      assertObject(registration, 'registration')
       assertReference(registration.reference)
       assertNoProtectedFields(registration, ['reference', 'submittedAt'])
       const document = { ...registration, isDeleted: false }
@@ -57,14 +55,11 @@ export function createAuditedRepository({ client, db }) {
       })
     },
 
-    // limit is required: Mongo treats a missing or 0 limit as no limit at all.
     async search(
       filter = {},
       { includeDeleted = false, sort = {}, skip = 0, limit, session } = {}
     ) {
-      if (!Number.isInteger(limit) || limit < 1) {
-        throw new TypeError('limit must be a positive integer')
-      }
+      assertLimit(limit)
       return registrations
         .find(visible(filter, includeDeleted), { projection: NO_ID, session })
         .sort(sort)
@@ -76,6 +71,7 @@ export function createAuditedRepository({ client, db }) {
     // null when there's no such registration, or it's deleted.
     async update(reference, changes, { session } = {}) {
       assertReference(reference)
+      assertObject(changes, 'changes')
       assertNoProtectedFields(changes)
       return registrations.findOneAndUpdate(
         visible({ reference }, false),

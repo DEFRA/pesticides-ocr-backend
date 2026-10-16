@@ -73,6 +73,17 @@ describe('#createAuditedRepository', () => {
       }
     )
 
+    test.each([
+      ['no registration', undefined],
+      ['null', null],
+      ['a list', []]
+    ])('rejects %s', async (_label, value) => {
+      await expect(repository.create(value)).rejects.toThrow(
+        'registration must be an object'
+      )
+      expect(await collection.countDocuments()).toBe(0)
+    })
+
     test('rethrows a duplicate reference error', async () => {
       await repository.create({ reference: 'PPP-AAA-001' })
 
@@ -218,6 +229,17 @@ describe('#createAuditedRepository', () => {
       await expect(
         repository.update('PPP-AAA-001', { [field]: 'x' })
       ).rejects.toThrow(`Cannot set protected fields: ${field}`)
+    })
+
+    test.each([
+      ['no changes', undefined],
+      ['null', null],
+      ['a list', []]
+    ])('rejects %s as the changes', async (_label, value) => {
+      await expect(repository.update('PPP-AAA-001', value)).rejects.toThrow(
+        'changes must be an object'
+      )
+      expect(await stored('PPP-AAA-001')).toMatchObject({ businessName: 'Old' })
     })
 
     test('rejects a query operator as the reference', async () => {

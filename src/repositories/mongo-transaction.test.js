@@ -5,6 +5,11 @@ import {
   OCR_REGISTRATION_HISTORY_COLLECTION,
   AUDIT_HISTORY_COLLECTION
 } from '#/common/constants/collections.js'
+import {
+  FIRST_VERSION,
+  HISTORY_OPERATION,
+  HISTORY_VERSION_INDEX
+} from '#/common/constants/history.js'
 import { withTransaction } from './mongo-transaction.js'
 
 describe('#withTransaction', () => {
@@ -27,10 +32,12 @@ describe('#withTransaction', () => {
     )
     await db
       .collection(OCR_REGISTRATION_HISTORY_COLLECTION)
-      .createIndex({ reference: 1, version: 1 }, { unique: true })
-    await db
-      .collection(OCR_REGISTRATION_COLLECTION)
-      .insertOne({ reference: 'PPP-000-001', version: 1, businessName: 'Old' })
+      .createIndex(HISTORY_VERSION_INDEX.key, HISTORY_VERSION_INDEX.options)
+    await db.collection(OCR_REGISTRATION_COLLECTION).insertOne({
+      reference: 'PPP-000-001',
+      version: FIRST_VERSION,
+      businessName: 'Old'
+    })
   })
 
   afterAll(async () => {
@@ -51,14 +58,14 @@ describe('#withTransaction', () => {
         {
           reference: 'PPP-000-001',
           version: historyVersion,
-          operation: 'update'
+          operation: HISTORY_OPERATION.UPDATE
         },
         { session: txSession }
       )
       await db
         .collection(AUDIT_HISTORY_COLLECTION)
         .insertOne(
-          { reference: 'PPP-000-001', operation: 'update' },
+          { reference: 'PPP-000-001', operation: HISTORY_OPERATION.UPDATE },
           { session: txSession }
         )
       return 'done'
@@ -82,13 +89,18 @@ describe('#withTransaction', () => {
   })
 
   test('keeps none of the writes when one of them fails', async () => {
-    await db
-      .collection(OCR_REGISTRATION_HISTORY_COLLECTION)
-      .insertOne({ reference: 'PPP-000-001', version: 2, operation: 'update' })
+    await db.collection(OCR_REGISTRATION_HISTORY_COLLECTION).insertOne({
+      reference: 'PPP-000-001',
+      version: 2,
+      operation: HISTORY_OPERATION.UPDATE
+    })
 
     await expect(updateWithHistoryAndAudit(2)).rejects.toThrow(/duplicate key/)
 
-    expect(await current()).toMatchObject({ businessName: 'Old', version: 1 })
+    expect(await current()).toMatchObject({
+      businessName: 'Old',
+      version: FIRST_VERSION
+    })
     expect(
       await db.collection(OCR_REGISTRATION_HISTORY_COLLECTION).countDocuments()
     ).toBe(1)

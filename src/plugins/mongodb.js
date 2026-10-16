@@ -3,10 +3,12 @@ import { LockManager } from 'mongo-locks'
 
 import {
   OCR_REGISTRATION_COLLECTION,
+  OCR_REGISTRATION_HISTORY_COLLECTION,
   MONGO_LOCKS_COLLECTION,
   JOURNEY_STARTS_COLLECTION,
   JOURNEY_NOT_ELIGIBLE_COLLECTION
 } from '#/common/constants/collections.js'
+import { HISTORY_VERSION_INDEX } from '#/common/constants/history.js'
 
 export const mongoDb = {
   plugin: {
@@ -58,6 +60,9 @@ async function createIndexes(db) {
       throw error
     }
   }
+  await db
+    .collection(OCR_REGISTRATION_HISTORY_COLLECTION)
+    .createIndex(HISTORY_VERSION_INDEX.key, HISTORY_VERSION_INDEX.options)
   const journeyStarts = db.collection(JOURNEY_STARTS_COLLECTION)
   const journeyNotEligible = db.collection(JOURNEY_NOT_ELIGIBLE_COLLECTION)
 

@@ -309,6 +309,23 @@ Routes without `options.auth` (e.g. `/health`) stay open. A request with no/inva
 
 > The exact token contract (whether the frontend forwards the Entra access token or ID token, i.e. the expected `audience`/`issuer`) is confirmed at Entra onboarding and is fully config-driven — no code change needed.
 
+## Registration history
+
+The `ocr-registration_history` collection keeps one entry per version of a registration, through `src/repositories/registration-history.js`. Entries can be added and read but never changed or removed. Create, update and delete will add entries as part of the audit work.
+
+| Field       | Required | Contents                                                                                         |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `reference` | yes      | the registration's reference                                                                     |
+| `version`   | yes      | the version this entry records                                                                   |
+| `operation` | yes      | `create`, `update` or `delete`                                                                   |
+| `at`        | yes      | when the change was made                                                                         |
+| `by`        | yes      | who made it: `{ type, id }`, where `type` is `applicant` or `case_officer`, and `id` is optional |
+| `reason`    | no       | why, where the operation needs one                                                               |
+| `requestId` | no       | the request that made the change                                                                 |
+| `snapshot`  | yes      | the complete registration as it was at this version                                              |
+
+Versions start at 1 when a registration is created, and each successful change must add the next one, for example: 1 created, 2 updated, 3 deleted. A unique index on `reference` + `version` rejects a second entry for the same version. The snapshot must be of the same registration as the entry.
+
 ## Database seeding
 
 Seed scripts are available for local development and testing.
