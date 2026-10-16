@@ -13,4 +13,4 @@ export const HISTORY_VERSION_INDEX = Object.freeze({
 
 export const MAX_REASON_LENGTH = 500
 export const MAX_REQUEST_ID_LENGTH = 200
-export const MAX_ACTOR_ID_LENGTH = 200
+export const MAX_BY_ID_LENGTH = 200

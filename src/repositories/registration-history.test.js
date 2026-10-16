@@ -6,7 +6,7 @@ import {
   FIRST_VERSION,
   HISTORY_OPERATION,
   HISTORY_VERSION_INDEX,
-  MAX_ACTOR_ID_LENGTH,
+  MAX_BY_ID_LENGTH,
   MAX_REASON_LENGTH,
   MAX_REQUEST_ID_LENGTH
 } from '#/common/constants/history.js'
@@ -122,11 +122,11 @@ describe('#createRegistrationHistory', () => {
         { requestId: 'x'.repeat(MAX_REQUEST_ID_LENGTH + 1) }
       ],
       [
-        'an actor id that is too long',
+        'a by.id that is too long',
         {
           by: {
             type: ACTOR_TYPE.CASE_OFFICER,
-            id: 'x'.repeat(MAX_ACTOR_ID_LENGTH + 1)
+            id: 'x'.repeat(MAX_BY_ID_LENGTH + 1)
           }
         }
       ],

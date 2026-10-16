@@ -5,7 +5,7 @@ import { OCR_REGISTRATION_HISTORY_COLLECTION } from '#/common/constants/collecti
 import {
   FIRST_VERSION,
   HISTORY_OPERATION,
-  MAX_ACTOR_ID_LENGTH,
+  MAX_BY_ID_LENGTH,
   MAX_REASON_LENGTH,
   MAX_REQUEST_ID_LENGTH
 } from '#/common/constants/history.js'
@@ -22,7 +22,7 @@ const entrySchema = Joi.object({
     type: Joi.string()
       .valid(...Object.values(ACTOR_TYPE))
       .required(),
-    id: Joi.string().max(MAX_ACTOR_ID_LENGTH)
+    id: Joi.string().max(MAX_BY_ID_LENGTH)
   }).required(),
   reason: Joi.string().max(MAX_REASON_LENGTH),
   requestId: Joi.string().max(MAX_REQUEST_ID_LENGTH),
