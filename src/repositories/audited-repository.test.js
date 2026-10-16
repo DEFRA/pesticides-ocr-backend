@@ -101,12 +101,12 @@ describe('#createAuditedRepository', () => {
       ).rejects.toThrow('Cannot set protected fields: deletedBy.type')
     })
 
-    test.each([undefined, { $gt: '' }])(
+    test.each([undefined, '', { $gt: '' }])(
       'rejects a reference of %s',
       async (reference) => {
         await expect(
           repository.create({ reference }, { by: applicant })
-        ).rejects.toThrow('reference must be a string')
+        ).rejects.toThrow('reference must be a non-empty string')
       }
     )
 
@@ -160,7 +160,7 @@ describe('#createAuditedRepository', () => {
 
     test('findByReference rejects a query operator as the reference', async () => {
       await expect(repository.findByReference({ $ne: null })).rejects.toThrow(
-        'reference must be a string'
+        'reference must be a non-empty string'
       )
     })
 
@@ -312,7 +312,7 @@ describe('#createAuditedRepository', () => {
           { businessName: 'New' },
           { by: caseOfficer }
         )
-      ).rejects.toThrow('reference must be a string')
+      ).rejects.toThrow('reference must be a non-empty string')
       expect(await stored('PPP-AAA-001')).toMatchObject({ businessName: 'Old' })
     })
   })
@@ -366,7 +366,7 @@ describe('#createAuditedRepository', () => {
     test('rejects a query operator as the reference', async () => {
       await expect(
         repository.softDelete({ $ne: '' }, { by: caseOfficer })
-      ).rejects.toThrow('reference must be a string')
+      ).rejects.toThrow('reference must be a non-empty string')
       expect(await stored('PPP-AAA-001')).toMatchObject({ isDeleted: false })
     })
   })
@@ -806,6 +806,30 @@ describe('#createAuditedRepository', () => {
         ).rejects.toMatchObject({ code: MONGO_DUPLICATE_KEY_ERROR })
 
         expect(await historyCollection.countDocuments()).toBe(1)
+      })
+
+      test('a caller that catches a failed change still commits nothing', async () => {
+        await repository.create(
+          { reference: 'PPP-AAA-001', businessName: 'Old' },
+          { by: applicant }
+        )
+        await takeVersion(2)
+
+        await repository.withTransaction(async (session) => {
+          await repository
+            .update(
+              'PPP-AAA-001',
+              { businessName: 'New' },
+              { by: caseOfficer, session }
+            )
+            .catch(() => {})
+          expect(session.inTransaction()).toBe(false)
+        })
+
+        expect(await stored('PPP-AAA-001')).toMatchObject({
+          businessName: 'Old',
+          version: FIRST_VERSION
+        })
       })
 
       test('a caller transaction that fails keeps no registration or history', async () => {

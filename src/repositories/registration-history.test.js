@@ -186,7 +186,12 @@ describe('#createRegistrationHistory', () => {
     })
 
     test.each([
-      ['reference', { $ne: '' }, FIRST_VERSION, 'reference must be a string'],
+      [
+        'reference',
+        { $ne: '' },
+        FIRST_VERSION,
+        'reference must be a non-empty string'
+      ],
       ['version', 'PPP-AAA-001', { $gt: 0 }, 'version must be an integer']
     ])(
       'rejects a query operator as the %s',
@@ -248,7 +253,7 @@ describe('#createRegistrationHistory', () => {
 
     test('rejects a query operator as the reference', async () => {
       await expect(history.list({ $ne: '' }, { limit: 10 })).rejects.toThrow(
-        'reference must be a string'
+        'reference must be a non-empty string'
       )
     })
   })
