@@ -1,28 +1,43 @@
 import { MongoClient } from 'mongodb'
 
 import { ACTOR_TYPE } from '#/common/constants/actors.js'
-import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
+import {
+  OCR_REGISTRATION_COLLECTION,
+  OCR_REGISTRATION_HISTORY_COLLECTION
+} from '#/common/constants/collections.js'
+import {
+  FIRST_VERSION,
+  HISTORY_OPERATION,
+  HISTORY_VERSION_INDEX
+} from '#/common/constants/history.js'
 import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
 import { createAuditedRepository } from './audited-repository.js'
 
+const applicant = { type: ACTOR_TYPE.APPLICANT }
 const caseOfficer = { type: ACTOR_TYPE.CASE_OFFICER, id: 'officer-1' }
 
 describe('#createAuditedRepository', () => {
   let client
   let db
   let collection
+  let historyCollection
   let repository
 
   beforeAll(async () => {
     client = await MongoClient.connect(process.env.MONGO_URI)
     db = client.db('audited-repository-test')
     collection = db.collection(OCR_REGISTRATION_COLLECTION)
+    historyCollection = db.collection(OCR_REGISTRATION_HISTORY_COLLECTION)
     repository = createAuditedRepository({ client, db })
   })
 
   beforeEach(async () => {
     await db.dropDatabase()
     await collection.createIndex({ reference: 1 }, { unique: true })
+    await historyCollection.createIndex(
+      HISTORY_VERSION_INDEX.key,
+      HISTORY_VERSION_INDEX.options
+    )
   })
 
   afterAll(async () => {
@@ -37,9 +52,13 @@ describe('#createAuditedRepository', () => {
     test('stores the registration as not deleted', async () => {
       const registration = { reference: 'PPP-AAA-001', businessName: 'Acme' }
 
-      const created = await repository.create(registration)
+      const created = await repository.create(registration, { by: applicant })
 
-      expect(created).toEqual({ ...registration, isDeleted: false })
+      expect(created).toEqual({
+        ...registration,
+        isDeleted: false,
+        version: FIRST_VERSION
+      })
       expect(await stored('PPP-AAA-001')).toEqual(created)
       expect(registration).not.toHaveProperty('_id')
     })
@@ -47,29 +66,47 @@ describe('#createAuditedRepository', () => {
     test('stores the submittedAt it is given', async () => {
       const submittedAt = new Date('2026-10-01T09:00:00Z')
 
-      await repository.create({ reference: 'PPP-AAA-001', submittedAt })
+      await repository.create(
+        { reference: 'PPP-AAA-001', submittedAt },
+        { by: applicant }
+      )
 
       expect(await stored('PPP-AAA-001')).toMatchObject({ submittedAt })
     })
 
     test('rejects lifecycle fields', async () => {
       await expect(
-        repository.create({ reference: 'PPP-AAA-001', isDeleted: true })
+        repository.create(
+          { reference: 'PPP-AAA-001', isDeleted: true },
+          { by: applicant }
+        )
       ).rejects.toThrow('Cannot set protected fields: isDeleted')
+    })
+
+    test('rejects a version', async () => {
+      await expect(
+        repository.create(
+          { reference: 'PPP-AAA-001', version: 5 },
+          { by: applicant }
+        )
+      ).rejects.toThrow('Cannot set protected fields: version')
     })
 
     test('rejects a dotted path into a lifecycle field', async () => {
       await expect(
-        repository.create({ reference: 'PPP-AAA-001', 'deletedBy.type': 'x' })
+        repository.create(
+          { reference: 'PPP-AAA-001', 'deletedBy.type': 'x' },
+          { by: applicant }
+        )
       ).rejects.toThrow('Cannot set protected fields: deletedBy.type')
     })
 
     test.each([undefined, { $gt: '' }])(
       'rejects a reference of %s',
       async (reference) => {
-        await expect(repository.create({ reference })).rejects.toThrow(
-          'reference must be a string'
-        )
+        await expect(
+          repository.create({ reference }, { by: applicant })
+        ).rejects.toThrow('reference must be a string')
       }
     )
 
@@ -85,19 +122,25 @@ describe('#createAuditedRepository', () => {
     })
 
     test('rethrows a duplicate reference error', async () => {
-      await repository.create({ reference: 'PPP-AAA-001' })
+      await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
 
       await expect(
-        repository.create({ reference: 'PPP-AAA-001' })
+        repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
       ).rejects.toMatchObject({ code: MONGO_DUPLICATE_KEY_ERROR })
     })
   })
 
   describe('reads', () => {
     beforeEach(async () => {
-      await repository.create({ reference: 'PPP-AAA-001', businessName: 'A' })
-      await repository.create({ reference: 'PPP-AAA-002', businessName: 'B' })
-      await repository.softDelete('PPP-AAA-002', { deletedBy: caseOfficer })
+      await repository.create(
+        { reference: 'PPP-AAA-001', businessName: 'A' },
+        { by: applicant }
+      )
+      await repository.create(
+        { reference: 'PPP-AAA-002', businessName: 'B' },
+        { by: applicant }
+      )
+      await repository.softDelete('PPP-AAA-002', { by: caseOfficer })
     })
 
     test('findByReference skips deleted registrations by default', async () => {
@@ -165,7 +208,10 @@ describe('#createAuditedRepository', () => {
     )
 
     test('search applies the filter, skip and limit', async () => {
-      await repository.create({ reference: 'PPP-AAA-003', businessName: 'A' })
+      await repository.create(
+        { reference: 'PPP-AAA-003', businessName: 'A' },
+        { by: applicant }
+      )
 
       const found = await repository.search(
         { businessName: 'A' },
@@ -186,33 +232,49 @@ describe('#createAuditedRepository', () => {
 
   describe('update', () => {
     beforeEach(async () => {
-      await repository.create({ reference: 'PPP-AAA-001', businessName: 'Old' })
+      await repository.create(
+        { reference: 'PPP-AAA-001', businessName: 'Old' },
+        { by: applicant }
+      )
     })
 
     test('applies the changes and returns the updated registration', async () => {
-      const updated = await repository.update('PPP-AAA-001', {
-        businessName: 'New'
-      })
+      const updated = await repository.update(
+        'PPP-AAA-001',
+        {
+          businessName: 'New'
+        },
+        { by: caseOfficer }
+      )
 
       expect(updated).toEqual({
         reference: 'PPP-AAA-001',
         businessName: 'New',
-        isDeleted: false
+        isDeleted: false,
+        version: 2
       })
       expect(await stored('PPP-AAA-001')).toEqual(updated)
     })
 
     test('returns null for an unknown reference', async () => {
       expect(
-        await repository.update('PPP-ZZZ-999', { businessName: 'New' })
+        await repository.update(
+          'PPP-ZZZ-999',
+          { businessName: 'New' },
+          { by: caseOfficer }
+        )
       ).toBeNull()
     })
 
     test('does not change a deleted registration', async () => {
-      await repository.softDelete('PPP-AAA-001', { deletedBy: caseOfficer })
+      await repository.softDelete('PPP-AAA-001', { by: caseOfficer })
 
       expect(
-        await repository.update('PPP-AAA-001', { businessName: 'New' })
+        await repository.update(
+          'PPP-AAA-001',
+          { businessName: 'New' },
+          { by: caseOfficer }
+        )
       ).toBeNull()
       expect(await stored('PPP-AAA-001')).toMatchObject({ businessName: 'Old' })
     })
@@ -221,13 +283,14 @@ describe('#createAuditedRepository', () => {
       '_id',
       'reference',
       'submittedAt',
+      'version',
       'isDeleted',
       'deletedAt',
       'deletedBy.type',
       'deletionReason'
     ])('rejects a change to %s', async (field) => {
       await expect(
-        repository.update('PPP-AAA-001', { [field]: 'x' })
+        repository.update('PPP-AAA-001', { [field]: 'x' }, { by: caseOfficer })
       ).rejects.toThrow(`Cannot set protected fields: ${field}`)
     })
 
@@ -244,7 +307,11 @@ describe('#createAuditedRepository', () => {
 
     test('rejects a query operator as the reference', async () => {
       await expect(
-        repository.update({ $regex: '.' }, { businessName: 'New' })
+        repository.update(
+          { $regex: '.' },
+          { businessName: 'New' },
+          { by: caseOfficer }
+        )
       ).rejects.toThrow('reference must be a string')
       expect(await stored('PPP-AAA-001')).toMatchObject({ businessName: 'Old' })
     })
@@ -252,18 +319,19 @@ describe('#createAuditedRepository', () => {
 
   describe('softDelete', () => {
     beforeEach(async () => {
-      await repository.create({ reference: 'PPP-AAA-001' })
+      await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
     })
 
     test('marks the registration deleted without removing it', async () => {
       const deleted = await repository.softDelete('PPP-AAA-001', {
-        deletedBy: caseOfficer,
+        by: caseOfficer,
         reason: 'Duplicate registration'
       })
 
       expect(deleted).toEqual({
         reference: 'PPP-AAA-001',
         isDeleted: true,
+        version: 2,
         deletedAt: expect.any(Date),
         deletedBy: caseOfficer,
         deletionReason: 'Duplicate registration'
@@ -273,7 +341,7 @@ describe('#createAuditedRepository', () => {
     })
 
     test('stores a null reason when none is given', async () => {
-      await repository.softDelete('PPP-AAA-001', { deletedBy: caseOfficer })
+      await repository.softDelete('PPP-AAA-001', { by: caseOfficer })
 
       expect(await stored('PPP-AAA-001')).toMatchObject({
         isDeleted: true,
@@ -282,32 +350,22 @@ describe('#createAuditedRepository', () => {
     })
 
     test('returns null when the registration is already deleted', async () => {
-      await repository.softDelete('PPP-AAA-001', { deletedBy: caseOfficer })
+      await repository.softDelete('PPP-AAA-001', { by: caseOfficer })
 
       expect(
-        await repository.softDelete('PPP-AAA-001', { deletedBy: caseOfficer })
+        await repository.softDelete('PPP-AAA-001', { by: caseOfficer })
       ).toBeNull()
     })
 
     test('returns null for an unknown reference', async () => {
       expect(
-        await repository.softDelete('PPP-ZZZ-999', { deletedBy: caseOfficer })
+        await repository.softDelete('PPP-ZZZ-999', { by: caseOfficer })
       ).toBeNull()
     })
 
-    test.each([undefined, null, ''])(
-      'requires deletedBy, rejecting %s',
-      async (deletedBy) => {
-        await expect(
-          repository.softDelete('PPP-AAA-001', { deletedBy })
-        ).rejects.toThrow('deletedBy is required')
-        expect(await stored('PPP-AAA-001')).toMatchObject({ isDeleted: false })
-      }
-    )
-
     test('rejects a query operator as the reference', async () => {
       await expect(
-        repository.softDelete({ $ne: '' }, { deletedBy: caseOfficer })
+        repository.softDelete({ $ne: '' }, { by: caseOfficer })
       ).rejects.toThrow('reference must be a string')
       expect(await stored('PPP-AAA-001')).toMatchObject({ isDeleted: false })
     })
@@ -316,11 +374,14 @@ describe('#createAuditedRepository', () => {
   describe('withTransaction', () => {
     test('commits every operation when they all succeed', async () => {
       await repository.withTransaction(async (session) => {
-        await repository.create({ reference: 'PPP-AAA-001' }, { session })
+        await repository.create(
+          { reference: 'PPP-AAA-001' },
+          { by: applicant, session }
+        )
         await repository.update(
           'PPP-AAA-001',
           { businessName: 'New' },
-          { session }
+          { by: caseOfficer, session }
         )
       })
 
@@ -329,7 +390,10 @@ describe('#createAuditedRepository', () => {
 
     test('reads its own writes inside the transaction', async () => {
       const found = await repository.withTransaction(async (session) => {
-        await repository.create({ reference: 'PPP-AAA-001' }, { session })
+        await repository.create(
+          { reference: 'PPP-AAA-001' },
+          { by: applicant, session }
+        )
         return repository.findByReference('PPP-AAA-001', { session })
       })
 
@@ -337,12 +401,18 @@ describe('#createAuditedRepository', () => {
     })
 
     test('keeps none of the operations when one fails', async () => {
-      await repository.create({ reference: 'PPP-AAA-002' })
+      await repository.create({ reference: 'PPP-AAA-002' }, { by: applicant })
 
       await expect(
         repository.withTransaction(async (session) => {
-          await repository.create({ reference: 'PPP-AAA-001' }, { session })
-          await repository.create({ reference: 'PPP-AAA-002' }, { session })
+          await repository.create(
+            { reference: 'PPP-AAA-001' },
+            { by: applicant, session }
+          )
+          await repository.create(
+            { reference: 'PPP-AAA-002' },
+            { by: applicant, session }
+          )
         })
       ).rejects.toMatchObject({ code: MONGO_DUPLICATE_KEY_ERROR })
 
@@ -350,12 +420,12 @@ describe('#createAuditedRepository', () => {
     })
 
     test('rolls back when the work throws', async () => {
-      await repository.create({ reference: 'PPP-AAA-001' })
+      await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
 
       await expect(
         repository.withTransaction(async (session) => {
           await repository.softDelete('PPP-AAA-001', {
-            deletedBy: caseOfficer,
+            by: caseOfficer,
             session
           })
           throw new Error('validation failed')
@@ -363,6 +433,400 @@ describe('#createAuditedRepository', () => {
       ).rejects.toThrow('validation failed')
 
       expect(await repository.findByReference('PPP-AAA-001')).not.toBeNull()
+    })
+  })
+
+  describe('history', () => {
+    const historyOf = (reference) =>
+      historyCollection
+        .find({ reference }, { projection: { _id: 0 } })
+        .sort({ version: 1 })
+        .toArray()
+
+    test('create writes version 1 with the full registration', async () => {
+      const created = await repository.create(
+        { reference: 'PPP-AAA-001', businessName: 'Acme' },
+        { by: applicant }
+      )
+
+      expect(await historyOf('PPP-AAA-001')).toEqual([
+        {
+          reference: 'PPP-AAA-001',
+          version: FIRST_VERSION,
+          operation: HISTORY_OPERATION.CREATE,
+          at: expect.any(Date),
+          by: applicant,
+          snapshot: created
+        }
+      ])
+    })
+
+    test('update records the case officer, reason and request ID', async () => {
+      await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+
+      const updated = await repository.update(
+        'PPP-AAA-001',
+        { businessName: 'New' },
+        { by: caseOfficer, reason: 'Corrected the name', requestId: 'req-1' }
+      )
+
+      const [, entry] = await historyOf('PPP-AAA-001')
+      expect(entry).toEqual({
+        reference: 'PPP-AAA-001',
+        version: 2,
+        operation: HISTORY_OPERATION.UPDATE,
+        at: expect.any(Date),
+        by: caseOfficer,
+        reason: 'Corrected the name',
+        requestId: 'req-1',
+        snapshot: updated
+      })
+    })
+
+    test('softDelete records a delete version at the time of deletion', async () => {
+      await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+
+      const deleted = await repository.softDelete('PPP-AAA-001', {
+        by: caseOfficer,
+        reason: 'Duplicate registration'
+      })
+
+      const [, entry] = await historyOf('PPP-AAA-001')
+      expect(entry).toMatchObject({
+        version: 2,
+        operation: HISTORY_OPERATION.DELETE,
+        at: deleted.deletedAt,
+        reason: 'Duplicate registration',
+        snapshot: deleted
+      })
+    })
+
+    test('each change adds the next version', async () => {
+      await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+      await repository.update(
+        'PPP-AAA-001',
+        { businessName: 'A' },
+        { by: caseOfficer }
+      )
+      await repository.update(
+        'PPP-AAA-001',
+        { businessName: 'B' },
+        { by: caseOfficer }
+      )
+      await repository.softDelete('PPP-AAA-001', { by: caseOfficer })
+
+      const entries = await historyOf('PPP-AAA-001')
+      expect(
+        entries.map(({ version, operation }) => [version, operation])
+      ).toEqual([
+        [1, HISTORY_OPERATION.CREATE],
+        [2, HISTORY_OPERATION.UPDATE],
+        [3, HISTORY_OPERATION.UPDATE],
+        [4, HISTORY_OPERATION.DELETE]
+      ])
+      expect(
+        await repository.findByReference('PPP-AAA-001', {
+          includeDeleted: true
+        })
+      ).toMatchObject({ version: 4 })
+    })
+
+    test('writes no history when there is nothing to change', async () => {
+      await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+      await repository.softDelete('PPP-AAA-001', { by: caseOfficer })
+
+      await repository.update(
+        'PPP-AAA-001',
+        { businessName: 'New' },
+        { by: caseOfficer }
+      )
+      await repository.softDelete('PPP-AAA-001', { by: caseOfficer })
+      await repository.update(
+        'PPP-ZZZ-999',
+        { businessName: 'New' },
+        { by: caseOfficer }
+      )
+
+      expect(await historyCollection.countDocuments()).toBe(2)
+    })
+
+    test.each([
+      ['an unknown actor type', { type: 'case-officer' }],
+      [
+        'an email address',
+        { type: ACTOR_TYPE.CASE_OFFICER, id: 'officer-1', email: 'a@b.c' }
+      ],
+      ['a case officer with no id', { type: ACTOR_TYPE.CASE_OFFICER }]
+    ])('rejects %s in by, storing nothing', async (_label, by) => {
+      await expect(
+        repository.create({ reference: 'PPP-AAA-001' }, { by })
+      ).rejects.toThrow('Invalid audit details')
+
+      expect(await stored('PPP-AAA-001')).toBeNull()
+      expect(await historyCollection.countDocuments()).toBe(0)
+    })
+
+    describe('who made the change', () => {
+      beforeEach(async () => {
+        await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+      })
+
+      const writes = [
+        [
+          'create',
+          (by) => repository.create({ reference: 'PPP-AAA-002' }, { by })
+        ],
+        [
+          'update',
+          (by) =>
+            repository.update('PPP-AAA-001', { businessName: 'New' }, { by })
+        ],
+        ['softDelete', (by) => repository.softDelete('PPP-AAA-001', { by })]
+      ]
+      const badActors = [undefined, null, '', [], 'applicant']
+
+      test.each(
+        writes.flatMap(([method, write]) =>
+          badActors.map((by) => [
+            method,
+            JSON.stringify(by) ?? 'undefined',
+            write,
+            by
+          ])
+        )
+      )(
+        '%s rejects by %s, changing nothing',
+        async (_method, _label, write, by) => {
+          await expect(write(by)).rejects.toThrow('Invalid audit details')
+
+          expect(await stored('PPP-AAA-001')).toEqual({
+            reference: 'PPP-AAA-001',
+            isDeleted: false,
+            version: FIRST_VERSION
+          })
+          expect(await stored('PPP-AAA-002')).toBeNull()
+          expect(await historyCollection.countDocuments()).toBe(1)
+        }
+      )
+
+      test('treats a null requestId as no requestId', async () => {
+        await repository.update(
+          'PPP-AAA-001',
+          { businessName: 'New' },
+          { by: caseOfficer, requestId: null }
+        )
+
+        const [, updated] = await historyOf('PPP-AAA-001')
+        expect(updated).not.toHaveProperty('requestId')
+      })
+
+      test('treats a null reason as no reason', async () => {
+        await repository.update(
+          'PPP-AAA-001',
+          { businessName: 'New' },
+          { by: caseOfficer, reason: null }
+        )
+        await repository.softDelete('PPP-AAA-001', {
+          by: caseOfficer,
+          reason: null
+        })
+
+        const [, updated, deleted] = await historyOf('PPP-AAA-001')
+        expect(updated).not.toHaveProperty('reason')
+        expect(deleted).not.toHaveProperty('reason')
+        expect(await stored('PPP-AAA-001')).toMatchObject({
+          deletionReason: null
+        })
+      })
+    })
+
+    test.each([
+      [
+        'create',
+        (session) =>
+          repository.create(
+            { reference: 'PPP-AAA-002' },
+            { by: applicant, session }
+          )
+      ],
+      [
+        'update',
+        (session) =>
+          repository.update(
+            'PPP-AAA-001',
+            { businessName: 'New' },
+            { by: caseOfficer, session }
+          )
+      ],
+      [
+        'softDelete',
+        (session) =>
+          repository.softDelete('PPP-AAA-001', { by: caseOfficer, session })
+      ]
+    ])(
+      '%s rejects a session that is not in a transaction',
+      async (_method, write) => {
+        await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+        const session = client.startSession()
+        try {
+          await expect(write(session)).rejects.toThrow(
+            'session must be in a transaction'
+          )
+        } finally {
+          await session.endSession()
+        }
+
+        expect(await stored('PPP-AAA-001')).toEqual({
+          reference: 'PPP-AAA-001',
+          isDeleted: false,
+          version: FIRST_VERSION
+        })
+        expect(await stored('PPP-AAA-002')).toBeNull()
+        expect(await historyCollection.countDocuments()).toBe(1)
+      }
+    )
+
+    test.each([
+      ['create', () => repository.create({ reference: 'PPP-AAA-002' }, null)],
+      [
+        'update',
+        () => repository.update('PPP-AAA-001', { businessName: 'New' }, null)
+      ],
+      ['softDelete', () => repository.softDelete('PPP-AAA-001', null)]
+    ])('%s rejects null options with a clear error', async (_method, write) => {
+      await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+
+      await expect(write()).rejects.toThrow('Invalid audit details')
+      expect(await historyCollection.countDocuments()).toBe(1)
+    })
+
+    test('reads accept null options', async () => {
+      await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+
+      expect(
+        await repository.findByReference('PPP-AAA-001', null)
+      ).toMatchObject({
+        reference: 'PPP-AAA-001'
+      })
+      await expect(repository.search({}, null)).rejects.toThrow(
+        'limit must be a positive integer'
+      )
+    })
+
+    test.each([null, [], 'filter'])(
+      'search rejects %s as the filter',
+      async (filter) => {
+        await expect(repository.search(filter, { limit: 10 })).rejects.toThrow(
+          'filter must be an object'
+        )
+      }
+    )
+
+    test('rejects an update with no changes', async () => {
+      await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+
+      await expect(
+        repository.update('PPP-AAA-001', {}, { by: caseOfficer })
+      ).rejects.toThrow('changes must not be empty')
+      expect(await historyCollection.countDocuments()).toBe(1)
+    })
+
+    test('a registration stored with no version gets version 1 on its first change', async () => {
+      await collection.insertOne({ reference: 'PPP-OLD-001' })
+
+      await repository.update(
+        'PPP-OLD-001',
+        { businessName: 'New' },
+        { by: caseOfficer }
+      )
+
+      expect(await stored('PPP-OLD-001')).toMatchObject({ version: 1 })
+      expect(
+        (await historyOf('PPP-OLD-001')).map(({ version, operation }) => [
+          version,
+          operation
+        ])
+      ).toEqual([[1, HISTORY_OPERATION.UPDATE]])
+    })
+
+    describe('rollback', () => {
+      const takeVersion = (version) =>
+        historyCollection.insertOne({ reference: 'PPP-AAA-001', version })
+
+      test('create keeps no registration when its history entry fails', async () => {
+        await takeVersion(FIRST_VERSION)
+
+        await expect(
+          repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+        ).rejects.toMatchObject({ code: MONGO_DUPLICATE_KEY_ERROR })
+
+        expect(await stored('PPP-AAA-001')).toBeNull()
+      })
+
+      test('update keeps the registration unchanged when its history entry fails', async () => {
+        await repository.create(
+          { reference: 'PPP-AAA-001', businessName: 'Old' },
+          { by: applicant }
+        )
+        await takeVersion(2)
+
+        await expect(
+          repository.update(
+            'PPP-AAA-001',
+            { businessName: 'New' },
+            { by: caseOfficer }
+          )
+        ).rejects.toMatchObject({ code: MONGO_DUPLICATE_KEY_ERROR })
+
+        expect(await stored('PPP-AAA-001')).toMatchObject({
+          businessName: 'Old',
+          version: FIRST_VERSION
+        })
+      })
+
+      test('softDelete keeps the registration when its history entry fails', async () => {
+        await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+        await takeVersion(2)
+
+        await expect(
+          repository.softDelete('PPP-AAA-001', { by: caseOfficer })
+        ).rejects.toMatchObject({ code: MONGO_DUPLICATE_KEY_ERROR })
+
+        expect(await stored('PPP-AAA-001')).toMatchObject({
+          isDeleted: false,
+          version: FIRST_VERSION
+        })
+      })
+
+      test('a failed registration change writes no history', async () => {
+        await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+
+        await expect(
+          repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+        ).rejects.toMatchObject({ code: MONGO_DUPLICATE_KEY_ERROR })
+
+        expect(await historyCollection.countDocuments()).toBe(1)
+      })
+
+      test('a caller transaction that fails keeps no registration or history', async () => {
+        await expect(
+          repository.withTransaction(async (session) => {
+            await repository.create(
+              { reference: 'PPP-AAA-001' },
+              { by: applicant, session }
+            )
+            await repository.update(
+              'PPP-AAA-001',
+              { businessName: 'New' },
+              { by: caseOfficer, session }
+            )
+            throw new Error('validation failed')
+          })
+        ).rejects.toThrow('validation failed')
+
+        expect(await stored('PPP-AAA-001')).toBeNull()
+        expect(await historyCollection.countDocuments()).toBe(0)
+      })
     })
   })
 })
