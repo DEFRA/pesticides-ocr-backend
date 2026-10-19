@@ -1,13 +1,13 @@
 import { describe, test, expect, vi } from 'vitest'
+import { ACTOR_TYPE } from '#/common/constants/actors.js'
 import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
 import {
   saveRegistration,
   generateReference
 } from '#/services/registration/registration.js'
 
-function makeDb(insertOne) {
-  return { collection: () => ({ insertOne }) }
-}
+const makeRegistrations = (create) => ({ create })
+const savedRegistration = (create) => create.mock.calls[0][0]
 
 describe('generateReference', () => {
   test('uses PPP prefix by default', () => {
@@ -39,49 +39,49 @@ describe('saveRegistration', () => {
   }
 
   test('returns an PPP reference by default', async () => {
-    const insertOne = vi.fn().mockResolvedValue({ insertedId: 'abc' })
-    const result = await saveRegistration(makeDb(insertOne), validData)
+    const create = vi.fn().mockResolvedValue({})
+    const result = await saveRegistration(makeRegistrations(create), validData)
 
     expect(result.reference).toMatch(/^PPP-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
   })
 
   test('uses a custom prefix when provided', async () => {
-    const insertOne = vi.fn().mockResolvedValue({ insertedId: 'abc' })
-    const result = await saveRegistration(makeDb(insertOne), validData, {
-      prefix: 'SED'
-    })
+    const create = vi.fn().mockResolvedValue({})
+    const result = await saveRegistration(
+      makeRegistrations(create),
+      validData,
+      {
+        prefix: 'SED'
+      }
+    )
 
     expect(result.reference).toMatch(/^SED-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
   })
 
-  test('passes submittedAt timestamp to insertOne', async () => {
-    const insertOne = vi.fn().mockResolvedValue({ insertedId: 'abc' })
-    await saveRegistration(makeDb(insertOne), validData)
-
-    expect(insertOne).toHaveBeenCalledWith(
-      expect.objectContaining({ submittedAt: expect.any(Date) })
+  test('creates the registration through the repository, with a submittedAt', async () => {
+    const create = vi.fn().mockResolvedValue({})
+    const { reference } = await saveRegistration(
+      makeRegistrations(create),
+      validData
     )
+
+    expect(savedRegistration(create)).toEqual({
+      ...validData,
+      reference,
+      submittedAt: expect.any(Date)
+    })
   })
 
-  test('stores the registration as not deleted', async () => {
-    const insertOne = vi.fn().mockResolvedValue({ insertedId: 'abc' })
-    await saveRegistration(makeDb(insertOne), validData)
+  test('records the change as made by an applicant, with the request ID', async () => {
+    const create = vi.fn().mockResolvedValue({})
+    await saveRegistration(makeRegistrations(create), validData, {
+      requestId: 'request-1'
+    })
 
-    expect(insertOne).toHaveBeenCalledWith(
-      expect.objectContaining({ isDeleted: false })
-    )
-  })
-
-  test('passes all provided data fields to insertOne', async () => {
-    const insertOne = vi.fn().mockResolvedValue({ insertedId: 'abc' })
-    await saveRegistration(makeDb(insertOne), validData)
-
-    expect(insertOne).toHaveBeenCalledWith(
-      expect.objectContaining({
-        businessName: validData.businessName,
-        businessActivities: validData.businessActivities
-      })
-    )
+    expect(create.mock.calls[0][1]).toEqual({
+      by: { type: ACTOR_TYPE.APPLICANT },
+      requestId: 'request-1'
+    })
   })
 
   test('retries with a new reference on duplicate reference collision', async () => {
@@ -89,24 +89,49 @@ describe('saveRegistration', () => {
       code: MONGO_DUPLICATE_KEY_ERROR,
       keyPattern: { reference: 1 }
     })
-    const insertOne = vi
+    const create = vi
       .fn()
       .mockRejectedValueOnce(dupError)
-      .mockResolvedValueOnce({ insertedId: 'abc' })
+      .mockResolvedValueOnce({})
 
-    const result = await saveRegistration(makeDb(insertOne), validData)
+    const result = await saveRegistration(makeRegistrations(create), validData)
 
-    expect(insertOne).toHaveBeenCalledTimes(2)
+    expect(create).toHaveBeenCalledTimes(2)
     expect(result.reference).toMatch(/^PPP-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
   })
 
-  test('rethrows non-duplicate errors from insertOne', async () => {
+  test('rethrows non-duplicate errors from create', async () => {
     const networkError = new Error('connection reset')
-    const insertOne = vi.fn().mockRejectedValue(networkError)
+    const create = vi.fn().mockRejectedValue(networkError)
 
     await expect(
-      saveRegistration(makeDb(insertOne), validData)
+      saveRegistration(makeRegistrations(create), validData)
     ).rejects.toThrow('connection reset')
+  })
+
+  test('rethrows a duplicate key error that has no keyPattern', async () => {
+    const dupError = Object.assign(new Error('duplicate key'), {
+      code: MONGO_DUPLICATE_KEY_ERROR
+    })
+    const create = vi.fn().mockRejectedValue(dupError)
+
+    await expect(
+      saveRegistration(makeRegistrations(create), validData)
+    ).rejects.toThrow('duplicate key')
+    expect(create).toHaveBeenCalledTimes(1)
+  })
+
+  test('rethrows a duplicate history version instead of retrying', async () => {
+    const dupError = Object.assign(new Error('duplicate key'), {
+      code: MONGO_DUPLICATE_KEY_ERROR,
+      keyPattern: { reference: 1, version: 1 }
+    })
+    const create = vi.fn().mockRejectedValue(dupError)
+
+    await expect(
+      saveRegistration(makeRegistrations(create), validData)
+    ).rejects.toThrow('duplicate key')
+    expect(create).toHaveBeenCalledTimes(1)
   })
 
   test('rethrows duplicate key errors not on the reference field', async () => {
@@ -114,10 +139,10 @@ describe('saveRegistration', () => {
       code: MONGO_DUPLICATE_KEY_ERROR,
       keyPattern: { someOtherField: 1 }
     })
-    const insertOne = vi.fn().mockRejectedValue(dupError)
+    const create = vi.fn().mockRejectedValue(dupError)
 
     await expect(
-      saveRegistration(makeDb(insertOne), validData)
+      saveRegistration(makeRegistrations(create), validData)
     ).rejects.toThrow('duplicate key')
   })
 
@@ -126,12 +151,12 @@ describe('saveRegistration', () => {
       code: MONGO_DUPLICATE_KEY_ERROR,
       keyPattern: { reference: 1 }
     })
-    const insertOne = vi.fn().mockRejectedValue(dupError)
+    const create = vi.fn().mockRejectedValue(dupError)
 
     await expect(
-      saveRegistration(makeDb(insertOne), validData)
+      saveRegistration(makeRegistrations(create), validData)
     ).rejects.toThrow('Failed to generate a unique reference after 10 attempts')
 
-    expect(insertOne).toHaveBeenCalledTimes(10)
+    expect(create).toHaveBeenCalledTimes(10)
   })
 })

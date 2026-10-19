@@ -1,8 +1,4 @@
 import { config } from '#/config.js'
-import {
-  getOneByReferenceNumber,
-  findRegistrationsPage
-} from '#/common/helpers/ocr-search.js'
 import { queryRegistrations } from './helpers/query-registrations.js'
 import { buildCriteriaFilter } from './helpers/search-filter.js'
 
@@ -21,14 +17,21 @@ const registerProjection = {
   quantity: 1
 }
 
-export async function searchRegistrations(db, criteria, { page, pageSize }) {
-  const { records, total } = await findRegistrationsPage(db, {
-    filter: buildCriteriaFilter(criteria),
-    sort: searchSort,
-    projection: registerProjection,
-    skip: (page - 1) * pageSize,
-    limit: pageSize
-  })
+export async function searchRegistrations(
+  registrations,
+  criteria,
+  { page, pageSize }
+) {
+  const filter = buildCriteriaFilter(criteria)
+  const [records, total] = await Promise.all([
+    registrations.search(filter, {
+      sort: searchSort,
+      projection: registerProjection,
+      skip: (page - 1) * pageSize,
+      limit: pageSize
+    }),
+    registrations.count(filter)
+  ])
 
   return {
     data: records,
@@ -57,19 +60,21 @@ function validateReferenceNumber(referenceNumber) {
 //   { single: doc | null }      a reference was given
 //   { list: [...] }             a free-text term was given (blank = everything)
 export async function resolveQuery(
-  db,
+  registrations,
   { reference, q } = {},
   { limit = config.get('export.maxRows') } = {}
 ) {
   if (reference === undefined) {
-    return { list: await queryRegistrations(db, { query: q, limit }) }
+    return {
+      list: await queryRegistrations(registrations, { query: q, limit })
+    }
   }
 
   if (!validateReferenceNumber(reference)) {
     return { invalidReference: true }
   }
 
-  return { single: await getOneByReferenceNumber(db, reference) }
+  return { single: await registrations.findByReference(reference) }
 }
 
-export { getOneByReferenceNumber, validateReferenceNumber }
+export { validateReferenceNumber }

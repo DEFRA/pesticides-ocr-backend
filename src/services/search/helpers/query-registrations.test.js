@@ -1,52 +1,47 @@
 import { queryRegistrations } from './query-registrations.js'
 import { buildSearchFilter } from './search-filter.js'
 import { storedDoc } from '#/services/search/search.fixtures.js'
-import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 
 describe('#queryRegistrations', () => {
-  let cursor
-  let sort
-  let find
-  let collection
-  let db
+  let registrations
 
   beforeEach(() => {
-    // Chainable Mongo cursor stub: find().sort().limit().toArray()
-    cursor = { toArray: vi.fn().mockResolvedValue([storedDoc]) }
-    cursor.limit = vi.fn().mockReturnValue(cursor)
-    sort = vi.fn().mockReturnValue(cursor)
-    find = vi.fn().mockReturnValue({ sort })
-    collection = vi.fn().mockReturnValue({ find })
-    db = { collection }
+    registrations = { search: vi.fn().mockResolvedValue([storedDoc]) }
   })
 
-  test('queries ocr-registration newest-first with the given limit', async () => {
-    await queryRegistrations(db, { query: '', limit: 5 })
+  test('searches newest first with the given limit', async () => {
+    await queryRegistrations(registrations, { query: '', limit: 5 })
 
-    expect(collection).toHaveBeenCalledWith(OCR_REGISTRATION_COLLECTION)
-    expect(find).toHaveBeenCalledWith({}, { projection: { _id: 0 } })
-    expect(sort).toHaveBeenCalledWith({ submittedAt: -1 })
-    expect(cursor.limit).toHaveBeenCalledWith(5)
+    expect(registrations.search).toHaveBeenCalledWith(
+      {},
+      { sort: { submittedAt: -1 }, limit: 5 }
+    )
   })
 
   test('returns the stored registrations unchanged, leaving presentation to the caller', async () => {
-    const result = await queryRegistrations(db, { query: '', limit: 5 })
+    const result = await queryRegistrations(registrations, {
+      query: '',
+      limit: 5
+    })
 
     expect(result).toEqual([storedDoc])
   })
 
   test('passes the built search filter for a non-blank query', async () => {
-    await queryRegistrations(db, { query: 'green', limit: 5 })
+    await queryRegistrations(registrations, { query: 'green', limit: 5 })
 
-    expect(find).toHaveBeenCalledWith(buildSearchFilter('green'), {
-      projection: { _id: 0 }
-    })
+    expect(registrations.search).toHaveBeenCalledWith(
+      buildSearchFilter('green'),
+      expect.objectContaining({ limit: 5 })
+    )
   })
 
-  test('defaults to limit 0 (Mongo "no cap") when no limit is given', async () => {
-    await queryRegistrations(db, { query: '' })
+  test('passes a missing limit on, so the repository rejects an uncapped read', async () => {
+    await queryRegistrations(registrations, { query: '' })
 
-    expect(cursor.limit).toHaveBeenCalledWith(0)
-    expect(cursor.toArray).toHaveBeenCalled()
+    expect(registrations.search).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ limit: undefined })
+    )
   })
 })

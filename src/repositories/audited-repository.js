@@ -1,6 +1,13 @@
 import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 import { FIRST_VERSION, HISTORY_OPERATION } from '#/common/constants/history.js'
-import { LIFECYCLE_FIELDS } from '#/common/constants/registration.js'
+import {
+  LIFECYCLE_FIELDS,
+  SUBMITTED_AT
+} from '#/common/constants/registration.js'
+import {
+  monthlyCountsPipeline,
+  toMonthlyCounts
+} from '#/common/helpers/monthly-counts.js'
 import {
   assertLimit,
   assertObject,
@@ -15,7 +22,7 @@ import {
 const PROTECTED_FIELDS = new Set([
   '_id',
   'reference',
-  'submittedAt',
+  SUBMITTED_AT,
   'version',
   ...LIFECYCLE_FIELDS
 ])
@@ -133,19 +140,45 @@ function readOperations(registrations) {
     async search(filter = {}, options = {}) {
       const {
         includeDeleted = false,
+        projection = {},
         sort = {},
         skip = 0,
         limit,
         session
       } = options ?? {}
       assertObject(filter, 'filter')
+      assertObject(projection, 'projection')
       assertLimit(limit)
       return registrations
-        .find(visible(filter, includeDeleted), { projection: NO_ID, session })
+        .find(visible(filter, includeDeleted), {
+          projection: { ...projection, ...NO_ID },
+          session
+        })
         .sort(sort)
         .skip(skip)
         .limit(limit)
         .toArray()
+    },
+
+    async count(filter = {}, options = {}) {
+      const { includeDeleted = false, session } = options ?? {}
+      assertObject(filter, 'filter')
+      return registrations.countDocuments(visible(filter, includeDeleted), {
+        session
+      })
+    },
+
+    async countByMonth(options) {
+      const { dateField, from, to, includeDeleted = false } = options ?? {}
+      const pipeline = monthlyCountsPipeline({ dateField, from, to })
+      const [result] = await registrations
+        .aggregate(
+          includeDeleted === true
+            ? pipeline
+            : [{ $match: NOT_DELETED }, ...pipeline]
+        )
+        .toArray()
+      return toMonthlyCounts(result)
     }
   }
 }
@@ -168,7 +201,7 @@ function createRegistration(context, registration, options) {
   return run(session, async (txSession) => {
     assertObject(registration, 'registration')
     assertReference(registration.reference)
-    assertNoProtectedFields(registration, ['reference', 'submittedAt'])
+    assertNoProtectedFields(registration, ['reference', SUBMITTED_AT])
     const audit = auditDetails({ by, reason, requestId })
     const document = {
       ...registration,

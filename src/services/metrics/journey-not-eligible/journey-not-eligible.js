@@ -5,6 +5,6 @@ import { JOURNEY_NOT_ELIGIBLE } from '#/services/metrics/helpers/journey-events.
 // exited via the "You do not need to use this service" page — a valid journey
 // completion, counted from `endedAt`. Recording one is a separate, public
 // endpoint (see the journey-not-eligible-events controller).
-export async function countJourneyNotEligible(db, { from, to } = {}) {
+export async function countJourneyNotEligible({ db }, { from, to } = {}) {
   return countByMonth(db, { ...JOURNEY_NOT_ELIGIBLE, from, to })
 }

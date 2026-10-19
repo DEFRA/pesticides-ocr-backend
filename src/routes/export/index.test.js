@@ -1,5 +1,6 @@
 import { SignJWT } from 'jose'
 import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
+import { deletedRegistration } from '#/services/search/search.fixtures.js'
 
 // The API runs in mock auth mode under test (ENVIRONMENT defaults to local), so
 // tokens are decoded but not signature-verified.
@@ -203,19 +204,19 @@ describe('#exportRoute', () => {
       expect(result.message).toBe('Invalid reference number')
     })
 
-    test('does not query mongo for a malformed reference', async () => {
-      const collection = vi.spyOn(server.db, 'collection')
+    test('does not read registrations for a malformed reference', async () => {
+      const read = vi.spyOn(server.registrations, 'findByReference')
 
       await get('/export?reference=not-a-reference', officerToken)
 
-      expect(collection).not.toHaveBeenCalled()
+      expect(read).not.toHaveBeenCalled()
 
       // Prove the spy would have caught a query had one been made
       await get('/export?reference=PPP-A1B-2C3', officerToken)
 
-      expect(collection).toHaveBeenCalledWith(OCR_REGISTRATION_COLLECTION)
+      expect(read).toHaveBeenCalled()
 
-      collection.mockRestore()
+      read.mockRestore()
     })
 
     test('400 for an over-length search term', async () => {
@@ -276,5 +277,31 @@ describe('#exportRoute', () => {
     expect(message).toContain('filtered=true')
     // The search term may be a person's name (PII) — it must never be logged.
     expect(message).not.toContain('green')
+  })
+
+  describe('Deleted registrations', () => {
+    beforeAll(async () => {
+      await server.db
+        .collection(OCR_REGISTRATION_COLLECTION)
+        .insertOne({ ...deletedRegistration })
+    })
+
+    afterAll(async () => {
+      await server.db
+        .collection(OCR_REGISTRATION_COLLECTION)
+        .deleteOne({ reference: deletedRegistration.reference })
+    })
+
+    test.each([
+      '/export?q=Deleted',
+      `/export?reference=${deletedRegistration.reference}`,
+      '/export?q='
+    ])('are not exported by %s', async (url) => {
+      const { statusCode, payload } = await get(url, officerToken)
+
+      expect(statusCode).toBe(200)
+      expect(payload).not.toContain(deletedRegistration.reference)
+      expect(payload).not.toContain(deletedRegistration.businessName)
+    })
   })
 })

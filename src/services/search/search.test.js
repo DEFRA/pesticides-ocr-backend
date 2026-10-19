@@ -1,9 +1,7 @@
 import {
-  getOneByReferenceNumber,
   resolveQuery,
   validateReferenceNumber
 } from '#/services/search/search.js'
-import { getOneByReferenceNumber as sharedLookup } from '#/common/helpers/ocr-search.js'
 
 const { configValues } = vi.hoisted(() => ({
   configValues: {}
@@ -67,22 +65,28 @@ describe('#validateReferenceNumber', () => {
   })
 })
 
-describe('#getOneByReferenceNumber', () => {
-  test('is the shared ocr-registration lookup, re-exported for the /search route', () => {
-    expect(getOneByReferenceNumber).toBe(sharedLookup)
-  })
-})
-
 describe('#resolveQuery', () => {
   test('Should cap a free text query at the export row limit when no limit is given', async () => {
     configValues['export.maxRows'] = 25
-    const limit = vi.fn().mockReturnValue({ toArray: async () => [] })
-    const db = {
-      collection: () => ({ find: () => ({ sort: () => ({ limit }) }) })
-    }
+    const registrations = { search: vi.fn().mockResolvedValue([]) }
 
-    await resolveQuery(db, { q: 'Farm' })
+    await resolveQuery(registrations, { q: 'Farm' })
 
-    expect(limit).toHaveBeenCalledWith(25)
+    expect(registrations.search).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ limit: 25 })
+    )
+  })
+
+  test('Should read a single reference through the repository', async () => {
+    configValues.referencePrefix = 'PPP'
+    const registrations = { findByReference: vi.fn().mockResolvedValue(null) }
+
+    expect(
+      await resolveQuery(registrations, { reference: 'PPP-A1B-2C3' })
+    ).toEqual({
+      single: null
+    })
+    expect(registrations.findByReference).toHaveBeenCalledWith('PPP-A1B-2C3')
   })
 })

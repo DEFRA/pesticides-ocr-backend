@@ -11,6 +11,7 @@ import {
   HISTORY_VERSION_INDEX
 } from '#/common/constants/history.js'
 import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
+import { SUBMITTED_AT } from '#/common/constants/registration.js'
 import { createAuditedRepository } from './audited-repository.js'
 
 const applicant = { type: ACTOR_TYPE.APPLICANT }
@@ -143,6 +144,40 @@ describe('#createAuditedRepository', () => {
       await repository.softDelete('PPP-AAA-002', { by: caseOfficer })
     })
 
+    test('search returns only the projected fields', async () => {
+      const [found] = await repository.search(
+        { reference: 'PPP-AAA-001' },
+        { projection: { reference: 1, businessName: 1 }, limit: 10 }
+      )
+
+      expect(found).toEqual({ reference: 'PPP-AAA-001', businessName: 'A' })
+    })
+
+    test.each([null, [], 'fields'])(
+      'search rejects %s as the projection',
+      async (projection) => {
+        await expect(
+          repository.search({}, { projection, limit: 10 })
+        ).rejects.toThrow('projection must be an object')
+      }
+    )
+
+    test('count skips deleted registrations by default', async () => {
+      expect(await repository.count()).toBe(1)
+      expect(await repository.count({}, null)).toBe(1)
+      expect(await repository.count({}, { includeDeleted: true })).toBe(2)
+      expect(await repository.count({ businessName: 'B' })).toBe(0)
+    })
+
+    test.each([null, [], 'filter'])(
+      'count rejects %s as the filter',
+      async (filter) => {
+        await expect(repository.count(filter)).rejects.toThrow(
+          'filter must be an object'
+        )
+      }
+    )
+
     test('findByReference skips deleted registrations by default', async () => {
       expect(await repository.findByReference('PPP-AAA-001')).toMatchObject({
         businessName: 'A'
@@ -230,6 +265,71 @@ describe('#createAuditedRepository', () => {
     })
   })
 
+  describe('countByMonth', () => {
+    beforeEach(async () => {
+      await repository.create(
+        { reference: 'PPP-AAA-001', submittedAt: new Date('2026-09-10') },
+        { by: applicant }
+      )
+      await repository.create(
+        { reference: 'PPP-AAA-002', submittedAt: new Date('2026-10-05') },
+        { by: applicant }
+      )
+      await repository.create(
+        { reference: 'PPP-AAA-003', submittedAt: new Date('2026-10-20') },
+        { by: applicant }
+      )
+      await repository.softDelete('PPP-AAA-003', { by: caseOfficer })
+    })
+
+    test('skips deleted registrations by default', async () => {
+      expect(
+        await repository.countByMonth({ dateField: SUBMITTED_AT })
+      ).toEqual({
+        total: 2,
+        byMonth: [
+          { month: '2026-09', count: 1 },
+          { month: '2026-10', count: 1 }
+        ]
+      })
+    })
+
+    test('counts deleted registrations with includeDeleted: true', async () => {
+      expect(
+        await repository.countByMonth({
+          dateField: SUBMITTED_AT,
+          includeDeleted: true
+        })
+      ).toEqual({
+        total: 3,
+        byMonth: [
+          { month: '2026-09', count: 1 },
+          { month: '2026-10', count: 2 }
+        ]
+      })
+    })
+
+    test('applies the from and to dates', async () => {
+      const counts = await repository.countByMonth({
+        dateField: SUBMITTED_AT,
+        from: '2026-10-01',
+        to: '2026-10-31',
+        includeDeleted: true
+      })
+
+      expect(counts.total).toBe(2)
+    })
+
+    test.each([undefined, null, { dateField: '' }, { dateField: 42 }])(
+      'rejects %s as the options',
+      async (options) => {
+        await expect(repository.countByMonth(options)).rejects.toThrow(
+          'dateField must be a non-empty string'
+        )
+      }
+    )
+  })
+
   describe('update', () => {
     beforeEach(async () => {
       await repository.create(
@@ -282,7 +382,7 @@ describe('#createAuditedRepository', () => {
     test.each([
       '_id',
       'reference',
-      'submittedAt',
+      SUBMITTED_AT,
       'version',
       'isDeleted',
       'deletedAt',

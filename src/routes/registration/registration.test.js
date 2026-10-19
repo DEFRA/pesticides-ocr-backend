@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeAll } from 'vitest'
+import { config } from '#/config.js'
 
 const mockSaveRegistration = vi.fn()
 
@@ -76,6 +77,7 @@ describe('POST /register', () => {
       await server.inject({
         method: 'POST',
         url: '/register',
+        headers: { [config.get('tracing.header')]: 'request-1' },
         payload: validPayload
       })
 
@@ -84,7 +86,8 @@ describe('POST /register', () => {
         expect.objectContaining({
           businessName: 'Company 1',
           businessActivities: ['manufacture', 'market']
-        })
+        }),
+        { requestId: 'request-1' }
       )
     })
 

@@ -23,6 +23,13 @@ describe('#mongoDb', () => {
       expect(server.db).toBeInstanceOf(Db)
       expect(server.mongoClient).toBeInstanceOf(MongoClient)
       expect(server.locker).toBeInstanceOf(LockManager)
+      expect(server.registrations).toEqual(
+        expect.objectContaining({
+          create: expect.any(Function),
+          search: expect.any(Function),
+          countByMonth: expect.any(Function)
+        })
+      )
     })
 
     test('MongoDb should have expected database name', () => {

@@ -22,3 +22,12 @@ export const storedDoc = {
   addressActivities: ['use', 'store'],
   quantity: { quantityType: 'amount', quantity: 80000 }
 }
+
+// A soft-deleted registration, for checking reads hide it and completion
+// metrics still count it.
+export const deletedRegistration = Object.freeze({
+  reference: 'PPP-DEL-001',
+  businessName: 'Deleted Farm',
+  submittedAt: new Date('2026-05-20T10:00:00.000Z'),
+  isDeleted: true
+})
