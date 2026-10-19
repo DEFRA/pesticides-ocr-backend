@@ -981,6 +981,40 @@ describe('#createAuditedRepository', () => {
         expect(await historyCollection.countDocuments()).toBe(callers + 1)
       })
 
+      test.each(['commitTransaction', 'abortTransaction'])(
+        'a change after the caller calls %s is rejected, not saved outside the transaction',
+        async (end) => {
+          await repository.create(
+            { reference: 'PPP-AAA-001', businessName: 'Old' },
+            { by: applicant }
+          )
+          let changeError
+
+          await expect(
+            repository.withTransaction(async (session) => {
+              await session[end]()
+              changeError = await repository
+                .update(
+                  'PPP-AAA-001',
+                  { businessName: 'New' },
+                  { by: caseOfficer, session }
+                )
+                .catch((error) => error)
+              return 'ok'
+            })
+          ).rejects.toThrow()
+
+          expect(changeError.message).toBe(
+            'session must have an active transaction'
+          )
+          expect(await stored('PPP-AAA-001')).toMatchObject({
+            businessName: 'Old',
+            version: FIRST_VERSION
+          })
+          expect(await historyCollection.countDocuments()).toBe(1)
+        }
+      )
+
       test('a caller transaction that fails keeps no registration or history', async () => {
         await expect(
           repository.withTransaction(async (session) => {

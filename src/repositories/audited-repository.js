@@ -80,6 +80,11 @@ function transactionRunner(client) {
         throw earlier
       }
       try {
+        // The caller may have committed or aborted it already, and a change
+        // made outside the transaction could be saved without its history.
+        if (!session.inTransaction()) {
+          throw new TypeError('session must have an active transaction')
+        }
         return await work(session)
       } catch (error) {
         if (failures.get(session) === null) {
