@@ -165,6 +165,26 @@ function readOperations(registrations) {
   }
 }
 
+function prepareCreate(registration, auditInput) {
+  assertObject(registration, 'registration')
+  assertReference(registration.reference)
+  assertNoProtectedFields(registration, ['reference', 'submittedAt'])
+  return {
+    audit: auditDetails(auditInput),
+    document: { ...registration, isDeleted: false, version: FIRST_VERSION }
+  }
+}
+
+function prepareUpdate(reference, changes, auditInput) {
+  assertReference(reference)
+  assertObject(changes, 'changes')
+  if (!Object.keys(changes).length) {
+    throw new TypeError('changes must not be empty')
+  }
+  assertNoProtectedFields(changes)
+  return { audit: auditDetails(auditInput) }
+}
+
 function writeOperations(context) {
   const { registrations } = context
   const changeExisting = (reference, update, txSession) =>
@@ -180,19 +200,7 @@ function writeOperations(context) {
       return recordChange(context, {
         session,
         operation: HISTORY_OPERATION.CREATE,
-        prepare: () => {
-          assertObject(registration, 'registration')
-          assertReference(registration.reference)
-          assertNoProtectedFields(registration, ['reference', 'submittedAt'])
-          return {
-            audit: auditDetails({ by, reason, requestId }),
-            document: {
-              ...registration,
-              isDeleted: false,
-              version: FIRST_VERSION
-            }
-          }
-        },
+        prepare: () => prepareCreate(registration, { by, reason, requestId }),
         change: async (txSession, { document }) => {
           // insertOne adds _id to the object it's given, so give it a copy.
           await registrations.insertOne({ ...document }, { session: txSession })
@@ -207,15 +215,8 @@ function writeOperations(context) {
       return recordChange(context, {
         session,
         operation: HISTORY_OPERATION.UPDATE,
-        prepare: () => {
-          assertReference(reference)
-          assertObject(changes, 'changes')
-          if (!Object.keys(changes).length) {
-            throw new TypeError('changes must not be empty')
-          }
-          assertNoProtectedFields(changes)
-          return { audit: auditDetails({ by, reason, requestId }) }
-        },
+        prepare: () =>
+          prepareUpdate(reference, changes, { by, reason, requestId }),
         change: (txSession) =>
           changeExisting(reference, { $set: changes }, txSession)
       })
