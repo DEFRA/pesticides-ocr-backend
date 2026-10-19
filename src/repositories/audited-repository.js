@@ -39,57 +39,94 @@ function assertNoProtectedFields(fields, allowed = []) {
   }
 }
 
-const historyEntry = (operation, snapshot, { by, reason, requestId, at }) => ({
-  reference: snapshot.reference,
-  version: snapshot.version,
-  operation,
-  at,
-  by,
-  ...(reason === undefined ? {} : { reason }),
-  ...(requestId === undefined ? {} : { requestId }),
-  snapshot
-})
+const given = (value) => value !== undefined && value !== null && value !== ''
 
 function auditDetails({ by, reason, requestId }) {
   const details = {
     by,
-    reason: reason ?? undefined,
-    requestId: requestId ?? undefined
+    ...(given(reason) && { reason }),
+    ...(given(requestId) && { requestId })
   }
   assertAudit(details)
-  return { ...details, at: new Date() }
+  return details
 }
 
-// A session outside a transaction would let the registration change commit
-// without its history entry. If the work fails, the caller's transaction is
-// aborted as well, so catching the error can't commit the change on its own.
-async function runInTransaction(client, session, work) {
-  if (!session) {
-    return withTransaction(client, work)
-  }
-  if (!session.inTransaction()) {
-    throw new TypeError('session must be in a transaction')
-  }
-  try {
-    return await work(session)
-  } catch (error) {
-    if (session.inTransaction()) {
-      await session.abortTransaction()
+const historyEntry = (operation, snapshot, audit, at) => ({
+  reference: snapshot.reference,
+  version: snapshot.version,
+  operation,
+  at,
+  ...audit,
+  snapshot
+})
+
+// A failure in a caller's transaction is rethrown when its work finishes, so
+// the whole transaction rolls back even if the caller caught the failure.
+function transactionRunner(client) {
+  const failures = new WeakMap()
+
+  return {
+    async run(session, work) {
+      if (!session) {
+        return withTransaction(client, work)
+      }
+      if (!failures.has(session)) {
+        throw new TypeError('session must come from withTransaction')
+      }
+      // After a failure the transaction is already lost, so later changes fail
+      // with the same error instead of a misleading "no such transaction".
+      const earlier = failures.get(session)
+      if (earlier) {
+        throw earlier
+      }
+      try {
+        return await work(session)
+      } catch (error) {
+        if (failures.get(session) === null) {
+          failures.set(session, error)
+        }
+        throw error
+      }
+    },
+
+    withTransaction(work) {
+      return withTransaction(client, async (session) => {
+        failures.set(session, null)
+        try {
+          const result = await work(session)
+          const failure = failures.get(session)
+          if (failure) {
+            throw failure
+          }
+          return result
+        } catch (error) {
+          // A transient failure keeps its label, so the driver retries it even
+          // if the caller wrapped it in its own error.
+          const failure = failures.get(session)
+          throw failure?.hasErrorLabel?.('TransientTransactionError')
+            ? failure
+            : error
+        } finally {
+          failures.delete(session)
+        }
+      })
     }
-    throw error
   }
 }
 
-// change returns the registration after the change, or null when there was
-// nothing to change, in which case no history entry is written.
+// prepare checks the input inside the transaction, so a caught check failure
+// rolls it back too. change returns the registration after the change, or null
+// when there was nothing to change.
 function recordChange(
-  { client, history },
-  { session, operation, audit, change }
+  { run, history },
+  { session, operation, prepare, change }
 ) {
-  return runInTransaction(client, session, async (txSession) => {
-    const changed = await change(txSession)
+  return run(session, async (txSession) => {
+    const { audit, ...input } = prepare()
+    const at = new Date()
+    const changed = await change(txSession, { ...input, audit, at })
     if (changed) {
-      await history.append(historyEntry(operation, changed, audit), {
+      await history.append(historyEntry(operation, changed, audit, at), {
         session: txSession
       })
     }
@@ -108,8 +145,7 @@ function readOperations(registrations) {
       })
     },
 
-    async search(filter, options) {
-      const criteria = filter === undefined ? {} : filter
+    async search(filter = {}, options = {}) {
       const {
         includeDeleted = false,
         sort = {},
@@ -117,10 +153,10 @@ function readOperations(registrations) {
         limit,
         session
       } = options ?? {}
-      assertObject(criteria, 'filter')
+      assertObject(filter, 'filter')
       assertLimit(limit)
       return registrations
-        .find(visible(criteria, includeDeleted), { projection: NO_ID, session })
+        .find(visible(filter, includeDeleted), { projection: NO_ID, session })
         .sort(sort)
         .skip(skip)
         .limit(limit)
@@ -141,42 +177,45 @@ function writeOperations(context) {
   return {
     async create(registration, options) {
       const { by, reason, requestId, session } = options ?? {}
-      assertObject(registration, 'registration')
-      assertReference(registration.reference)
-      assertNoProtectedFields(registration, ['reference', 'submittedAt'])
-      const audit = auditDetails({ by, reason, requestId })
-      const document = {
-        ...registration,
-        isDeleted: false,
-        version: FIRST_VERSION
-      }
-      await recordChange(context, {
+      return recordChange(context, {
         session,
         operation: HISTORY_OPERATION.CREATE,
-        audit,
-        change: async (txSession) => {
+        prepare: () => {
+          assertObject(registration, 'registration')
+          assertReference(registration.reference)
+          assertNoProtectedFields(registration, ['reference', 'submittedAt'])
+          return {
+            audit: auditDetails({ by, reason, requestId }),
+            document: {
+              ...registration,
+              isDeleted: false,
+              version: FIRST_VERSION
+            }
+          }
+        },
+        change: async (txSession, { document }) => {
           // insertOne adds _id to the object it's given, so give it a copy.
           await registrations.insertOne({ ...document }, { session: txSession })
           return document
         }
       })
-      return document
     },
 
     // null when there's no such registration, or it's deleted.
     async update(reference, changes, options) {
       const { by, reason, requestId, session } = options ?? {}
-      assertReference(reference)
-      assertObject(changes, 'changes')
-      if (!Object.keys(changes).length) {
-        throw new TypeError('changes must not be empty')
-      }
-      assertNoProtectedFields(changes)
-      const audit = auditDetails({ by, reason, requestId })
       return recordChange(context, {
         session,
         operation: HISTORY_OPERATION.UPDATE,
-        audit,
+        prepare: () => {
+          assertReference(reference)
+          assertObject(changes, 'changes')
+          if (!Object.keys(changes).length) {
+            throw new TypeError('changes must not be empty')
+          }
+          assertNoProtectedFields(changes)
+          return { audit: auditDetails({ by, reason, requestId }) }
+        },
         change: (txSession) =>
           changeExisting(reference, { $set: changes }, txSession)
       })
@@ -185,20 +224,26 @@ function writeOperations(context) {
     // null when there's no such registration, or it's already deleted.
     async softDelete(reference, options) {
       const { by, reason, requestId, session } = options ?? {}
-      assertReference(reference)
-      const audit = auditDetails({ by, reason, requestId })
-      const deletion = {
-        isDeleted: true,
-        deletedAt: audit.at,
-        deletedBy: audit.by,
-        deletionReason: audit.reason
-      }
       return recordChange(context, {
         session,
         operation: HISTORY_OPERATION.DELETE,
-        audit,
-        change: (txSession) =>
-          changeExisting(reference, { $set: deletion }, txSession)
+        prepare: () => {
+          assertReference(reference)
+          return { audit: auditDetails({ by, reason, requestId }) }
+        },
+        change: (txSession, { audit, at }) =>
+          changeExisting(
+            reference,
+            {
+              $set: {
+                isDeleted: true,
+                deletedAt: at,
+                deletedBy: audit.by,
+                deletionReason: audit.reason
+              }
+            },
+            txSession
+          )
       })
     }
   }
@@ -207,13 +252,11 @@ function writeOperations(context) {
 export function createAuditedRepository({ client, db }) {
   const registrations = db.collection(OCR_REGISTRATION_COLLECTION)
   const history = createRegistrationHistory({ db })
+  const transactions = transactionRunner(client)
 
   return {
     ...readOperations(registrations),
-    ...writeOperations({ client, registrations, history }),
-
-    withTransaction(work) {
-      return withTransaction(client, work)
-    }
+    ...writeOperations({ run: transactions.run, registrations, history }),
+    withTransaction: transactions.withTransaction
   }
 }

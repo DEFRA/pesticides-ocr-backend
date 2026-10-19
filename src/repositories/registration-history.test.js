@@ -146,6 +146,10 @@ describe('#createRegistrationHistory', () => {
       ['a date given as text', { at: '2026-10-09T10:30:00Z' }],
       ['an unknown actor type', { by: { type: 'case-officer' } }],
       ['a case officer with no id', { by: { type: ACTOR_TYPE.CASE_OFFICER } }],
+      [
+        'an email address as the id',
+        { by: { type: ACTOR_TYPE.CASE_OFFICER, id: 'jane@example.com' } }
+      ],
       ['a missing actor', { by: undefined }],
       ['a missing snapshot', { snapshot: undefined }],
       ['an unknown field', { status: 'accepted' }]

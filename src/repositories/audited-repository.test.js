@@ -556,7 +556,15 @@ describe('#createAuditedRepository', () => {
         'an email address',
         { type: ACTOR_TYPE.CASE_OFFICER, id: 'officer-1', email: 'a@b.c' }
       ],
-      ['a case officer with no id', { type: ACTOR_TYPE.CASE_OFFICER }]
+      ['a case officer with no id', { type: ACTOR_TYPE.CASE_OFFICER }],
+      [
+        'an email address as a case officer id',
+        { type: ACTOR_TYPE.CASE_OFFICER, id: 'jane@example.com' }
+      ],
+      [
+        'an email address as an applicant id',
+        { type: ACTOR_TYPE.APPLICANT, id: 'joe@example.com' }
+      ]
     ])('rejects %s in by, storing nothing', async (_label, by) => {
       await expect(
         repository.create({ reference: 'PPP-AAA-001' }, { by })
@@ -620,6 +628,18 @@ describe('#createAuditedRepository', () => {
         expect(updated).not.toHaveProperty('requestId')
       })
 
+      test('treats an empty reason and request ID as none', async () => {
+        await repository.update(
+          'PPP-AAA-001',
+          { businessName: 'New' },
+          { by: caseOfficer, reason: '', requestId: '' }
+        )
+
+        const [, updated] = await historyOf('PPP-AAA-001')
+        expect(updated).not.toHaveProperty('reason')
+        expect(updated).not.toHaveProperty('requestId')
+      })
+
       test('treats a null reason as no reason', async () => {
         await repository.update(
           'PPP-AAA-001',
@@ -664,14 +684,19 @@ describe('#createAuditedRepository', () => {
           repository.softDelete('PPP-AAA-001', { by: caseOfficer, session })
       ]
     ])(
-      '%s rejects a session that is not in a transaction',
+      '%s rejects a session that did not come from withTransaction',
       async (_method, write) => {
         await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
         const session = client.startSession()
         try {
           await expect(write(session)).rejects.toThrow(
-            'session must be in a transaction'
+            'session must come from withTransaction'
           )
+          session.startTransaction()
+          await expect(write(session)).rejects.toThrow(
+            'session must come from withTransaction'
+          )
+          await session.abortTransaction()
         } finally {
           await session.endSession()
         }
@@ -798,6 +823,23 @@ describe('#createAuditedRepository', () => {
         })
       })
 
+      test('a failed registration update writes no history', async () => {
+        await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+
+        await expect(
+          repository.update(
+            'PPP-AAA-001',
+            { details: 'x', 'details.name': 'y' },
+            { by: caseOfficer }
+          )
+        ).rejects.toThrow(/would create a conflict/)
+
+        expect(await historyCollection.countDocuments()).toBe(1)
+        expect(await stored('PPP-AAA-001')).toMatchObject({
+          version: FIRST_VERSION
+        })
+      })
+
       test('a failed registration change writes no history', async () => {
         await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
 
@@ -815,21 +857,128 @@ describe('#createAuditedRepository', () => {
         )
         await takeVersion(2)
 
-        await repository.withTransaction(async (session) => {
-          await repository
-            .update(
-              'PPP-AAA-001',
-              { businessName: 'New' },
-              { by: caseOfficer, session }
+        await expect(
+          repository.withTransaction(async (session) => {
+            await repository.create(
+              { reference: 'PPP-AAA-002' },
+              { by: applicant, session }
             )
-            .catch(() => {})
-          expect(session.inTransaction()).toBe(false)
-        })
+            await repository
+              .update(
+                'PPP-AAA-001',
+                { businessName: 'New' },
+                { by: caseOfficer, session }
+              )
+              .catch(() => {})
+            await repository.create(
+              { reference: 'PPP-AAA-003' },
+              { by: applicant, session }
+            )
+            return 'ok'
+          })
+        ).rejects.toMatchObject({ code: MONGO_DUPLICATE_KEY_ERROR })
 
         expect(await stored('PPP-AAA-001')).toMatchObject({
           businessName: 'Old',
           version: FIRST_VERSION
         })
+        expect(await stored('PPP-AAA-002')).toBeNull()
+        expect(await stored('PPP-AAA-003')).toBeNull()
+      })
+
+      test.each([
+        [
+          'a failed write',
+          (session) => {
+            const looped = { reference: 'PPP-AAA-009' }
+            looped.self = looped
+            return repository.create(looped, { by: applicant, session })
+          }
+        ],
+        [
+          'a failed check',
+          (session) =>
+            repository.update(
+              'PPP-AAA-001',
+              { businessName: 'New' },
+              { by: { type: 'case-officer' }, session }
+            )
+        ]
+      ])(
+        'a caller that catches %s and returns normally still commits nothing',
+        async (_label, failing) => {
+          await repository.create(
+            { reference: 'PPP-AAA-001', businessName: 'Old' },
+            { by: applicant }
+          )
+
+          await expect(
+            repository.withTransaction(async (session) => {
+              await repository.create(
+                { reference: 'PPP-AAA-002' },
+                { by: applicant, session }
+              )
+              await failing(session).catch(() => {})
+              return 'ok'
+            })
+          ).rejects.toThrow()
+
+          expect(await stored('PPP-AAA-002')).toBeNull()
+          expect(await stored('PPP-AAA-001')).toMatchObject({
+            businessName: 'Old',
+            version: FIRST_VERSION
+          })
+          expect(await historyCollection.countDocuments()).toBe(1)
+        }
+      )
+
+      test('concurrent callers that wrap a write conflict in their own error are still retried', async () => {
+        await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+        const callers = 5
+
+        await Promise.all(
+          Array.from({ length: callers }, (_, i) =>
+            repository.withTransaction((session) =>
+              repository
+                .update(
+                  'PPP-AAA-001',
+                  { [`field${i}`]: i },
+                  { by: caseOfficer, session }
+                )
+                .catch((error) => {
+                  throw new Error(`could not save: ${error.message}`)
+                })
+            )
+          )
+        )
+
+        expect(await stored('PPP-AAA-001')).toMatchObject({
+          version: FIRST_VERSION + callers
+        })
+      })
+
+      test('concurrent callers that catch a write conflict are retried until every change lands', async () => {
+        await repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
+        const callers = 10
+
+        await Promise.all(
+          Array.from({ length: callers }, (_, i) =>
+            repository.withTransaction((session) =>
+              repository
+                .update(
+                  'PPP-AAA-001',
+                  { [`field${i}`]: i },
+                  { by: caseOfficer, session }
+                )
+                .catch(() => {})
+            )
+          )
+        )
+
+        expect(await stored('PPP-AAA-001')).toMatchObject({
+          version: FIRST_VERSION + callers
+        })
+        expect(await historyCollection.countDocuments()).toBe(callers + 1)
       })
 
       test('a caller transaction that fails keeps no registration or history', async () => {

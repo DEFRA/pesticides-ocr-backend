@@ -15,8 +15,10 @@ const actorSchema = Joi.object({
   type: Joi.string()
     .valid(...Object.values(ACTOR_TYPE))
     .required(),
+  // An identifier, never an email address: history can't be changed later.
   id: Joi.string()
     .max(MAX_BY_ID_LENGTH)
+    .pattern(/^[^@]+$/, 'not an email address')
     .when('type', { is: ACTOR_TYPE.CASE_OFFICER, then: Joi.required() })
 }).required()
 const reasonSchema = Joi.string().max(MAX_REASON_LENGTH)
@@ -60,7 +62,8 @@ export function createRegistrationHistory({ db }) {
   const history = db.collection(OCR_REGISTRATION_HISTORY_COLLECTION)
 
   return {
-    async append(entry, { session } = {}) {
+    async append(entry, options) {
+      const { session } = options ?? {}
       const { error, value } = entrySchema.validate(entry, { convert: false })
       if (error) {
         throw new TypeError(`Invalid history entry: ${error.message}`)
@@ -70,7 +73,8 @@ export function createRegistrationHistory({ db }) {
       return value
     },
 
-    async findVersion(reference, version, { session } = {}) {
+    async findVersion(reference, version, options) {
+      const { session } = options ?? {}
       assertReference(reference)
       if (!Number.isInteger(version)) {
         throw new TypeError('version must be an integer')
@@ -82,7 +86,8 @@ export function createRegistrationHistory({ db }) {
     },
 
     // Newest first, so a limit drops the oldest versions, not the latest.
-    async list(reference, { limit, session } = {}) {
+    async list(reference, options) {
+      const { limit, session } = options ?? {}
       assertReference(reference)
       assertLimit(limit)
       return history
