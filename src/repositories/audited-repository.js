@@ -96,7 +96,7 @@ function transactionRunner(client) {
 
     withTransaction(work) {
       return withTransaction(client, async (session) => {
-        const transaction = { failure: undefined }
+        const transaction = { failure: null }
         transactions.set(session, transaction)
         try {
           const result = await work(session)
