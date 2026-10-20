@@ -12,7 +12,10 @@ import {
 } from '#/common/constants/history.js'
 import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
 import { withTransaction } from '#/repositories/mongo-transaction.js'
-import { createRegistrationHistory } from './registration-history.js'
+import {
+  assertAudit,
+  createRegistrationHistory
+} from './registration-history.js'
 
 const entry = (overrides = {}) => ({
   reference: 'PPP-AAA-001',
@@ -104,6 +107,10 @@ describe('#createRegistrationHistory', () => {
 
     test.each([
       ['a missing reference', { reference: undefined }],
+      [
+        'a reference with surrounding spaces',
+        { reference: ' PPP-AAA-001', snapshot: { reference: ' PPP-AAA-001' } }
+      ],
       ['a missing version', { version: undefined }],
       ['a missing operation', { operation: undefined }],
       ['a missing date', { at: undefined }],
@@ -142,6 +149,11 @@ describe('#createRegistrationHistory', () => {
       ['an unknown operation', { operation: 'status-changed' }],
       ['a date given as text', { at: '2026-10-09T10:30:00Z' }],
       ['an unknown actor type', { by: { type: 'case-officer' } }],
+      ['a case officer with no id', { by: { type: ACTOR_TYPE.CASE_OFFICER } }],
+      [
+        'an email address as the id',
+        { by: { type: ACTOR_TYPE.CASE_OFFICER, id: 'jane@example.com' } }
+      ],
       ['a missing actor', { by: undefined }],
       ['a missing snapshot', { snapshot: undefined }],
       ['an unknown field', { status: 'accepted' }]
@@ -182,7 +194,12 @@ describe('#createRegistrationHistory', () => {
     })
 
     test.each([
-      ['reference', { $ne: '' }, FIRST_VERSION, 'reference must be a string'],
+      [
+        'reference',
+        { $ne: '' },
+        FIRST_VERSION,
+        'reference must be a non-empty string'
+      ],
       ['version', 'PPP-AAA-001', { $gt: 0 }, 'version must be an integer']
     ])(
       'rejects a query operator as the %s',
@@ -244,8 +261,61 @@ describe('#createRegistrationHistory', () => {
 
     test('rejects a query operator as the reference', async () => {
       await expect(history.list({ $ne: '' }, { limit: 10 })).rejects.toThrow(
-        'reference must be a string'
+        'reference must be a non-empty string'
       )
     })
+  })
+})
+
+describe('#assertAudit', () => {
+  test.each([
+    ['an Entra subject ID', 'AAAAAAAAAAAAAAAAAAAAAIkzqFVrSaSaFHy782bbtaQ'],
+    ['an Entra object ID', '00000000-0000-0000-0000-000000000000'],
+    ['an opaque ID that contains @', 'a@b']
+  ])('accepts %s as a case officer id', (_label, id) => {
+    expect(() =>
+      assertAudit({ by: { type: ACTOR_TYPE.CASE_OFFICER, id } })
+    ).not.toThrow()
+  })
+
+  test.each(['jane@example.com', 'x@example.co.uk'])(
+    'rejects the email address %s as an id',
+    (id) => {
+      expect(() =>
+        assertAudit({ by: { type: ACTOR_TYPE.CASE_OFFICER, id } })
+      ).toThrow('must not be an email address')
+    }
+  )
+
+  test.each([
+    ['an applicant', { by: { type: ACTOR_TYPE.APPLICANT } }],
+    [
+      'a case officer with a reason and request ID',
+      {
+        by: { type: ACTOR_TYPE.CASE_OFFICER, id: 'entra-subject-id' },
+        reason: 'Corrected the name',
+        requestId: 'request-id'
+      }
+    ]
+  ])('accepts %s', (_label, audit) => {
+    expect(() => assertAudit(audit)).not.toThrow()
+  })
+
+  test.each([
+    ['no audit details', undefined],
+    ['null', null],
+    ['a list', []],
+    ['text', 'applicant'],
+    ['no actor', {}],
+    ['a case officer with no id', { by: { type: ACTOR_TYPE.CASE_OFFICER } }],
+    [
+      'a reason that is too long',
+      {
+        by: { type: ACTOR_TYPE.APPLICANT },
+        reason: 'x'.repeat(MAX_REASON_LENGTH + 1)
+      }
+    ]
+  ])('rejects %s', (_label, audit) => {
+    expect(() => assertAudit(audit)).toThrow('Invalid audit details')
   })
 })

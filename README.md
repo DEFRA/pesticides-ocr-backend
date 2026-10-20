@@ -311,7 +311,7 @@ Routes without `options.auth` (e.g. `/health`) stay open. A request with no/inva
 
 ## Registration history
 
-The `ocr-registration_history` collection keeps one entry per version of a registration, through `src/repositories/registration-history.js`. Entries can be added and read but never changed or removed. Create, update and delete will add entries as part of the audit work.
+The `ocr-registration_history` collection keeps one entry per version of a registration, through `src/repositories/registration-history.js`. Entries can be added and read but never changed or removed. The audited repository's `create`, `update` and `softDelete` each add an entry, in the same transaction as the registration change, so neither is saved without the other. Each takes `by` (who made the change: `{ type: 'applicant' }`, or `{ type: 'case_officer', id }` with the Entra subject ID), and optionally `reason` and `requestId`. These are checked before anything is written, and `by.id` is never an email address. To group several changes, pass them the session from the repository's `withTransaction` (no other session is accepted): if any of them fails, including its input checks, the whole transaction rolls back and `withTransaction` rejects with that error, even if your code caught it. Don't call `withTransaction` inside another one; pass the session down instead, as a nested call starts a separate transaction.
 
 | Field       | Required | Contents                                                                                         |
 | ----------- | -------- | ------------------------------------------------------------------------------------------------ |
@@ -324,7 +324,7 @@ The `ocr-registration_history` collection keeps one entry per version of a regis
 | `requestId` | no       | the request that made the change                                                                 |
 | `snapshot`  | yes      | the complete registration as it was at this version                                              |
 
-Versions start at 1 when a registration is created, and each successful change must add the next one, for example: 1 created, 2 updated, 3 deleted. A unique index on `reference` + `version` rejects a second entry for the same version. The snapshot must be of the same registration as the entry.
+Versions start at 1 when a registration is created, and each successful change adds the next one, kept in the registration's `version` field, for example: 1 created, 2 updated, 3 deleted. A registration stored before versions were added gets version 1 on its first change, so its history has no `create` entry. A unique index on `reference` + `version` rejects a second entry for the same version. The snapshot must be of the same registration as the entry.
 
 ## Database seeding
 
