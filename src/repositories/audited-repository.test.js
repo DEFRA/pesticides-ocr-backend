@@ -101,7 +101,7 @@ describe('#createAuditedRepository', () => {
       ).rejects.toThrow('Cannot set protected fields: deletedBy.type')
     })
 
-    test.each([undefined, '', { $gt: '' }])(
+    test.each([undefined, '', ' ', ' PPP-AAA-001', { $gt: '' }])(
       'rejects a reference of %s',
       async (reference) => {
         await expect(

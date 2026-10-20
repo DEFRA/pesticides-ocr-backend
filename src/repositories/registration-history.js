@@ -40,7 +40,7 @@ const auditSchema = Joi.object({
 }).required()
 
 const entrySchema = Joi.object({
-  reference: Joi.string().required(),
+  reference: Joi.string().trim().required(),
   version: Joi.number().integer().min(FIRST_VERSION).required(),
   operation: Joi.string()
     .valid(...Object.values(HISTORY_OPERATION))

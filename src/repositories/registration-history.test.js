@@ -107,6 +107,10 @@ describe('#createRegistrationHistory', () => {
 
     test.each([
       ['a missing reference', { reference: undefined }],
+      [
+        'a reference with surrounding spaces',
+        { reference: ' PPP-AAA-001', snapshot: { reference: ' PPP-AAA-001' } }
+      ],
       ['a missing version', { version: undefined }],
       ['a missing operation', { operation: undefined }],
       ['a missing date', { at: undefined }],

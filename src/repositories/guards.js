@@ -1,8 +1,14 @@
 // A non-string reference could be a query operator, like { $ne: '' }, that
 // matches someone else's registration.
 export function assertReference(reference) {
-  if (typeof reference !== 'string' || reference === '') {
-    throw new TypeError('reference must be a non-empty string')
+  if (
+    typeof reference !== 'string' ||
+    reference === '' ||
+    reference.trim() !== reference
+  ) {
+    throw new TypeError(
+      'reference must be a non-empty string with no surrounding spaces'
+    )
   }
 }
 
