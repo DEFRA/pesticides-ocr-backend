@@ -265,6 +265,25 @@ describe('#createRegistrationHistory', () => {
 
 describe('#assertAudit', () => {
   test.each([
+    ['an Entra subject ID', 'AAAAAAAAAAAAAAAAAAAAAIkzqFVrSaSaFHy782bbtaQ'],
+    ['an Entra object ID', '00000000-0000-0000-0000-000000000000'],
+    ['an opaque ID that contains @', 'a@b']
+  ])('accepts %s as a case officer id', (_label, id) => {
+    expect(() =>
+      assertAudit({ by: { type: ACTOR_TYPE.CASE_OFFICER, id } })
+    ).not.toThrow()
+  })
+
+  test.each(['jane@example.com', 'x@example.co.uk'])(
+    'rejects the email address %s as an id',
+    (id) => {
+      expect(() =>
+        assertAudit({ by: { type: ACTOR_TYPE.CASE_OFFICER, id } })
+      ).toThrow('must not be an email address')
+    }
+  )
+
+  test.each([
     ['an applicant', { by: { type: ACTOR_TYPE.APPLICANT } }],
     [
       'a case officer with a reason and request ID',

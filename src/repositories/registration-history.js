@@ -11,14 +11,23 @@ import {
 } from '#/common/constants/history.js'
 import { assertLimit, assertReference } from '#/repositories/guards.js'
 
+const emailAddress = Joi.string().email()
+
+function rejectEmailAddress(value, helpers) {
+  return emailAddress.validate(value).error
+    ? value
+    : helpers.message('{{#label}} must not be an email address')
+}
+
 const actorSchema = Joi.object({
   type: Joi.string()
     .valid(...Object.values(ACTOR_TYPE))
     .required(),
-  // An identifier, never an email address: history can't be changed later.
+  // Entra's sub claim is an opaque string with no documented character set, so
+  // only a value that is an email address is rejected: history can't be changed.
   id: Joi.string()
     .max(MAX_BY_ID_LENGTH)
-    .pattern(/^[^@]+$/, 'not an email address')
+    .custom(rejectEmailAddress)
     .when('type', { is: ACTOR_TYPE.CASE_OFFICER, then: Joi.required() })
 }).required()
 const reasonSchema = Joi.string().max(MAX_REASON_LENGTH)
