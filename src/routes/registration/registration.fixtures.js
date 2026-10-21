@@ -67,8 +67,6 @@ export async function seedVerification(
     expiresAt: verifiedAt,
     verifiedAt,
     supersededAt: null,
-    purgeAt: new Date(
-      verifiedAt.getTime() + SECONDS_PER_DAY * MS_PER_SECOND
-    )
+    purgeAt: new Date(verifiedAt.getTime() + SECONDS_PER_DAY * MS_PER_SECOND)
   })
 }
