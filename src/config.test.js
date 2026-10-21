@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, afterEach } from 'vitest'
+import { pino } from 'pino'
 
 // The auth mode default must key off the CDP environment tier, so a deployed
 // tier can never silently fall back to the unverified mock path.
@@ -80,4 +81,154 @@ describe('config startup validation', () => {
       )
     }
   )
+})
+
+describe('config email verification', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  async function loadConfigWith(env) {
+    vi.resetModules()
+    for (const [name, value] of Object.entries(env)) {
+      vi.stubEnv(name, value)
+    }
+    return import('#/config.js')
+  }
+
+  test('defaults the link to 15 minutes and leaves secrets, URL and template empty', async () => {
+    const { config } = await loadConfigWith({})
+
+    expect(config.get('emailVerification')).toEqual({
+      linkTtlSeconds: 900,
+      verifiedTtlSeconds: 14400,
+      recordRetentionSeconds: 86400,
+      resendCooldownSeconds: 60,
+      maxSendsPerEmailPerHour: 5,
+      maxSendsPerJourneyPerHour: 5,
+      maxSendsGlobalPerHour: 1000,
+      linkBaseUrl: '',
+      hashSecret: '',
+      requiredForRegistration: true
+    })
+    expect(config.get('notify.templates.emailVerificationLink')).toBe('')
+  })
+
+  test('lets a tier turn off the /register verification gate', async () => {
+    const { config } = await loadConfigWith({
+      EMAIL_VERIFICATION_REQUIRED_FOR_REGISTRATION: 'false'
+    })
+
+    expect(config.get('emailVerification.requiredForRegistration')).toBe(false)
+  })
+
+  test('keeps the hash secret out of the printed config', async () => {
+    const { config } = await loadConfigWith({
+      EMAIL_VERIFICATION_HASH_SECRET: 'do-not-print-me'
+    })
+
+    expect(config.toString()).not.toContain('do-not-print-me')
+  })
+
+  test.each([
+    ['EMAIL_VERIFICATION_LINK_TTL_SECONDS', 'linkTtlSeconds'],
+    ['EMAIL_VERIFICATION_VERIFIED_TTL_SECONDS', 'verifiedTtlSeconds'],
+    ['EMAIL_VERIFICATION_RECORD_RETENTION_SECONDS', 'recordRetentionSeconds'],
+    ['EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS', 'resendCooldownSeconds'],
+    [
+      'EMAIL_VERIFICATION_MAX_SENDS_PER_EMAIL_PER_HOUR',
+      'maxSendsPerEmailPerHour'
+    ],
+    [
+      'EMAIL_VERIFICATION_MAX_SENDS_PER_JOURNEY_PER_HOUR',
+      'maxSendsPerJourneyPerHour'
+    ],
+    ['EMAIL_VERIFICATION_MAX_SENDS_GLOBAL_PER_HOUR', 'maxSendsGlobalPerHour']
+  ])('refuses to start with %s=0', async (name, key) => {
+    await expect(loadConfigWith({ [name]: '0' })).rejects.toThrow(
+      new RegExp(`emailVerification\\.${key}`)
+    )
+  })
+
+  test('accepts an https link base URL on a deployed tier', async () => {
+    const { config } = await loadConfigWith({
+      ENVIRONMENT: 'dev',
+      EMAIL_VERIFICATION_LINK_BASE_URL: 'https://ocr.example.gov.uk'
+    })
+
+    expect(config.get('emailVerification.linkBaseUrl')).toBe(
+      'https://ocr.example.gov.uk'
+    )
+  })
+
+  test('refuses an http link base URL on a deployed tier', async () => {
+    await expect(
+      loadConfigWith({
+        ENVIRONMENT: 'dev',
+        EMAIL_VERIFICATION_LINK_BASE_URL: 'http://ocr.example.gov.uk'
+      })
+    ).rejects.toThrow(/emailVerification\.linkBaseUrl: must use https/)
+  })
+
+  test('accepts an http link base URL on the local tier', async () => {
+    const { config } = await loadConfigWith({
+      ENVIRONMENT: 'local',
+      EMAIL_VERIFICATION_LINK_BASE_URL: 'http://localhost:3000'
+    })
+
+    expect(config.get('emailVerification.linkBaseUrl')).toBe(
+      'http://localhost:3000'
+    )
+  })
+
+  test('refuses to start when the retention is shorter than the link and verified TTLs', async () => {
+    await expect(
+      loadConfigWith({
+        EMAIL_VERIFICATION_LINK_TTL_SECONDS: '900',
+        EMAIL_VERIFICATION_VERIFIED_TTL_SECONDS: '14400',
+        EMAIL_VERIFICATION_RECORD_RETENTION_SECONDS: '15299'
+      })
+    ).rejects.toThrow(/emailVerification\.recordRetentionSeconds/)
+  })
+})
+
+describe('config log.redact in production', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  async function productionRedactPaths() {
+    vi.resetModules()
+    vi.stubEnv('NODE_ENV', 'production')
+    const { config } = await import('#/config.js')
+    return config.get('log.redact')
+  }
+
+  test('redacts the journey token header with the other credentials', async () => {
+    expect(await productionRedactPaths()).toEqual([
+      'req.headers.authorization',
+      'req.headers.cookie',
+      'req.headers["x-journey-token"]',
+      'res.headers'
+    ])
+  })
+
+  test('removes the journey token header from a request log line', async () => {
+    const lines = []
+    const logger = pino(
+      { redact: { paths: await productionRedactPaths(), remove: true } },
+      { write: (line) => lines.push(JSON.parse(line)) }
+    )
+
+    logger.info({
+      req: {
+        url: '/email-verifications',
+        headers: { 'x-journey-token': 'nonce.signature', accept: '*/*' }
+      }
+    })
+
+    expect(lines[0].req.headers).toEqual({ accept: '*/*' })
+  })
 })

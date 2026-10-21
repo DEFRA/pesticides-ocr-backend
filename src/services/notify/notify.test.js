@@ -1,19 +1,20 @@
-import { describe, test, expect, vi } from 'vitest'
+import { describe, test, expect, vi, beforeEach } from 'vitest'
 import {
   successfulSendEmailMock,
-  failedSendEmailMock,
+  notifyRejectionMock,
+  networkErrorMock,
   emailArgs
 } from './notify.fixtures.js'
 
-const { mockSendEmail, configValues } = vi.hoisted(() => ({
+const { mockSendEmail, mockLogger, configValues } = vi.hoisted(() => ({
   mockSendEmail: vi.fn(),
+  mockLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
   configValues: {
     notify: {
       keyMode: 'test',
       apiKey: 'TEST-KEY',
       templates: { submissionConfirmation: 'test-template-id' }
-    },
-    isProduction: true
+    }
   }
 }))
 
@@ -29,73 +30,117 @@ vi.mock('#/config.js', () => ({
   config: { get: (key) => configValues[key] }
 }))
 
+vi.mock('#/common/helpers/logging/logger.js', () => ({
+  createLogger: () => mockLogger
+}))
+
+const [, EMAIL_ADDRESS, PERSONALISATION] = emailArgs()
+
+// Everything the logger was given, as one string, to search for leaks.
+const loggedText = () =>
+  JSON.stringify(
+    Object.values(mockLogger).flatMap((log) => log.mock.calls),
+    (_key, value) => (value instanceof Error ? value.message : value)
+  )
+
+let sendEmail
+let NotifySendError
+
+beforeEach(async () => {
+  vi.resetModules()
+  configValues.notify.apiKey = 'TEST-KEY'
+  configValues.notify.templates.submissionConfirmation = 'test-template-id'
+  ;({ sendEmail, NotifySendError } =
+    await import('#/services/notify/notify.js'))
+})
+
 describe('success', () => {
-  let sendEmail
-
-  beforeEach(async () => {
-    vi.resetModules()
-    configValues.notify.apiKey = 'TEST-KEY'
-    configValues.notify.keyMode = 'test'
-    configValues.isProduction = true
-    ;({ sendEmail } = await import('#/services/notify/notify.js'))
-  })
-
-  test('Send email successfully', async () => {
-    configValues.isProduction = false
+  test('resolves with the Notify response', async () => {
     mockSendEmail.mockResolvedValue(successfulSendEmailMock)
-
-    vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const response = await sendEmail(...emailArgs())
 
     expect(response.status).toBe(201)
-    expect(console.log).toHaveBeenCalledOnce()
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      'test-template-id',
+      EMAIL_ADDRESS,
+      { personalisation: PERSONALISATION }
+    )
   })
 
-  test('No console log in production', async () => {
+  test('logs the template name but not the address or personalisation', async () => {
     mockSendEmail.mockResolvedValue(successfulSendEmailMock)
 
-    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await sendEmail(...emailArgs())
 
-    const response = await sendEmail(...emailArgs())
-
-    expect(response.status).toBe(201)
-    expect(console.log).not.toHaveBeenCalled()
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      { templateName: 'submissionConfirmation' },
+      'Notify email sent'
+    )
+    expect(loggedText()).not.toContain(EMAIL_ADDRESS)
+    expect(loggedText()).not.toContain(PERSONALISATION.submissionId)
   })
 })
 
 describe('failure', () => {
-  let sendEmail
+  test('rejects with the status and errors when Notify refuses the email (400)', async () => {
+    mockSendEmail.mockRejectedValue(notifyRejectionMock())
 
-  beforeEach(async () => {
-    vi.resetModules()
-    configValues.notify.apiKey = 'TEST-KEY'
-    configValues.notify.keyMode = 'test'
-    configValues.isProduction = true
-    ;({ sendEmail } = await import('#/services/notify/notify.js'))
+    const result = sendEmail(...emailArgs())
+
+    await expect(result).rejects.toBeInstanceOf(NotifySendError)
+    await expect(result).rejects.toMatchObject({
+      status: 400,
+      code: 'ERR_BAD_REQUEST',
+      errors: [
+        {
+          error: 'BadRequestError',
+          message: 'Can’t send to this recipient using a team-only API key'
+        }
+      ]
+    })
   })
 
-  test('Send email failure', async () => {
-    configValues.isProduction = false
-    mockSendEmail.mockRejectedValue(failedSendEmailMock)
+  test('rejects without a status or errors when Notify is unreachable', async () => {
+    mockSendEmail.mockRejectedValue(networkErrorMock())
 
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const result = sendEmail(...emailArgs())
 
-    const response = await sendEmail(...emailArgs())
-
-    expect(response.status).toBe(400)
-    expect(console.error).toHaveBeenCalledTimes(2)
+    await expect(result).rejects.toBeInstanceOf(NotifySendError)
+    await expect(result).rejects.toMatchObject({
+      status: undefined,
+      errors: []
+    })
   })
 
-  test('No console error in production', async () => {
-    mockSendEmail.mockRejectedValue(failedSendEmailMock)
+  test.each([
+    ['a 400 rejection', notifyRejectionMock],
+    ['a network error', networkErrorMock]
+  ])(
+    'logs %s without the address or personalisation',
+    async (_label, failure) => {
+      mockSendEmail.mockRejectedValue(failure())
 
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+      await expect(sendEmail(...emailArgs())).rejects.toThrow()
 
-    const response = await sendEmail(...emailArgs())
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ templateName: 'submissionConfirmation' }),
+        'Notify email failed'
+      )
+      expect(loggedText()).not.toContain(EMAIL_ADDRESS)
+      expect(loggedText()).not.toContain(PERSONALISATION.submissionId)
+    }
+  )
 
-    expect(response.status).toBe(400)
-    expect(console.error).not.toHaveBeenCalled()
+  test('does not carry the address or personalisation on the rejection', async () => {
+    mockSendEmail.mockRejectedValue(notifyRejectionMock())
+
+    const error = await sendEmail(...emailArgs()).catch((e) => e)
+
+    const serialised = JSON.stringify({ ...error, message: error.message })
+    expect(serialised).not.toContain(EMAIL_ADDRESS)
+    expect(serialised).not.toContain(PERSONALISATION.submissionId)
+    expect(error.cause).toBeUndefined()
   })
 
   test('Throw error for unknown template', async () => {

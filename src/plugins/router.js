@@ -9,13 +9,20 @@ import { metricsJourneyStartEvents } from '#/routes/metrics/journey-start-events
 import { metricsJourneyNotEligible } from '#/routes/metrics/journey-not-eligible.js'
 import { metricsJourneyNotEligibleEvents } from '#/routes/metrics/journey-not-eligible-events.js'
 import { metricsJourneys } from '#/routes/metrics/journeys/index.js'
+import { emailVerifications } from '#/routes/email-verification/email-verifications.js'
 import { warnIfJourneyTokenUnset } from '#/routes/metrics/helpers/journey-token-guard.js'
+import {
+  warnIfEmailVerificationUnconfigured,
+  warnIfRegistrationGateDisabled
+} from '#/services/email-verification/config-guard.js'
 
 export const router = {
   plugin: {
     name: 'router',
     register: (server, _options) => {
       warnIfJourneyTokenUnset(server)
+      warnIfEmailVerificationUnconfigured(server)
+      warnIfRegistrationGateDisabled(server)
       server.route(
         [health]
           .concat(register)
@@ -28,6 +35,7 @@ export const router = {
           .concat(metricsJourneyNotEligible)
           .concat(metricsJourneyNotEligibleEvents)
           .concat(metricsJourneys)
+          .concat(emailVerifications)
       )
     }
   }

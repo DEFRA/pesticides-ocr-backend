@@ -4,6 +4,8 @@ import convictFormatWithValidator from 'convict-format-with-validator'
 import { convictValidateMongoUri } from '#/common/helpers/convict/validate-mongo-uri.js'
 import { convictValidateReferencePrefix } from '#/common/helpers/convict/validate-reference-prefix.js'
 import { convictValidatePositiveInt } from '#/common/helpers/convict/validate-positive-int.js'
+import { validateEmailVerificationConfig } from '#/common/helpers/convict/validate-email-verification.js'
+import { JOURNEY_TOKEN_HEADER } from '#/common/constants/journey-token.js'
 
 convict.addFormat(convictValidateMongoUri)
 convict.addFormat(convictValidateReferencePrefix)
@@ -26,6 +28,7 @@ const localNotifyApiKey =
     test: process.env.NOTIFY_TEST_API_KEY
   }[notifyKeyMode] ?? ''
 
+const POSITIVE_INT = 'positive-int'
 convict.addFormats(convictFormatWithValidator)
 
 export const config = convict({
@@ -96,7 +99,12 @@ export const config = convict({
       doc: 'Log paths to redact',
       format: Array,
       default: isProduction
-        ? ['req.headers.authorization', 'req.headers.cookie', 'res.headers']
+        ? [
+            'req.headers.authorization',
+            'req.headers.cookie',
+            `req.headers["${JOURNEY_TOKEN_HEADER}"]`,
+            'res.headers'
+          ]
         : ['req', 'res', 'responseTime']
     }
   },
@@ -193,7 +201,78 @@ export const config = convict({
         format: String,
         default: '',
         env: 'NOTIFY_TEMPLATE_SUBMISSION_CONFIRMATION'
+      },
+      emailVerificationLink: {
+        doc: 'Notify template ID for the email verification (magic link) email. Set per environment. Empty = verification requests are refused (503).',
+        format: String,
+        default: '',
+        env: 'NOTIFY_TEMPLATE_EMAIL_VERIFICATION_LINK'
       }
+    }
+  },
+  // Magic-link email verification. The rate limits and verifiedTtlSeconds are
+  // interim values, to be confirmed with the team.
+  emailVerification: {
+    linkTtlSeconds: {
+      doc: 'How long a magic link works after it is sent, in seconds.',
+      format: POSITIVE_INT,
+      default: 900,
+      env: 'EMAIL_VERIFICATION_LINK_TTL_SECONDS'
+    },
+    verifiedTtlSeconds: {
+      doc: 'How long a verified email address counts towards POST /register, in seconds. Matches the frontend session TTL.',
+      format: POSITIVE_INT,
+      default: 14400,
+      env: 'EMAIL_VERIFICATION_VERIFIED_TTL_SECONDS'
+    },
+    recordRetentionSeconds: {
+      doc: 'How long a verification record is kept before the TTL index deletes it, in seconds. Must be at least linkTtlSeconds + verifiedTtlSeconds, so a record outlives its verification.',
+      format: POSITIVE_INT,
+      default: 86400,
+      env: 'EMAIL_VERIFICATION_RECORD_RETENTION_SECONDS'
+    },
+    resendCooldownSeconds: {
+      doc: 'Minimum time between two verification emails for the same journey, in seconds.',
+      format: POSITIVE_INT,
+      default: 60,
+      env: 'EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS'
+    },
+    maxSendsPerEmailPerHour: {
+      doc: 'Most verification emails sent to one email address in an hour.',
+      format: POSITIVE_INT,
+      default: 5,
+      env: 'EMAIL_VERIFICATION_MAX_SENDS_PER_EMAIL_PER_HOUR'
+    },
+    maxSendsPerJourneyPerHour: {
+      doc: 'Most verification emails sent for one journey in an hour.',
+      format: POSITIVE_INT,
+      default: 5,
+      env: 'EMAIL_VERIFICATION_MAX_SENDS_PER_JOURNEY_PER_HOUR'
+    },
+    maxSendsGlobalPerHour: {
+      doc: 'Most verification emails sent by the service in an hour, across all journeys. Protects the Notify quota.',
+      format: POSITIVE_INT,
+      default: 1000,
+      env: 'EMAIL_VERIFICATION_MAX_SENDS_GLOBAL_PER_HOUR'
+    },
+    linkBaseUrl: {
+      doc: "The frontend's public origin that magic links point at, e.g. https://example.gov.uk (no path or trailing slash). Must be https except on the local tier. Set per environment. Empty = verification requests are refused (503).",
+      format: String,
+      default: '',
+      env: 'EMAIL_VERIFICATION_LINK_BASE_URL'
+    },
+    hashSecret: {
+      doc: 'HMAC key for hashing email addresses in rate-limit keys and audit records, so no plain address is stored there. Set via CDP Secrets; never committed. Empty = verification requests are refused (503).',
+      format: String,
+      default: '',
+      sensitive: true,
+      env: 'EMAIL_VERIFICATION_HASH_SECRET'
+    },
+    requiredForRegistration: {
+      doc: "Whether POST /register needs x-journey-token and a verified contact email for that journey. Turn off only on a tier whose frontend doesn't send the journey token to /register yet; deployed tiers warn at boot while it's off.",
+      format: Boolean,
+      default: true,
+      env: 'EMAIL_VERIFICATION_REQUIRED_FOR_REGISTRATION'
     }
   },
   // API authorisation (EQ-413). Protected routes require a bearer token:
@@ -259,3 +338,4 @@ export const config = convict({
 })
 
 config.validate({ allowed: 'strict' })
+validateEmailVerificationConfig(config)

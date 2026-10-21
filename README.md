@@ -111,47 +111,49 @@ git config --global core.autocrlf false
 
 ## API endpoints
 
-| Endpoint     | Method    | Description                                               |
-| :----------- | :-------- | :-------------------------------------------------------- |
-| `/health`    | GET       | Health check                                              |
-| `/register`  | POST      | Submit a pesticide registration application               |
-| `/search`    | GET       | Partial-match search of the register, paginated           |
-| `/export`    | GET       | A reference or free-text match, as a CSV download         |
-| `/whoami`    | GET       | Authenticated caller's identity (case-officer scope)      |
-| `/metrics/*` | GET, POST | Journey metrics (see [Journey metrics](#journey-metrics)) |
+| Endpoint                       | Method    | Description                                                                                                                             |
+| :----------------------------- | :-------- | :-------------------------------------------------------------------------------------------------------------------------------------- |
+| `/health`                      | GET       | Health check                                                                                                                            |
+| `/register`                    | POST      | Submit a pesticide registration application, once its contact email is verified (see [POST /register](#post-register))                  |
+| `/search`                      | GET       | Partial-match search of the register, paginated                                                                                         |
+| `/export`                      | GET       | A reference or free-text match, as a CSV download                                                                                       |
+| `/whoami`                      | GET       | Authenticated caller's identity (case-officer scope)                                                                                    |
+| `/metrics/*`                   | GET, POST | Journey metrics (see [Journey metrics](#journey-metrics))                                                                               |
+| `/email-verifications`         | POST      | Email a magic link to confirm the applicant's address (see [POST /email-verifications](#post-email-verifications))                      |
+| `/email-verifications/verify`  | POST      | Use up a magic link, confirming the address (see [POST /email-verifications/verify](#post-email-verificationsverify))                   |
+| `/email-verifications/current` | GET       | The journey's latest link: none, pending, expired or verified (see [GET /email-verifications/current](#get-email-verificationscurrent)) |
 
 ### POST /register
 
-Accepts a JSON body with a `formSession` object containing the registration form data.
+Public, called by the frontend to submit an application. It needs the frontend's signed `x-journey-token` header, and the primary contact's email address must have been verified by magic link for that journey (see [POST /email-verifications](#post-email-verifications)) within `EMAIL_VERIFICATION_VERIFIED_TTL_SECONDS` (default 4 hours). The address is compared trimmed and lower-cased, as it was stored when the link was requested. The body is the registration itself:
 
 **Request body:**
 
 ```json
 {
-  "formSession": {
-    "businessActivities": ["manufacture", "market"],
-    "businessName": "Company Name",
-    "address": {
-      "line1": "1 Example Street",
-      "line2": "Village",
-      "town": "Town",
-      "county": "County",
-      "postcode": "AB12 3CD"
-    },
-    "primaryContact": {
-      "name": "Full Name",
-      "telephone": "01234567890",
-      "email": "contact@example.com"
-    },
-    "addressActivities": ["use", "store"],
-    "quantity": {
-      "quantityType": "area",
-      "quantity": "50"
-    },
-    "professionalSectors": ["agriculture-horticulture"],
-    "memberSchemes": ["BASIS"],
-    "additionalAddresses": []
-  }
+  "businessActivities": ["manufacture", "market"],
+  "mainCustomer": "professional",
+  "businessName": "Company Name",
+  "address": {
+    "addressLine1": "1 Example Street",
+    "addressLine2": "Village",
+    "addressTown": "Town",
+    "addressCounty": "County",
+    "addressPostcode": "AB12 3CD"
+  },
+  "primaryContact": {
+    "contactName": "Full Name",
+    "contactTelephone": "01234567890",
+    "contactEmail": "contact@example.com"
+  },
+  "addressActivities": ["use", "store"],
+  "quantity": {
+    "quantityType": "area",
+    "quantity": "50"
+  },
+  "professionalSectors": ["agriculture-horticulture"],
+  "memberSchemes": ["BASIS"],
+  "additionalAddresses": []
 }
 ```
 
@@ -162,6 +164,18 @@ Accepts a JSON body with a `formSession` object containing the registration form
 ```
 
 Reference numbers use the format `{PREFIX}-XXX-XXX` (uppercase alphanumeric). The prefix defaults to `PPP` and is configurable via the `REFERENCE_PREFIX` environment variable, which must itself be upper-case letters or digits (the app refuses to start otherwise).
+
+The payload is validated first, so an invalid one is a `400` whatever the header. Then:
+
+| Status | `code`                   | When                                                                                                                                                                     |
+| ------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 401    | `JOURNEY_TOKEN_INVALID`  | `x-journey-token` is missing or not validly signed                                                                                                                       |
+| 403    | `EMAIL_NOT_VERIFIED`     | The contact email has no verification for this journey: it was never verified, was verified on another journey, changed after verification, or was verified too long ago |
+| 503    | `SERVICE_NOT_CONFIGURED` | `JOURNEY_TOKEN_SECRET` isn't set on this tier                                                                                                                            |
+
+On a `403` the frontend sends the applicant back to verify the address. Nothing is saved on any of these.
+
+`EMAIL_VERIFICATION_REQUIRED_FOR_REGISTRATION` (default `true`) turns the header and verification check off, for a tier whose frontend doesn't yet send the journey token to `/register`. Deployed tiers log a warning at every boot while it's `false`.
 
 ### GET /search
 
@@ -210,6 +224,121 @@ Rows are registrations as stored, limited to the fields the register shows (refe
 ### GET /export
 
 Same auth as `/search`, returned as a CSV download (`ocr-registrations.csv`). Takes exactly one of `?reference=` (one exact reference, using the configured `REFERENCE_PREFIX`) or `?q=` (a literal free-text match on the same fields as `/search`; blank exports the whole register). A reference exports one record, or just the header row if it doesn't exist. A term exports every match, up to `EXPORT_MAX_ROWS` (default 10000, at least 1); a larger match is a `400` asking for a narrower search, rather than a truncated file. Deleted registrations are never exported.
+
+### POST /email-verifications
+
+Public, called by the frontend to send (or resend) a magic link that confirms the applicant owns their email address. It needs the frontend's signed `x-journey-token` header, which binds the link to the journey. A new link supersedes the journey's earlier ones, so only the latest works. The body is at most 1 KB:
+
+```json
+{ "email": "jane.smith@example.com" }
+```
+
+**Response (202):** when the link stops working, and the earliest time the journey can ask for another. The response never includes the email address, token or any ID.
+
+```json
+{
+  "expiresAt": "2026-10-15T10:15:00.000Z",
+  "resendAvailableAt": "2026-10-15T10:01:00.000Z"
+}
+```
+
+Errors carry a stable `code` for the frontend to branch on:
+
+| Status | `code`                   | When                                                                                     |
+| ------ | ------------------------ | ---------------------------------------------------------------------------------------- |
+| 400    | `VALIDATION_ERROR`       | The email is missing, invalid or over 254 characters, or the body has other fields       |
+| 401    | `JOURNEY_TOKEN_INVALID`  | `x-journey-token` is missing or not validly signed                                       |
+| 429    | `RESEND_COOLDOWN`        | Within the cooldown since the journey's last email. `Retry-After` gives the seconds left |
+| 429    | `RATE_LIMITED`           | A cap on emails per address, per journey or overall was reached. `Retry-After` is set    |
+| 502    | `EMAIL_SEND_FAILED`      | Notify refused the email or couldn't be reached. Nothing is stored and no quota is used  |
+| 503    | `SERVICE_NOT_CONFIGURED` | A secret, the link base URL, the Notify key or the template ID isn't set on this tier    |
+
+The limits (`EMAIL_VERIFICATION_*` in [.env.example](.env.example)) are counted in Mongo, so they hold across instances. There's no per-IP limit, because CDP doesn't pass the client IP on. The full design is in [magic-link-api-design.md](magic-link-api-design.md).
+
+### POST /email-verifications/verify
+
+Public, called when the applicant presses Confirm on the page the magic link opens (never when the page loads, as email scanners open links too). The body is at most 1 KB:
+
+```json
+{ "token": "<the 43-character token from the link>" }
+```
+
+`x-journey-token` is optional here. It only decides `sameJourney`: without it, or from another browser, the link still verifies, against the journey that asked for it.
+
+**Response (200):**
+
+```json
+{ "outcome": "VERIFIED", "sameJourney": true }
+```
+
+A link verifies once: of any number of concurrent attempts, exactly one succeeds.
+
+| Status | `code`                | When                                                                                      |
+| ------ | --------------------- | ----------------------------------------------------------------------------------------- |
+| 400    | `TOKEN_INVALID`       | The token isn't 43 characters of base64url, or the body has other fields. Nothing is read |
+| 404    | `TOKEN_INVALID`       | No link has this token, or its record has been purged                                     |
+| 410    | `TOKEN_EXPIRED`       | The link wasn't used within `EMAIL_VERIFICATION_LINK_TTL_SECONDS`                         |
+| 410    | `TOKEN_SUPERSEDED`    | A newer link was sent for the journey                                                     |
+| 409    | `TOKEN_ALREADY_USED`  | The link has been used. The body also has `sameJourney`, as for a 200                     |
+| 500    | `VERIFICATION_FAILED` | Unexpected error                                                                          |
+
+### GET /email-verifications/current
+
+Public, needs `x-journey-token`. The state of the journey's latest link, so the browser that asked for it can carry on after the link is used on another device. Nothing about the address goes in the URL or the response; the frontend checks it still holds the address it asked about.
+
+**Response (200):**
+
+```json
+{
+  "status": "verified",
+  "expiresAt": "2026-10-15T10:15:00.000Z",
+  "verifiedAt": "2026-10-15T10:03:12.000Z",
+  "resendAvailableAt": "2026-10-15T10:01:00.000Z"
+}
+```
+
+| `status`   | Meaning                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `none`     | No link has been sent for the journey. The dates are `null`                                                                  |
+| `pending`  | The latest link is live                                                                                                      |
+| `expired`  | The latest link can't be used any more, and its address isn't verified                                                       |
+| `verified` | The latest link's address was verified for the journey within `EMAIL_VERIFICATION_VERIFIED_TTL_SECONDS`. `verifiedAt` is set |
+
+Errors: `401 JOURNEY_TOKEN_INVALID`, or `503 SERVICE_NOT_CONFIGURED` without `JOURNEY_TOKEN_SECRET`.
+
+### Email verification audit and monitoring
+
+Each step is written to the CDP audit stream through `@defra/cdp-auditing`. Every event has `event`, the `journeyId` when there is one, and `emailHash` (an HMAC of the address under `EMAIL_VERIFICATION_HASH_SECRET`) when an address is involved. No event, metric or log line holds a token, token hash, link or address. In production the `x-journey-token` header is removed from request logs. Request bodies aren't logged, and no endpoint takes the token or address in its URL.
+
+| Event                                 | Extra fields                                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------------ |
+| `EMAIL_VERIFICATION_LINK_REQUESTED`   |                                                                                      |
+| `EMAIL_VERIFICATION_LINK_SENT`        | `expiresAt`                                                                          |
+| `EMAIL_VERIFICATION_LINK_SEND_FAILED` | `reason`: Notify's error type (`BadRequestError`, …) or the network error code       |
+| `EMAIL_VERIFICATION_RATE_LIMITED`     | `limit`: `cooldown`, `email`, `journey` or `global`. Never returned to the caller    |
+| `EMAIL_VERIFICATION_VERIFIED`         | `sameJourney`                                                                        |
+| `EMAIL_VERIFICATION_REJECTED`         | `code`: `TOKEN_INVALID`, `TOKEN_EXPIRED`, `TOKEN_SUPERSEDED` or `TOKEN_ALREADY_USED` |
+| `REGISTRATION_EMAIL_NOT_VERIFIED`     | A `POST /register` refused with `EMAIL_NOT_VERIFIED`                                 |
+
+Counters, through `@defra/cdp-metrics`:
+
+| Metric                         | Dimensions                  |
+| ------------------------------ | --------------------------- |
+| `emailVerificationLinkSent`    |                             |
+| `emailVerificationSendFailed`  |                             |
+| `emailVerificationRateLimited` | `limit`, as for the event   |
+| `emailVerificationVerified`    |                             |
+| `emailVerificationRejected`    | `outcome`: the `code` above |
+| `registrationEmailNotVerified` |                             |
+
+A failed audit write or metric is logged and never changes the response.
+
+Proposed alerts:
+
+- Notify failures above 5% of sends over 15 minutes: `emailVerificationSendFailed` / (`emailVerificationLinkSent` + `emailVerificationSendFailed`).
+- The global cap is reached: any `emailVerificationRateLimited` with `limit` = `global`.
+
+The dashboards and alerts are set up in CDP and Grafana, not in this repository.
 
 ### Journey metrics
 
