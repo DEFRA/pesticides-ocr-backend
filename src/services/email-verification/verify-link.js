@@ -58,23 +58,23 @@ export function recordVerifyRejected({ journeyId, email, code }) {
 export async function verifyLinkToken(db, { token, journeyId }) {
   const tokenHash = hashLinkToken(token)
   const now = new Date()
-  const isSameJourney = (record) =>
-    journeyId !== null && record?.journeyId === journeyId
+  const isSameJourney = (candidate) =>
+    journeyId !== null && candidate?.journeyId === journeyId
 
   const verified = await markVerified(db, { tokenHash, now })
   if (verified) {
-    const sameJourney = isSameJourney(verified)
+    const verifiedSameJourney = isSameJourney(verified)
     logger.info(
-      { journeyId: verified.journeyId, sameJourney },
+      { journeyId: verified.journeyId, sameJourney: verifiedSameJourney },
       'Email verification link verified'
     )
     auditEmailVerification(EMAIL_VERIFICATION_VERIFIED, {
       journeyId: verified.journeyId,
       email: verified.email,
-      sameJourney
+      sameJourney: verifiedSameJourney
     })
     countEmailVerification(METRICS.VERIFIED)
-    return { verified: true, sameJourney }
+    return { verified: true, sameJourney: verifiedSameJourney }
   }
 
   const record = await findByTokenHash(db, tokenHash)

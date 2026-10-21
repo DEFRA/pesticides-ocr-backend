@@ -43,11 +43,13 @@ export async function currentVerificationStatus(db, { journeyId }) {
     since: addSeconds(now, -settings.verifiedTtlSeconds)
   })
 
-  let status = CURRENT_STATUS.EXPIRED
+  let status
   if (verification) {
     status = CURRENT_STATUS.VERIFIED
   } else if (latest.status === STATUS.PENDING && latest.expiresAt > now) {
     status = CURRENT_STATUS.PENDING
+  } else {
+    status = CURRENT_STATUS.EXPIRED
   }
 
   return {
