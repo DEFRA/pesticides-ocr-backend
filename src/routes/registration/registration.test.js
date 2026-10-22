@@ -7,6 +7,11 @@ import {
   seedVerification,
   validRegistrationPayload
 } from '#/routes/registration/registration.fixtures.js'
+import {
+  ADDRESS_ACTIVITY,
+  BUSINESS_ACTIVITY,
+  PROFESSIONAL_SECTOR
+} from '#/common/constants/registration-answers.js'
 
 const mockSaveRegistration = vi.fn()
 
@@ -94,6 +99,88 @@ describe('POST /register', () => {
       const response = await postRegister(rest)
 
       expect(response.statusCode).toBe(201)
+    })
+  })
+
+  describe('answers that depend on earlier answers', () => {
+    function post(payload) {
+      mockSaveRegistration.mockResolvedValue({ reference: 'PP-SKP-001' })
+
+      return postRegister(payload)
+    }
+
+    test.each([
+      [[BUSINESS_ACTIVITY.SELLER_AMATEUR]],
+      [[BUSINESS_ACTIVITY.MANUFACTURE, BUSINESS_ACTIVITY.SELLER_AMATEUR]]
+    ])(
+      'accepts no mainCustomer when the activities are %j',
+      async (businessActivities) => {
+        const { mainCustomer, ...rest } = validPayload
+
+        const response = await post({ ...rest, businessActivities })
+
+        expect(response.statusCode).toBe(201)
+      }
+    )
+
+    test('still validates a mainCustomer sent by an amateur seller', async () => {
+      const response = await post({
+        ...validPayload,
+        businessActivities: [BUSINESS_ACTIVITY.SELLER_AMATEUR],
+        mainCustomer: '   '
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(JSON.parse(response.payload).message).toBe(
+        'Enter your main customer'
+      )
+    })
+
+    test('accepts no quantity when the address activities have no use', async () => {
+      const { quantity, ...rest } = validPayload
+
+      const response = await post({
+        ...rest,
+        addressActivities: [ADDRESS_ACTIVITY.STORE]
+      })
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    test('returns 400 with no quantity when the address activities include use', async () => {
+      const { quantity, ...rest } = validPayload
+
+      const response = await post({
+        ...rest,
+        addressActivities: [ADDRESS_ACTIVITY.USE]
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(JSON.parse(response.payload).message).toBe('Quantity is required')
+    })
+
+    test('still validates a quantity sent without use', async () => {
+      const response = await post({
+        ...validPayload,
+        addressActivities: [ADDRESS_ACTIVITY.STORE],
+        quantity: { quantityType: 'volume', quantity: '10' }
+      })
+
+      expect(response.statusCode).toBe(400)
+    })
+
+    test('saves the Other description, trimmed, as the only professional sector', async () => {
+      const response = await post({
+        ...validPayload,
+        professionalSectors: ['  Golf courses  ']
+      })
+
+      expect(response.statusCode).toBe(201)
+      expect(mockSaveRegistration).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ professionalSectors: ['Golf courses'] }),
+        expect.anything()
+      )
     })
   })
 
@@ -216,13 +303,30 @@ describe('POST /register', () => {
       expect(response.statusCode).toBe(400)
     })
 
-    test('returns 400 for invalid professionalSectors value', async () => {
+    test.each([
+      [
+        'a sector code with an Other description',
+        [PROFESSIONAL_SECTOR.AMENITY, 'Golf courses']
+      ],
+      ['two Other descriptions', ['Golf courses', 'Parks']],
+      ['a blank Other description', ['   ']],
+      ['an Other description over 100 characters', ['x'.repeat(101)]],
+      [
+        'a repeated sector code',
+        [PROFESSIONAL_SECTOR.AMENITY, PROFESSIONAL_SECTOR.AMENITY]
+      ],
+      ['a string instead of a list', 'Golf courses'],
+      ['null', null]
+    ])('returns 400 for professionalSectors with %s', async (_, sectors) => {
       const response = await postRegister({
         ...validPayload,
-        professionalSectors: ['invalid-sector']
+        professionalSectors: sectors
       })
 
       expect(response.statusCode).toBe(400)
+      expect(JSON.parse(response.payload).message).toBe(
+        'Select a professional sector or describe your main type of work'
+      )
     })
 
     test('returns 400 when additional address has missing contact', async () => {
