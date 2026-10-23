@@ -171,11 +171,11 @@ The payload is validated first, so an invalid one is a `400` whatever the header
 | ------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 401    | `JOURNEY_TOKEN_INVALID`  | `x-journey-token` is missing or not validly signed                                                                                                                       |
 | 403    | `EMAIL_NOT_VERIFIED`     | The contact email has no verification for this journey: it was never verified, was verified on another journey, changed after verification, or was verified too long ago |
-| 503    | `SERVICE_NOT_CONFIGURED` | `JOURNEY_TOKEN_SECRET` isn't set on this tier                                                                                                                            |
+| 503    | `SERVICE_NOT_CONFIGURED` | `JOURNEY_TOKEN_SECRET` or any other email verification setting (hash secret, link base URL, Notify key or template ID) isn't set on this tier                            |
 
 On a `403` the frontend sends the applicant back to verify the address. Nothing is saved on any of these.
 
-`EMAIL_VERIFICATION_REQUIRED_FOR_REGISTRATION` (default `true`) turns the header and verification check off, for a tier whose frontend doesn't yet send the journey token to `/register`. Deployed tiers log a warning at every boot while it's `false`.
+`EMAIL_VERIFICATION_REQUIRED_FOR_REGISTRATION` (default `false`) turns the header and verification check on, once a tier's frontend sends the journey token to `/register`. Deployed tiers log a warning at every boot while it's `false`.
 
 ### GET /search
 
@@ -253,7 +253,7 @@ Errors carry a stable `code` for the frontend to branch on:
 | 502    | `EMAIL_SEND_FAILED`      | Notify refused the email or couldn't be reached. Nothing is stored and no quota is used  |
 | 503    | `SERVICE_NOT_CONFIGURED` | A secret, the link base URL, the Notify key or the template ID isn't set on this tier    |
 
-The limits (`EMAIL_VERIFICATION_*` in [.env.example](.env.example)) are counted in Mongo, so they hold across instances. There's no per-IP limit, because CDP doesn't pass the client IP on. The full design is in [magic-link-api-design.md](magic-link-api-design.md).
+The limits (`EMAIL_VERIFICATION_*` in [.env.example](.env.example)) are counted in Mongo, so they hold across instances. There's no per-IP limit, because CDP doesn't pass the client IP on.
 
 ### POST /email-verifications/verify
 

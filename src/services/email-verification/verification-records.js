@@ -2,21 +2,15 @@ import {
   EMAIL_VERIFICATIONS_COLLECTION,
   EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION
 } from '#/common/constants/collections.js'
+import { VERIFICATION_STATUS } from '#/common/constants/email-verification.js'
+import { addSeconds } from '#/common/helpers/time.js'
 import { withTransaction } from '#/repositories/mongo-transaction.js'
 
-export const STATUS = {
-  SENDING: 'sending',
-  PENDING: 'pending',
-  VERIFIED: 'verified',
-  SUPERSEDED: 'superseded'
-}
-
-const MS_PER_SECOND = 1000
+// Re-exported for existing imports; the canonical definition lives in
+// common/constants/email-verification.js.
+export const STATUS = VERIFICATION_STATUS
 
 const records = (db) => db.collection(EMAIL_VERIFICATIONS_COLLECTION)
-
-const addSeconds = (date, seconds) =>
-  new Date(date.getTime() + seconds * MS_PER_SECOND)
 
 // A new link starts as `sending`, which verify ignores, so it can't be used
 // until the email has gone. If the send fails the record is deleted; if the

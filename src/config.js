@@ -269,9 +269,9 @@ export const config = convict({
       env: 'EMAIL_VERIFICATION_HASH_SECRET'
     },
     requiredForRegistration: {
-      doc: "Whether POST /register needs x-journey-token and a verified contact email for that journey. Turn off only on a tier whose frontend doesn't send the journey token to /register yet; deployed tiers warn at boot while it's off.",
+      doc: "Whether POST /register needs x-journey-token and a verified contact email for that journey. Defaults to false until every tier's frontend sends the journey token to /register; turn on per tier once it does. Deployed tiers warn at boot while it's off.",
       format: Boolean,
-      default: true,
+      default: false,
       env: 'EMAIL_VERIFICATION_REQUIRED_FOR_REGISTRATION'
     }
   },

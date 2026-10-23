@@ -110,17 +110,17 @@ describe('config email verification', () => {
       maxSendsGlobalPerHour: 1000,
       linkBaseUrl: '',
       hashSecret: '',
-      requiredForRegistration: true
+      requiredForRegistration: false
     })
     expect(config.get('notify.templates.emailVerificationLink')).toBe('')
   })
 
-  test('lets a tier turn off the /register verification gate', async () => {
+  test('lets a tier turn on the /register verification gate', async () => {
     const { config } = await loadConfigWith({
-      EMAIL_VERIFICATION_REQUIRED_FOR_REGISTRATION: 'false'
+      EMAIL_VERIFICATION_REQUIRED_FOR_REGISTRATION: 'true'
     })
 
-    expect(config.get('emailVerification.requiredForRegistration')).toBe(false)
+    expect(config.get('emailVerification.requiredForRegistration')).toBe(true)
   })
 
   test('keeps the hash secret out of the printed config', async () => {

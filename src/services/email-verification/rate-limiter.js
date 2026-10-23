@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
 
 import { EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION } from '#/common/constants/collections.js'
+import { RATE_LIMITS } from '#/common/constants/email-verification.js'
 import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
+import { MS_PER_SECOND } from '#/common/helpers/time.js'
 
 // Fixed-window limits on verification emails, shared by every instance through
 // Mongo. Each counter is one document per bucket per hour,
@@ -11,14 +13,10 @@ import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
 // windowEndsAt, claimId }, claimed atomically. No per-IP limit: CDP doesn't
 // expose the client IP.
 
-export const LIMITS = {
-  COOLDOWN: 'cooldown',
-  EMAIL: 'email',
-  JOURNEY: 'journey',
-  GLOBAL: 'global'
-}
+// Re-exported for existing imports; the canonical definition lives in
+// common/constants/email-verification.js.
+export const LIMITS = RATE_LIMITS
 
-const MS_PER_SECOND = 1000
 const WINDOW_MS = 60 * 60 * MS_PER_SECOND
 
 const rateLimits = (db) =>

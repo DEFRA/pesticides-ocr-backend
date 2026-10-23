@@ -1,6 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto'
 
 import { EMAIL_VERIFICATIONS_COLLECTION } from '#/common/constants/collections.js'
+import { addSeconds } from '#/common/helpers/time.js'
 import { STATUS } from '#/services/email-verification/verification-records.js'
 
 export const JOURNEY_SECRET = 'journey-test-secret'
@@ -8,7 +9,6 @@ export const JOURNEY = 'journey-0f2b8c1e-7a4d-4e9b-9c6f-1d2e3f4a5b6c'
 export const OTHER_JOURNEY = 'journey-9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d'
 export const CONTACT_EMAIL = 'spray@everything.biz'
 
-const MS_PER_SECOND = 1000
 const SECONDS_PER_DAY = 86400
 
 // A journey token as the frontend signs it: `<nonce>.<HMAC of the nonce>`.
@@ -67,6 +67,6 @@ export async function seedVerification(
     expiresAt: verifiedAt,
     verifiedAt,
     supersededAt: null,
-    purgeAt: new Date(verifiedAt.getTime() + SECONDS_PER_DAY * MS_PER_SECOND)
+    purgeAt: addSeconds(verifiedAt, SECONDS_PER_DAY)
   })
 }

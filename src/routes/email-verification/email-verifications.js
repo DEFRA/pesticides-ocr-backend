@@ -146,9 +146,9 @@ function verifyRejectedError({ code, sameJourney }) {
 
 const isoOrNull = (date) => date?.toISOString() ?? null
 
-// POST /email-verifications: request or resend a magic link (design §7.1).
-// POST /email-verifications/verify: use up a link (§7.3).
-// GET /email-verifications/current: the journey's latest link (§7.2).
+// POST /email-verifications: request or resend a magic link.
+// POST /email-verifications/verify: use up a link.
+// GET /email-verifications/current: the journey's latest link.
 // No response carries an email address, token or record id.
 export const emailVerifications = [
   {

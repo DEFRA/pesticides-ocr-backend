@@ -7,6 +7,7 @@ import {
   EMAIL_VERIFICATION_LINK_SENT,
   EMAIL_VERIFICATION_RATE_LIMITED
 } from '#/common/constants/audit-events.js'
+import { VERIFY_EMAIL_PATH } from '#/common/constants/email-verification.js'
 import { NotifySendError, sendEmail } from '#/services/notify/notify.js'
 import { auditEmailVerification } from '#/services/email-verification/audit.js'
 import { hashEmail } from '#/services/email-verification/email-hash.js'
@@ -34,7 +35,7 @@ const SECONDS_PER_MINUTE = 60
 // submission data.
 function personalisation(token, settings) {
   return {
-    verification_link: `${settings.linkBaseUrl}/verify-email?token=${token}`,
+    verification_link: `${settings.linkBaseUrl}${VERIFY_EMAIL_PATH}?token=${token}`,
     expiry_minutes: Math.max(
       1,
       Math.floor(settings.linkTtlSeconds / SECONDS_PER_MINUTE)

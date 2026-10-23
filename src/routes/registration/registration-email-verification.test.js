@@ -27,6 +27,9 @@ import {
 } from '#/routes/registration/registration.fixtures.js'
 
 const HASH_SECRET = 'hash-test-secret'
+const LINK_BASE_URL = 'https://ocr.example.gov.uk'
+const NOTIFY_API_KEY = 'notify-test-key'
+const NOTIFY_TEMPLATE = 'email-verification-template-id'
 
 const { mockAudit, mockCounter } = vi.hoisted(() => ({
   mockAudit: vi.fn(),
@@ -60,6 +63,8 @@ describe('POST /register: email verification gate', () => {
   let registrations
   let originalSettings
   let originalJourneySecret
+  let originalNotifyApiKey
+  let originalNotifyTemplate
 
   beforeAll(async () => {
     // Imported here so config reads the in-memory MONGO_URI.
@@ -72,6 +77,10 @@ describe('POST /register: email verification gate', () => {
     logger = loggerModule.createLogger()
     originalSettings = structuredClone(config.get('emailVerification'))
     originalJourneySecret = config.get('journeyToken.secret')
+    originalNotifyApiKey = config.get('notify.apiKey')
+    originalNotifyTemplate = config.get(
+      'notify.templates.emailVerificationLink'
+    )
     server = await createServer()
     await server.initialize()
     registrations = server.db.collection(OCR_REGISTRATION_COLLECTION)
@@ -83,9 +92,12 @@ describe('POST /register: email verification gate', () => {
     config.set('emailVerification', {
       ...structuredClone(originalSettings),
       hashSecret: HASH_SECRET,
+      linkBaseUrl: LINK_BASE_URL,
       requiredForRegistration: true
     })
     config.set('journeyToken.secret', JOURNEY_SECRET)
+    config.set('notify.apiKey', NOTIFY_API_KEY)
+    config.set('notify.templates.emailVerificationLink', NOTIFY_TEMPLATE)
     mockAudit.mockReset()
     mockCounter.mockReset().mockResolvedValue(undefined)
     for (const level of ['debug', 'info', 'warn', 'error']) {
@@ -103,6 +115,8 @@ describe('POST /register: email verification gate', () => {
   afterAll(async () => {
     config.set('emailVerification', originalSettings)
     config.set('journeyToken.secret', originalJourneySecret)
+    config.set('notify.apiKey', originalNotifyApiKey)
+    config.set('notify.templates.emailVerificationLink', originalNotifyTemplate)
     await server.stop({ timeout: 0 })
   })
 
@@ -232,6 +246,15 @@ describe('POST /register: email verification gate', () => {
       expect(logger.info).toHaveBeenCalled()
       expect(emitted).not.toContain('spray')
       expect(emitted).not.toContain('everything.biz')
+    })
+  })
+
+  describe('a partly configured tier', () => {
+    test('refuses with 503 rather than 403, so the frontend does not loop the applicant', async () => {
+      await seedVerification(server.db)
+      config.set('notify.templates.emailVerificationLink', '')
+
+      await expectRefused(await register(), 503, 'SERVICE_NOT_CONFIGURED')
     })
   })
 

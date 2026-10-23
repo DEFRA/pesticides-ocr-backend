@@ -1,21 +1,15 @@
 import { config } from '#/config.js'
+import { CURRENT_VERIFICATION_STATUS } from '#/common/constants/email-verification.js'
+import { addSeconds } from '#/common/helpers/time.js'
 import {
   STATUS,
   findLatestRecord,
   findRecentVerification
 } from '#/services/email-verification/verification-records.js'
 
-export const CURRENT_STATUS = {
-  NONE: 'none',
-  PENDING: 'pending',
-  EXPIRED: 'expired',
-  VERIFIED: 'verified'
-}
-
-const MS_PER_SECOND = 1000
-
-const addSeconds = (date, seconds) =>
-  new Date(date.getTime() + seconds * MS_PER_SECOND)
+// Re-exported for existing imports; the canonical definition lives in
+// common/constants/email-verification.js.
+export const CURRENT_STATUS = CURRENT_VERIFICATION_STATUS
 
 // The state of the journey's latest link, for the browser that requested it to
 // pick up a verification made elsewhere. `verified` means the address the
