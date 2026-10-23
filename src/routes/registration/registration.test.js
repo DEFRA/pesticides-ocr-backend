@@ -1,5 +1,3 @@
-import { describe, test, expect, vi, beforeAll } from 'vitest'
-import { config } from '#/config.js'
 import { describe, test, expect, vi, beforeAll, afterAll } from 'vitest'
 
 import {
