@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'vitest'
 import { SignJWT } from 'jose'
 import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
+import { deletedRegistration } from '#/services/search/search.fixtures.js'
 
 // Mock-mode tokens (ENVIRONMENT defaults to local under test): decoded but not
 // signature-verified. Mint tokens with/without the case-officer role.
@@ -127,5 +128,26 @@ describe('#metricsRoutes — GET /metrics/registrations', () => {
       (await get('/metrics/registrations?from=not-a-date', officerToken))
         .statusCode
     ).toBe(400)
+  })
+
+  describe('Deleted registrations', () => {
+    beforeAll(async () => {
+      await server.db
+        .collection(OCR_REGISTRATION_COLLECTION)
+        .insertOne({ ...deletedRegistration })
+    })
+
+    afterAll(async () => {
+      await server.db
+        .collection(OCR_REGISTRATION_COLLECTION)
+        .deleteOne({ reference: deletedRegistration.reference })
+    })
+
+    test('still count as completed registrations', async () => {
+      const { result } = await get('/metrics/registrations', officerToken)
+
+      expect(result.total).toBe(4)
+      expect(result.byMonth).toContainEqual({ month: '2026-05', count: 2 })
+    })
   })
 })

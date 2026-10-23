@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto'
 import { config } from '#/config.js'
 import { createLogger } from '#/common/helpers/logging/logger.js'
 import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
-import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
+import { ACTOR_TYPE } from '#/common/constants/actors.js'
 
 const logger = createLogger()
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -14,24 +14,30 @@ export function generateReference(prefix = config.get('referencePrefix')) {
   return `${prefix}-${segment()}-${segment()}`
 }
 
-export async function saveRegistration(db, data, { prefix } = {}) {
-  const collection = db.collection(OCR_REGISTRATION_COLLECTION)
+// A duplicate history version also lists reference in its keyPattern, so only
+// the registrations' own reference index counts as a collision.
+const isReferenceCollision = (err) =>
+  err.code === MONGO_DUPLICATE_KEY_ERROR &&
+  Object.keys(err.keyPattern ?? {}).join() === 'reference'
 
+// Applicants submit without signing in, so the actor has no id.
+const APPLICANT = Object.freeze({ type: ACTOR_TYPE.APPLICANT })
+
+export async function saveRegistration(
+  registrations,
+  data,
+  { prefix, requestId } = {}
+) {
   for (let attempt = 1; attempt <= MAX_REFERENCE_RETRIES; attempt++) {
     const reference = generateReference(prefix)
     try {
-      const result = await collection.insertOne({
-        ...data,
-        reference,
-        submittedAt: new Date(),
-        isDeleted: false
-      })
-      return { ...result, reference }
+      await registrations.create(
+        { ...data, reference, submittedAt: new Date() },
+        { by: APPLICANT, requestId }
+      )
+      return { reference }
     } catch (err) {
-      if (
-        err.code !== MONGO_DUPLICATE_KEY_ERROR ||
-        !err.keyPattern?.reference
-      ) {
+      if (!isReferenceCollision(err)) {
         throw err
       }
       logger.warn({ reference, attempt }, 'Reference collision, retrying')

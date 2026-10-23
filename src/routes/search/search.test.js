@@ -1,5 +1,6 @@
 import { SignJWT } from 'jose'
 import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
+import { deletedRegistration } from '#/services/search/search.fixtures.js'
 
 // The API runs in mock auth mode under test (ENVIRONMENT defaults to local), so
 // tokens are decoded but not signature-verified. These helpers mint tokens that
@@ -392,18 +393,48 @@ describe('#searchRoute', () => {
       expect(statusCode).toBe(400)
     })
 
-    test('does not query mongo for an invalid request', async () => {
-      const collection = vi.spyOn(server.db, 'collection')
+    test('does not read registrations for an invalid request', async () => {
+      const read = vi.spyOn(server.registrations, 'search')
 
       await get('/search?q=')
 
-      expect(collection).not.toHaveBeenCalled()
+      expect(read).not.toHaveBeenCalled()
 
       await get('/search?q=green')
 
-      expect(collection).toHaveBeenCalledWith(OCR_REGISTRATION_COLLECTION)
+      expect(read).toHaveBeenCalled()
 
-      collection.mockRestore()
+      read.mockRestore()
+    })
+  })
+
+  describe('Deleted registrations', () => {
+    beforeAll(async () => {
+      await server.db
+        .collection(OCR_REGISTRATION_COLLECTION)
+        .insertOne({ ...deletedRegistration })
+    })
+
+    afterAll(async () => {
+      await server.db
+        .collection(OCR_REGISTRATION_COLLECTION)
+        .deleteOne({ reference: deletedRegistration.reference })
+    })
+
+    test('are not returned by search', async () => {
+      const { statusCode, result } = await get('/search?q=Deleted')
+
+      expect(statusCode).toBe(200)
+      expect(result.data).toEqual([])
+      expect(result.pagination.totalRecords).toBe(0)
+    })
+
+    test('are not returned when searching by reference', async () => {
+      const { result } = await get(
+        `/search?reference=${deletedRegistration.reference}`
+      )
+
+      expect(references(result)).toEqual([])
     })
   })
 })

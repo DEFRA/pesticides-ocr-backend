@@ -165,7 +165,7 @@ Reference numbers use the format `{PREFIX}-XXX-XXX` (uppercase alphanumeric). Th
 
 ### GET /search
 
-Case-officer bearer auth required (see [API authorisation](#api-authorisation-eq-413)): no token is a `401`, a token without the case-officer role a `403`. Searches the register on one or more partial criteria, a page at a time.
+Case-officer bearer auth required (see [API authorisation](#api-authorisation-eq-413)): no token is a `401`, a token without the case-officer role a `403`. Searches the register on one or more partial criteria, a page at a time. Deleted registrations are never returned.
 
 | Query              | Searches                      |
 | ------------------ | ----------------------------- |
@@ -209,7 +209,7 @@ Rows are registrations as stored, limited to the fields the register shows (refe
 
 ### GET /export
 
-Same auth as `/search`, returned as a CSV download (`ocr-registrations.csv`). Takes exactly one of `?reference=` (one exact reference, using the configured `REFERENCE_PREFIX`) or `?q=` (a literal free-text match on the same fields as `/search`; blank exports the whole register). A reference exports one record, or just the header row if it doesn't exist. A term exports every match, up to `EXPORT_MAX_ROWS` (default 10000, at least 1); a larger match is a `400` asking for a narrower search, rather than a truncated file.
+Same auth as `/search`, returned as a CSV download (`ocr-registrations.csv`). Takes exactly one of `?reference=` (one exact reference, using the configured `REFERENCE_PREFIX`) or `?q=` (a literal free-text match on the same fields as `/search`; blank exports the whole register). A reference exports one record, or just the header row if it doesn't exist. A term exports every match, up to `EXPORT_MAX_ROWS` (default 10000, at least 1); a larger match is a `400` asking for a narrower search, rather than a truncated file. Deleted registrations are never exported.
 
 ### Journey metrics
 
@@ -230,7 +230,7 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
 | ----------------------------------- | ------------------------------------------------------------------------------- |
 | `GET /metrics/journeys`             | the completion metric: starts, finishes, drop-outs and rates, by year and month |
 | `GET /metrics/journey-starts`       | `{ total, byMonth }` of journey starts                                          |
-| `GET /metrics/registrations`        | `{ total, byMonth }` of completed registrations                                 |
+| `GET /metrics/registrations`        | `{ total, byMonth }` of completed registrations, including any deleted since    |
 | `GET /metrics/journey-not-eligible` | `{ total, byMonth }` of not-eligible exits                                      |
 
 `GET /metrics/journeys` returns the overall figures (the life of the service, or the `from`/`to` period), plus the same per year and per month:
@@ -311,7 +311,7 @@ Routes without `options.auth` (e.g. `/health`) stay open. A request with no/inva
 
 ## Registration history
 
-The `ocr-registration_history` collection keeps one entry per version of a registration, through `src/repositories/registration-history.js`. Entries can be added and read but never changed or removed. The audited repository's `create`, `update` and `softDelete` each add an entry, in the same transaction as the registration change, so neither is saved without the other. Each takes `by` (who made the change: `{ type: 'applicant' }`, or `{ type: 'case_officer', id }` with the Entra subject ID), and optionally `reason` and `requestId`. These are checked before anything is written, and `by.id` is never an email address. To group several changes, pass them the session from the repository's `withTransaction` (no other session is accepted): if any of them fails, including its input checks, the whole transaction rolls back and `withTransaction` rejects with that error, even if your code caught it. Don't call `withTransaction` inside another one; pass the session down instead, as a nested call starts a separate transaction.
+Submission, search, export and the registrations metric all read and write registrations through the audited repository (`src/repositories/audited-repository.js`), which every request has as `request.registrations`. The `ocr-registration_history` collection keeps one entry per version of a registration, through `src/repositories/registration-history.js`. Entries can be added and read but never changed or removed. The audited repository's `create`, `update` and `softDelete` each add an entry, in the same transaction as the registration change, so neither is saved without the other. Each takes `by` (who made the change: `{ type: 'applicant' }`, or `{ type: 'case_officer', id }` with the Entra subject ID), and optionally `reason` and `requestId`. These are checked before anything is written, and `by.id` is never an email address. To group several changes, pass them the session from the repository's `withTransaction` (no other session is accepted): if any of them fails, including its input checks, the whole transaction rolls back and `withTransaction` rejects with that error, even if your code caught it. Don't call `withTransaction` inside another one; pass the session down instead, as a nested call starts a separate transaction.
 
 | Field       | Required | Contents                                                                                         |
 | ----------- | -------- | ------------------------------------------------------------------------------------------------ |

@@ -46,11 +46,11 @@ function byYear(monthly) {
   return [...years].map(([year, sums]) => ({ year, ...summarise(sums) }))
 }
 
-export async function summariseJourneys(db, { from, to } = {}) {
+export async function summariseJourneys(sources, { from, to } = {}) {
   const [starts, registrations, notEligible] = await Promise.all([
-    countJourneyStarts(db, { from, to }),
-    countRegistrations(db, { from, to }),
-    countJourneyNotEligible(db, { from, to })
+    countJourneyStarts(sources, { from, to }),
+    countRegistrations(sources, { from, to }),
+    countJourneyNotEligible(sources, { from, to })
   ])
 
   // A document without its date field counts in the totals but has no month.

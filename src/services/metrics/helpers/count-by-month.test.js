@@ -1,8 +1,10 @@
 import { countByMonth } from './count-by-month.js'
 import {
   JOURNEY_STARTS_COLLECTION,
-  JOURNEY_NOT_ELIGIBLE_COLLECTION
+  JOURNEY_NOT_ELIGIBLE_COLLECTION,
+  OCR_REGISTRATION_COLLECTION
 } from '#/common/constants/collections.js'
+import { SUBMITTED_AT } from '#/common/constants/registration.js'
 
 describe('#countByMonth', () => {
   let facet
@@ -132,5 +134,15 @@ describe('#countByMonth', () => {
     })
 
     expect(result).toEqual({ total: 0, byMonth: [] })
+  })
+
+  test('refuses the registrations collection, which is counted through the repository', async () => {
+    await expect(
+      countByMonth(db, {
+        collection: OCR_REGISTRATION_COLLECTION,
+        dateField: SUBMITTED_AT
+      })
+    ).rejects.toThrow('Count registrations through the audited repository')
+    expect(collection).not.toHaveBeenCalled()
   })
 })

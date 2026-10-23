@@ -9,6 +9,7 @@ import {
   JOURNEY_NOT_ELIGIBLE_COLLECTION
 } from '#/common/constants/collections.js'
 import { HISTORY_VERSION_INDEX } from '#/common/constants/history.js'
+import { createAuditedRepository } from '#/repositories/audited-repository.js'
 
 export const mongoDb = {
   plugin: {
@@ -34,6 +35,12 @@ export const mongoDb = {
       server.decorate('server', 'locker', locker)
       server.decorate('request', 'db', () => db, { apply: true })
       server.decorate('request', 'locker', () => locker, { apply: true })
+
+      const registrations = createAuditedRepository({ client, db })
+      server.decorate('server', 'registrations', registrations)
+      server.decorate('request', 'registrations', () => registrations, {
+        apply: true
+      })
 
       server.events.on('stop', async () => {
         server.logger.info('Closing Mongo client')

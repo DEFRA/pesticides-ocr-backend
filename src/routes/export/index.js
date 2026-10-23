@@ -35,7 +35,7 @@ export const exportRegistrations = [
     },
     handler: async (request, h) => {
       const maxRows = config.get('export.maxRows')
-      const result = await resolveQuery(request.db, request.query, {
+      const result = await resolveQuery(request.registrations, request.query, {
         limit: maxRows + 1
       })
 

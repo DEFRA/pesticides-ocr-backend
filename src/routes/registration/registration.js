@@ -1,5 +1,7 @@
 import Joi from 'joi'
 import Boom from '@hapi/boom'
+import { getTraceId } from '@defra/hapi-tracing'
+import { MAX_REQUEST_ID_LENGTH } from '#/common/constants/history.js'
 import { saveRegistration } from '#/services/registration/registration.js'
 
 const businessActivitiesValues = [
@@ -200,6 +202,17 @@ const schema = Joi.object({
     .optional()
 })
 
+// The request ID comes from a header, so one that's empty or too long is
+// dropped rather than failing the applicant's submission.
+function requestIdFromTrace() {
+  const traceId = getTraceId()
+  return typeof traceId === 'string' &&
+    traceId !== '' &&
+    traceId.length <= MAX_REQUEST_ID_LENGTH
+    ? traceId
+    : undefined
+}
+
 export const register = [
   {
     method: 'POST',
@@ -219,7 +232,11 @@ export const register = [
     },
     handler: async (request, h) => {
       try {
-        const result = await saveRegistration(request.db, request.payload)
+        const result = await saveRegistration(
+          request.registrations,
+          request.payload,
+          { requestId: requestIdFromTrace() }
+        )
         return h.response({ reference: result.reference }).code(HTTP_CREATED)
       } catch (err) {
         request.log(['error'], err)

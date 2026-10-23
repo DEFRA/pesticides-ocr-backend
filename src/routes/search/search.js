@@ -24,7 +24,10 @@ export const search = [
       const { page, pageSize, ...criteria } = request.query
 
       return h.response(
-        await searchRegistrations(request.db, criteria, { page, pageSize })
+        await searchRegistrations(request.registrations, criteria, {
+          page,
+          pageSize
+        })
       )
     }
   }

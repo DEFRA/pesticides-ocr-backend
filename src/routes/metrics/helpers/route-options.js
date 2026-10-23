@@ -39,7 +39,8 @@ export const countRoute = (path, count) => ({
     }
   },
   handler: async (request, h) => {
-    const result = await count(request.db, {
+    const sources = { db: request.db, registrations: request.registrations }
+    const result = await count(sources, {
       from: request.query.from,
       to: request.query.to
     })
