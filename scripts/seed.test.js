@@ -1,5 +1,9 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { MONGO_DUPLICATE_KEY_ERROR } from '../src/common/constants/mongo.js'
+import {
+  BUSINESS_ACTIVITIES,
+  QUANTITY_TYPES
+} from '../src/common/constants/registration-answers.js'
 
 const { mockCollection, mockClient } = vi.hoisted(() => {
   const mockCollection = {
@@ -93,20 +97,15 @@ describe('buildRecord', () => {
 
   test('quantity has a valid quantityType', () => {
     const { quantity } = buildRecord()
-    expect(['area', 'amount']).toContain(quantity.quantityType)
+    expect(QUANTITY_TYPES).toContain(quantity.quantityType)
     expect(Number(quantity.quantity)).toBeGreaterThan(0)
   })
 
   test('businessActivities contains only valid values', () => {
-    const valid = [
-      'manufacture',
-      'market',
-      'seller-professional',
-      'seller-amateur',
-      'use-professional'
-    ]
     const { businessActivities } = buildRecord()
-    expect(businessActivities.every((a) => valid.includes(a))).toBe(true)
+    expect(
+      businessActivities.every((a) => BUSINESS_ACTIVITIES.includes(a))
+    ).toBe(true)
   })
 
   test('optional additionalAddresses entry has correct shape when present', () => {

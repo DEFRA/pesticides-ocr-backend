@@ -10,6 +10,12 @@
 import { MongoClient } from 'mongodb'
 import { randomInt } from 'crypto'
 import { fileURLToPath } from 'url'
+import {
+  ADDRESS_ACTIVITIES,
+  BUSINESS_ACTIVITIES,
+  PROFESSIONAL_SECTORS,
+  QUANTITY_TYPES
+} from '../src/common/constants/registration-answers.js'
 import { generateReference } from '../src/services/registration/registration.js'
 import { OCR_REGISTRATION_COLLECTION } from '../src/common/constants/collections.js'
 import { MONGO_DUPLICATE_KEY_ERROR } from '../src/common/constants/mongo.js'
@@ -41,20 +47,6 @@ export function pickSubset(arr) {
 }
 
 export function buildRecord() {
-  const businessActivitiesPool = [
-    'manufacture',
-    'market',
-    'seller-professional',
-    'seller-amateur',
-    'use-professional'
-  ]
-  const addressActivitiesPool = ['use', 'store', 'records']
-  const professionalSectorsPool = [
-    'agriculture-horticulture',
-    'amenity',
-    'forestry'
-  ]
-  const quantityTypes = ['area', 'amount']
   const counties = ['North Yorkshire', 'Devon', 'Kent', 'Cheshire', 'Suffolk']
   const memberSchemePool = [
     'red-tractor',
@@ -68,7 +60,7 @@ export function buildRecord() {
   const includeSchemes = randomInt(2) === 0
 
   return {
-    businessActivities: pickSubset(businessActivitiesPool),
+    businessActivities: pickSubset(BUSINESS_ACTIVITIES),
     businessName: `Seed Company ${randomInt(1, 999)}`,
     mainCustomer: pickRandom(['professional', 'amateur', 'both']),
     address: {
@@ -100,13 +92,13 @@ export function buildRecord() {
       contactTelephone: `0${randomInt(1000000000, 9999999999)}`,
       contactEmail: `seed${randomInt(1, 9999)}@example.com`
     },
-    addressActivities: pickSubset(addressActivitiesPool),
+    addressActivities: pickSubset(ADDRESS_ACTIVITIES),
     quantity: {
-      quantityType: pickRandom(quantityTypes),
+      quantityType: pickRandom(QUANTITY_TYPES),
       quantity: String(randomInt(1, 500))
     },
     ...(includeSectors && {
-      professionalSectors: pickSubset(professionalSectorsPool)
+      professionalSectors: pickSubset(PROFESSIONAL_SECTORS)
     }),
     ...(includeSchemes && {
       memberSchemes: pickSubset(memberSchemePool)
@@ -133,7 +125,7 @@ export function buildRecord() {
             contactTelephone: `0${randomInt(1000000000, 9999999999)}`,
             contactEmail: `extra${randomInt(1, 9999)}@example.com`
           },
-          activity: pickSubset(addressActivitiesPool)
+          activity: pickSubset(ADDRESS_ACTIVITIES)
         }
       ]
     })

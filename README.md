@@ -157,6 +157,14 @@ Public, called by the frontend to submit an application. It needs the frontend's
 }
 ```
 
+Some answers are only required when the journey asks for them:
+
+- `mainCustomer` is optional when `businessActivities` includes `seller-amateur`.
+- `quantity` is required only when `addressActivities` includes `use`.
+- `professionalSectors` is either a list of sector codes, or a list holding just the applicant's own description under Other (1 to 100 characters).
+
+Answers that are sent are always validated. The allowed values are in `src/common/constants/registration-answers.js`.
+
 **Response (201):**
 
 ```json

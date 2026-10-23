@@ -15,24 +15,14 @@ import {
   EMAIL_NOT_VERIFIED,
   SERVICE_NOT_CONFIGURED
 } from '#/common/constants/error-codes.js'
-
-const businessActivitiesValues = [
-  'manufacture',
-  'market',
-  'seller-professional',
-  'seller-amateur',
-  'use-professional'
-]
-
-const addressActivitiesValues = ['use', 'store', 'records']
-
-const professionalSectorsValues = [
-  'agriculture-horticulture',
-  'amenity',
-  'forestry'
-]
-
-const quantityTypeValues = ['area', 'amount']
+import {
+  ADDRESS_ACTIVITIES,
+  ADDRESS_ACTIVITY,
+  BUSINESS_ACTIVITIES,
+  BUSINESS_ACTIVITY,
+  PROFESSIONAL_SECTORS,
+  QUANTITY_TYPES
+} from '#/common/constants/registration-answers.js'
 
 const MAX_SHORT_TEXT = 100
 const MAX_BUSINESS_NAME = 200
@@ -131,9 +121,9 @@ const additionalAddressSchema = Joi.object({
     'any.required': 'Contact details are required'
   }),
   activity: Joi.array()
-    .items(Joi.string().valid(...addressActivitiesValues))
+    .items(Joi.string().valid(...ADDRESS_ACTIVITIES))
     .min(1)
-    .max(addressActivitiesValues.length)
+    .max(ADDRESS_ACTIVITIES.length)
     .unique()
     .required()
     .messages({
@@ -142,21 +132,32 @@ const additionalAddressSchema = Joi.object({
     })
 })
 
+const SELECT_SECTOR_MESSAGE =
+  'Select a professional sector or describe your main type of work'
+
 const schema = Joi.object({
   businessActivities: Joi.array()
-    .items(Joi.string().valid(...businessActivitiesValues))
+    .items(Joi.string().valid(...BUSINESS_ACTIVITIES))
     .min(1)
-    .max(businessActivitiesValues.length)
+    .max(BUSINESS_ACTIVITIES.length)
     .unique()
     .required()
     .messages({
       'array.min': 'Select at least one business activity',
       'any.required': 'Select at least one business activity'
     }),
-  mainCustomer: Joi.string().trim().min(1).required().messages({
-    'string.empty': 'Enter your main customer',
-    'any.required': 'Enter your main customer'
-  }),
+  mainCustomer: Joi.string()
+    .trim()
+    .min(1)
+    .when('businessActivities', {
+      is: Joi.array().has(BUSINESS_ACTIVITY.SELLER_AMATEUR),
+      then: Joi.optional(),
+      otherwise: Joi.required()
+    })
+    .messages({
+      'string.empty': 'Enter your main customer',
+      'any.required': 'Enter your main customer'
+    }),
   businessName: Joi.string()
     .trim()
     .min(1)
@@ -174,9 +175,9 @@ const schema = Joi.object({
     'any.required': 'Primary contact details are required'
   }),
   addressActivities: Joi.array()
-    .items(Joi.string().valid(...addressActivitiesValues))
+    .items(Joi.string().valid(...ADDRESS_ACTIVITIES))
     .min(1)
-    .max(addressActivitiesValues.length)
+    .max(ADDRESS_ACTIVITIES.length)
     .unique()
     .required()
     .messages({
@@ -185,7 +186,7 @@ const schema = Joi.object({
     }),
   quantity: Joi.object({
     quantityType: Joi.string()
-      .valid(...quantityTypeValues)
+      .valid(...QUANTITY_TYPES)
       .required()
       .messages({
         'any.only': 'Select a quantity type',
@@ -197,13 +198,28 @@ const schema = Joi.object({
       'any.required': 'Enter a quantity'
     })
   })
-    .required()
+    .when('addressActivities', {
+      is: Joi.array().has(ADDRESS_ACTIVITY.USE),
+      then: Joi.required(),
+      otherwise: Joi.optional()
+    })
     .messages({ 'any.required': 'Quantity is required' }),
-  professionalSectors: Joi.array()
-    .items(Joi.string().valid(...professionalSectorsValues))
-    .max(professionalSectorsValues.length)
-    .unique()
-    .optional(),
+  // Either the ticked sectors, or the applicant's own description under Other.
+  professionalSectors: Joi.alternatives()
+    .try(
+      Joi.array()
+        .items(Joi.string().valid(...PROFESSIONAL_SECTORS))
+        .max(PROFESSIONAL_SECTORS.length)
+        .unique(),
+      Joi.array()
+        .items(Joi.string().trim().min(1).max(MAX_SHORT_TEXT))
+        .length(1)
+    )
+    .optional()
+    .messages({
+      'alternatives.match': SELECT_SECTOR_MESSAGE,
+      'alternatives.types': SELECT_SECTOR_MESSAGE
+    }),
   memberSchemes: Joi.array()
     .items(Joi.string().trim().min(1).max(MAX_SHORT_TEXT))
     .max(MAX_MEMBER_SCHEMES)
