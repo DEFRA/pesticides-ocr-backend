@@ -211,6 +211,8 @@ describe('config log.redact in production', () => {
       'req.headers.authorization',
       'req.headers.cookie',
       'req.headers["x-journey-token"]',
+      'req.body.token',
+      'req.body.email',
       'res.headers'
     ])
   })
