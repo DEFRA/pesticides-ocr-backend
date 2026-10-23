@@ -103,6 +103,8 @@ export const config = convict({
             'req.headers.authorization',
             'req.headers.cookie',
             `req.headers["${JOURNEY_TOKEN_HEADER}"]`,
+            'req.body.token',
+            'req.body.email',
             'res.headers'
           ]
         : ['req', 'res', 'responseTime']

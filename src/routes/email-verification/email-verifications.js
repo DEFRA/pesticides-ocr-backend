@@ -36,8 +36,6 @@ import {
 
 const logger = createLogger()
 
-// Public: the applicant journey has no bearer token. The signed journey token
-// binds the request to a session instead, so the body only needs the address.
 const MAX_PAYLOAD_BYTES = 1024
 
 // Stored and compared trimmed and lower-cased. Unknown keys are rejected.
@@ -150,6 +148,9 @@ const isoOrNull = (date) => date?.toISOString() ?? null
 // POST /email-verifications/verify: use up a link.
 // GET /email-verifications/current: the journey's latest link.
 // No response carries an email address, token or record id.
+//
+// Public: the applicant journey has no bearer token. The signed journey token
+// binds the request to a session instead, so the body only needs the address.
 export const emailVerifications = [
   {
     method: 'POST',
