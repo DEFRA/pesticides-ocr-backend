@@ -2,7 +2,19 @@ import Joi from 'joi'
 import Boom from '@hapi/boom'
 import { getTraceId } from '@defra/hapi-tracing'
 import { MAX_REQUEST_ID_LENGTH } from '#/common/constants/history.js'
+import { config } from '#/config.js'
 import { saveRegistration } from '#/services/registration/registration.js'
+import { isEmailVerifiedForJourney } from '#/services/email-verification/registration-gate.js'
+import { missingEmailVerificationSettings } from '#/services/email-verification/config-guard.js'
+import { normalisedEmailSchema } from '#/services/email-verification/email-address.js'
+import { requireJourneyId } from '#/common/helpers/require-journey-id.js'
+import { withErrorCode } from '#/common/helpers/error-code.js'
+import { HTTP_CREATED } from '#/common/constants/http-status.js'
+import { MAX_EMAIL_LENGTH } from '#/common/constants/email.js'
+import {
+  EMAIL_NOT_VERIFIED,
+  SERVICE_NOT_CONFIGURED
+} from '#/common/constants/error-codes.js'
 
 const businessActivitiesValues = [
   'manufacture',
@@ -22,11 +34,8 @@ const professionalSectorsValues = [
 
 const quantityTypeValues = ['area', 'amount']
 
-const HTTP_CREATED = 201
-
 const MAX_SHORT_TEXT = 100
 const MAX_BUSINESS_NAME = 200
-const MAX_EMAIL = 254
 const MAX_TELEPHONE = 20
 const MAX_MEMBER_SCHEMES = 50
 const MAX_ADDITIONAL_ADDRESSES = 20
@@ -102,12 +111,16 @@ const contactSchema = Joi.object({
       'string.max': 'Telephone number must be 20 characters or less',
       'any.required': 'Enter a telephone number'
     }),
-  contactEmail: Joi.string().email().max(MAX_EMAIL).required().messages({
-    'string.empty': 'Enter an email address',
-    'string.email': 'Enter a valid email address',
-    'string.max': 'Email address must be 254 characters or less',
-    'any.required': 'Enter an email address'
-  })
+  contactEmail: normalisedEmailSchema
+    .max(MAX_EMAIL_LENGTH)
+    .email({ tlds: false })
+    .required()
+    .messages({
+      'string.empty': 'Enter an email address',
+      'string.email': 'Enter a valid email address',
+      'string.max': 'Email address must be 254 characters or less',
+      'any.required': 'Enter an email address'
+    })
 })
 
 const additionalAddressSchema = Joi.object({
@@ -213,6 +226,44 @@ function requestIdFromTrace() {
     : undefined
 }
 
+// The primary contact email must have been verified by magic link for the
+// submitting journey: 401 without a valid x-journey-token, 503 if any email
+// verification setting is missing on this tier, 403 with no recent
+// verification. Skipped only on a tier that has turned the gate off for its
+// frontend to catch up.
+async function requireVerifiedContactEmail(request) {
+  if (!config.get('emailVerification.requiredForRegistration')) {
+    return
+  }
+
+  if (missingEmailVerificationSettings().length > 0) {
+    throw withErrorCode(
+      Boom.serverUnavailable('Email verification is not configured'),
+      SERVICE_NOT_CONFIGURED
+    )
+  }
+
+  const journeyId = requireJourneyId(request)
+
+  let verified
+  try {
+    verified = await isEmailVerifiedForJourney(request.db, {
+      journeyId,
+      email: request.payload.primaryContact.contactEmail
+    })
+  } catch (err) {
+    request.log(['error'], err)
+    throw Boom.internal('Failed to check email verification')
+  }
+
+  if (!verified) {
+    throw withErrorCode(
+      Boom.forbidden('The contact email address has not been verified'),
+      EMAIL_NOT_VERIFIED
+    )
+  }
+}
+
 export const register = [
   {
     method: 'POST',
@@ -231,6 +282,8 @@ export const register = [
       }
     },
     handler: async (request, h) => {
+      await requireVerifiedContactEmail(request)
+
       try {
         const result = await saveRegistration(
           request.registrations,

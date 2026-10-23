@@ -3,9 +3,12 @@ import { LockManager } from 'mongo-locks'
 
 import {
   OCR_REGISTRATION_COLLECTION,
-  OCR_REGISTRATION_HISTORY_COLLECTION
+  OCR_REGISTRATION_HISTORY_COLLECTION,
+  EMAIL_VERIFICATIONS_COLLECTION,
+  EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION
 } from '#/common/constants/collections.js'
 import { HISTORY_VERSION_INDEX } from '#/common/constants/history.js'
+import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
 
 describe('#mongoDb', () => {
   let server
@@ -69,6 +72,94 @@ describe('#mongoDb', () => {
 
       await Promise.all(
         [first, ...instances].map((instance) => instance.stop({ timeout: 0 }))
+      )
+    })
+  })
+
+  describe('Email verification indexes', () => {
+    let verifications
+    let rateLimits
+
+    // Only the key and the options that change behaviour, so the assertion
+    // doesn't depend on fields Mongo adds itself, like v.
+    const shape = ({ key, unique, expireAfterSeconds }) => ({
+      key,
+      ...(unique === undefined ? {} : { unique }),
+      ...(expireAfterSeconds === undefined ? {} : { expireAfterSeconds })
+    })
+
+    beforeAll(async () => {
+      const { createServer } = await import('#/server.js')
+      server = await createServer()
+      await server.initialize()
+      verifications = server.db.collection(EMAIL_VERIFICATIONS_COLLECTION)
+      rateLimits = server.db.collection(
+        EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION
+      )
+    })
+
+    afterAll(async () => {
+      await server.stop({ timeout: 0 })
+    })
+
+    test('creates only the verification indexes that queries use', async () => {
+      const indexes = (await verifications.indexes()).map(shape)
+
+      expect(indexes).toEqual([
+        { key: { _id: 1 } },
+        { key: { tokenHash: 1 }, unique: true },
+        { key: { journeyId: 1, createdAt: -1 } },
+        { key: { purgeAt: 1 }, expireAfterSeconds: 0 }
+      ])
+    })
+
+    test('creates a TTL index on the rate-limit window end', async () => {
+      const indexes = (await rateLimits.indexes()).map(shape)
+
+      expect(indexes).toEqual([
+        { key: { _id: 1 } },
+        { key: { windowEndsAt: 1 }, expireAfterSeconds: 0 }
+      ])
+    })
+
+    test('refuses a second record with the same token hash', async () => {
+      const record = () => ({
+        journeyId: 'journey-1',
+        tokenHash: 'a'.repeat(64),
+        status: 'pending'
+      })
+      await verifications.insertOne(record())
+
+      await expect(verifications.insertOne(record())).rejects.toMatchObject({
+        code: MONGO_DUPLICATE_KEY_ERROR
+      })
+      expect(
+        await verifications.countDocuments({ tokenHash: 'a'.repeat(64) })
+      ).toBe(1)
+    })
+
+    test('lets one of many concurrent inserts with the same token hash win', async () => {
+      const tokenHash = 'b'.repeat(64)
+      const results = await Promise.allSettled(
+        Array.from({ length: 10 }, (_, i) =>
+          verifications.insertOne({ journeyId: `journey-${i}`, tokenHash })
+        )
+      )
+
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+      expect(await verifications.countDocuments({ tokenHash })).toBe(1)
+    })
+
+    test('creating the indexes again on restart is a no-op', async () => {
+      const { createServer } = await import('#/server.js')
+      const instances = await Promise.all([createServer(), createServer()])
+      await Promise.all(instances.map((instance) => instance.initialize()))
+
+      expect(await verifications.indexes()).toHaveLength(4)
+      expect(await rateLimits.indexes()).toHaveLength(2)
+
+      await Promise.all(
+        instances.map((instance) => instance.stop({ timeout: 0 }))
       )
     })
   })

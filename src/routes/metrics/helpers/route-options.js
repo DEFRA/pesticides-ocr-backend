@@ -4,6 +4,8 @@ import Boom from '@hapi/boom'
 import { config } from '#/config.js'
 import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
 import { verifiedNonce } from '#/services/metrics/helpers/journey-token.js'
+import { HTTP_NO_CONTENT } from '#/common/constants/http-status.js'
+import { JOURNEY_TOKEN_HEADER } from '#/common/constants/journey-token.js'
 
 // Shared route shapes for the EQ-472 metrics endpoints. Volumes come from the
 // database — the authoritative, consent-independent source (GA under-counts).
@@ -13,12 +15,9 @@ import { verifiedNonce } from '#/services/metrics/helpers/journey-token.js'
 
 const auth = requireRole(...getCaseOfficerRoles())
 
-const HTTP_NO_CONTENT = 204
 // Beacons ignore the request body; cap it small so an unauthenticated caller
 // can't stream a large payload at us.
 const MAX_BEACON_PAYLOAD_BYTES = 1024
-// The frontend sends its signed per-session token in this header.
-const JOURNEY_TOKEN_HEADER = 'x-journey-token'
 
 // Optional inclusive ISO date bounds. Unknown params and invalid dates are
 // rejected with 400 by the server-wide failAction (same as the /search route).

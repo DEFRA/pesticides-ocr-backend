@@ -1,5 +1,12 @@
-import { describe, test, expect, vi, beforeAll } from 'vitest'
-import { config } from '#/config.js'
+import { describe, test, expect, vi, beforeAll, afterAll } from 'vitest'
+
+import {
+  JOURNEY,
+  JOURNEY_SECRET,
+  journeyToken,
+  seedVerification,
+  validRegistrationPayload
+} from '#/routes/registration/registration.fixtures.js'
 
 const mockSaveRegistration = vi.fn()
 
@@ -7,65 +14,47 @@ vi.mock('#/services/registration/registration.js', () => ({
   saveRegistration: mockSaveRegistration
 }))
 
+// The email verification gate itself is covered against the real records in
+// registration-email-verification.test.js. Here the contact email is verified
+// for the journey, so every request reaches validation and saving as before.
 describe('POST /register', () => {
   let server
+  let config
+  let originalJourneySecret
 
   beforeAll(async () => {
-    const { createServer } = await import('#/server.js')
+    const [{ createServer }, configModule] = await Promise.all([
+      import('#/server.js'),
+      import('#/config.js')
+    ])
+    config = configModule.config
+    originalJourneySecret = config.get('journeyToken.secret')
+    config.set('journeyToken.secret', JOURNEY_SECRET)
     server = await createServer()
     await server.initialize()
+    await seedVerification(server.db)
   })
 
   afterAll(async () => {
+    config.set('journeyToken.secret', originalJourneySecret)
     await server.stop({ timeout: 1000 })
   })
 
-  const validPayload = {
-    businessActivities: ['manufacture', 'market'],
-    mainCustomer: 'professional',
-    businessName: 'Company 1',
-    address: {
-      addressLine1: '67 My Road',
-      addressLine2: 'My Village',
-      addressTown: 'My Town',
-      addressCounty: 'North Yorkshire',
-      addressPostcode: 'AB12 3CD'
-    },
-    primaryContact: {
-      contactName: 'Jonny Pesticide',
-      contactTelephone: '01234567890',
-      contactEmail: 'spray@everything.biz'
-    },
-    addressActivities: ['use', 'store'],
-    quantity: { quantityType: 'area', quantity: '67' },
-    professionalSectors: ['agriculture-horticulture', 'amenity'],
-    memberSchemes: ['Scheme A'],
-    additionalAddresses: [
-      {
-        address: {
-          addressLine1: '1 Other St',
-          addressTown: 'Othertown',
-          addressPostcode: 'SW1A 2AA'
-        },
-        contact: {
-          contactName: 'Jane Doe',
-          contactTelephone: '07700900000',
-          contactEmail: 'jane@example.com'
-        },
-        activity: ['use']
-      }
-    ]
-  }
+  const postRegister = (payload) =>
+    server.inject({
+      method: 'POST',
+      url: '/register',
+      headers: { 'x-journey-token': journeyToken(JOURNEY) },
+      payload
+    })
+
+  const validPayload = validRegistrationPayload
 
   describe('success', () => {
     test('returns 201 and reference on valid payload', async () => {
       mockSaveRegistration.mockResolvedValue({ reference: 'PP-ABC-123' })
 
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: validPayload
-      })
+      const response = await postRegister(validPayload)
 
       expect(response.statusCode).toBe(201)
       expect(JSON.parse(response.payload)).toEqual({ reference: 'PP-ABC-123' })
@@ -80,6 +69,7 @@ describe('POST /register', () => {
         headers: { [config.get('tracing.header')]: 'request-1' },
         payload: validPayload
       })
+      await postRegister(validPayload)
 
       expect(mockSaveRegistration).toHaveBeenCalledWith(
         expect.anything(),
@@ -101,11 +91,7 @@ describe('POST /register', () => {
         ...rest
       } = validPayload
 
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: rest
-      })
+      const response = await postRegister(rest)
 
       expect(response.statusCode).toBe(201)
     })
@@ -115,11 +101,7 @@ describe('POST /register', () => {
     test('returns 500 when saveRegistration throws', async () => {
       mockSaveRegistration.mockRejectedValue(new Error('db connection lost'))
 
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: validPayload
-      })
+      const response = await postRegister(validPayload)
 
       expect(response.statusCode).toBe(500)
       expect(JSON.parse(response.payload).message).toBe(
@@ -130,30 +112,21 @@ describe('POST /register', () => {
 
   describe('validation failures', () => {
     test('returns 400 when the payload is empty', async () => {
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: {}
-      })
+      const response = await postRegister({})
 
       expect(response.statusCode).toBe(400)
     })
 
     test('returns 400 when the payload is wrapped in formSession', async () => {
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: { formSession: validPayload }
-      })
+      const response = await postRegister({ formSession: validPayload })
 
       expect(response.statusCode).toBe(400)
     })
 
     test('returns 400 when businessActivities is empty', async () => {
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: { ...validPayload, businessActivities: [] }
+      const response = await postRegister({
+        ...validPayload,
+        businessActivities: []
       })
 
       expect(response.statusCode).toBe(400)
@@ -163,11 +136,7 @@ describe('POST /register', () => {
     test('returns 400 when businessName is missing', async () => {
       const { businessName, ...rest } = validPayload
 
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: rest
-      })
+      const response = await postRegister(rest)
 
       expect(response.statusCode).toBe(400)
       expect(JSON.parse(response.payload).message).toMatch(/business name/i)
@@ -176,24 +145,16 @@ describe('POST /register', () => {
     test('returns 400 when mainCustomer is missing', async () => {
       const { mainCustomer, ...rest } = validPayload
 
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: rest
-      })
+      const response = await postRegister(rest)
 
       expect(response.statusCode).toBe(400)
       expect(JSON.parse(response.payload).message).toMatch(/main customer/i)
     })
 
     test('returns 400 for invalid UK postcode', async () => {
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: {
-          ...validPayload,
-          address: { ...validPayload.address, addressPostcode: 'NOTVALID' }
-        }
+      const response = await postRegister({
+        ...validPayload,
+        address: { ...validPayload.address, addressPostcode: 'NOTVALID' }
       })
 
       expect(response.statusCode).toBe(400)
@@ -201,15 +162,11 @@ describe('POST /register', () => {
     })
 
     test('returns 400 for invalid email address', async () => {
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: {
-          ...validPayload,
-          primaryContact: {
-            ...validPayload.primaryContact,
-            contactEmail: 'not-an-email'
-          }
+      const response = await postRegister({
+        ...validPayload,
+        primaryContact: {
+          ...validPayload.primaryContact,
+          contactEmail: 'not-an-email'
         }
       })
 
@@ -218,15 +175,11 @@ describe('POST /register', () => {
     })
 
     test('returns 400 for invalid telephone number', async () => {
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: {
-          ...validPayload,
-          primaryContact: {
-            ...validPayload.primaryContact,
-            contactTelephone: 'abc'
-          }
+      const response = await postRegister({
+        ...validPayload,
+        primaryContact: {
+          ...validPayload.primaryContact,
+          contactTelephone: 'abc'
         }
       })
 
@@ -235,13 +188,9 @@ describe('POST /register', () => {
     })
 
     test('returns 400 for invalid quantityType', async () => {
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: {
-          ...validPayload,
-          quantity: { quantityType: 'volume', quantity: '10' }
-        }
+      const response = await postRegister({
+        ...validPayload,
+        quantity: { quantityType: 'volume', quantity: '10' }
       })
 
       expect(response.statusCode).toBe(400)
@@ -249,13 +198,9 @@ describe('POST /register', () => {
     })
 
     test('returns 400 for non-numeric quantity value', async () => {
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: {
-          ...validPayload,
-          quantity: { quantityType: 'area', quantity: 'lots' }
-        }
+      const response = await postRegister({
+        ...validPayload,
+        quantity: { quantityType: 'area', quantity: 'lots' }
       })
 
       expect(response.statusCode).toBe(400)
@@ -263,42 +208,36 @@ describe('POST /register', () => {
     })
 
     test('returns 400 for invalid businessActivity value', async () => {
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: { ...validPayload, businessActivities: ['invalid-activity'] }
+      const response = await postRegister({
+        ...validPayload,
+        businessActivities: ['invalid-activity']
       })
 
       expect(response.statusCode).toBe(400)
     })
 
     test('returns 400 for invalid professionalSectors value', async () => {
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: { ...validPayload, professionalSectors: ['invalid-sector'] }
+      const response = await postRegister({
+        ...validPayload,
+        professionalSectors: ['invalid-sector']
       })
 
       expect(response.statusCode).toBe(400)
     })
 
     test('returns 400 when additional address has missing contact', async () => {
-      const response = await server.inject({
-        method: 'POST',
-        url: '/register',
-        payload: {
-          ...validPayload,
-          additionalAddresses: [
-            {
-              address: {
-                addressLine1: '1 Other St',
-                addressTown: 'Othertown',
-                addressPostcode: 'SW1A 2AA'
-              },
-              activity: ['use']
-            }
-          ]
-        }
+      const response = await postRegister({
+        ...validPayload,
+        additionalAddresses: [
+          {
+            address: {
+              addressLine1: '1 Other St',
+              addressTown: 'Othertown',
+              addressPostcode: 'SW1A 2AA'
+            },
+            activity: ['use']
+          }
+        ]
       })
 
       expect(response.statusCode).toBe(400)

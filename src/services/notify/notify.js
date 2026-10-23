@@ -1,7 +1,9 @@
 import { config } from '#/config.js'
+import { createLogger } from '#/common/helpers/logging/logger.js'
 import { NotifyClient } from 'notifications-node-client'
 
 const notifyConfig = config.get('notify')
+const logger = createLogger()
 
 let client
 
@@ -17,6 +19,36 @@ function getClient() {
   return client
 }
 
+// What sendEmail rejects with. It carries Notify's status and error list but
+// not the client's error, whose request config holds the email address and
+// personalisation and would end up in any log the caller writes.
+export class NotifySendError extends Error {
+  constructor({ templateName, status, code, errors }) {
+    super(`Notify failed to send '${templateName}' email`)
+    this.name = 'NotifySendError'
+    this.status = status
+    this.code = code
+    this.errors = errors
+  }
+}
+
+// A Notify rejection has response.data.errors, a list of { error, message }.
+// A network error or timeout has no response at all.
+function describeFailure(templateName, error) {
+  const errors = Object.values(error.response?.data?.errors ?? {}).map(
+    ({ error: type, message }) => ({ error: type, message })
+  )
+  return {
+    templateName,
+    status: error.response?.status,
+    code: error.code,
+    errors
+  }
+}
+
+// Rejects when Notify refuses the email or can't be reached. The email address
+// and personalisation are never logged: the personalisation can hold a magic
+// link.
 async function sendEmail(templateName, emailAddress, personalisation) {
   const templateId = notifyConfig.templates[templateName]
 
@@ -24,29 +56,19 @@ async function sendEmail(templateName, emailAddress, personalisation) {
     throw new Error(`Unknown template '${templateName}'`)
   }
 
-  return getClient()
-    .sendEmail(templateId, emailAddress, { personalisation })
-    .then((response) => {
-      if (!config.get('isProduction')) {
-        console.log(
-          `Email sent to ${emailAddress} using template '${templateName}' (ID: ${templateId}). Response:`,
-          response
-        )
-      }
-      return response
-    })
-    .catch((error) => {
-      if (!config.get('isProduction')) {
-        console.error(
-          `Error sending email to ${emailAddress} using template '${templateName}' (ID: ${templateId}):`
-        )
-        for (const [key, value] of Object.entries(error.response.data.errors)) {
-          console.error(`  ${key}:`, value)
-        }
-      }
+  const notify = getClient()
 
-      return error
+  try {
+    const response = await notify.sendEmail(templateId, emailAddress, {
+      personalisation
     })
+    logger.info({ templateName }, 'Notify email sent')
+    return response
+  } catch (error) {
+    const failure = describeFailure(templateName, error)
+    logger.error(failure, 'Notify email failed')
+    throw new NotifySendError(failure)
+  }
 }
 
 export { sendEmail }

@@ -6,7 +6,9 @@ import {
   OCR_REGISTRATION_HISTORY_COLLECTION,
   MONGO_LOCKS_COLLECTION,
   JOURNEY_STARTS_COLLECTION,
-  JOURNEY_NOT_ELIGIBLE_COLLECTION
+  JOURNEY_NOT_ELIGIBLE_COLLECTION,
+  EMAIL_VERIFICATIONS_COLLECTION,
+  EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION
 } from '#/common/constants/collections.js'
 import { HISTORY_VERSION_INDEX } from '#/common/constants/history.js'
 import { createAuditedRepository } from '#/repositories/audited-repository.js'
@@ -83,4 +85,19 @@ async function createIndexes(db) {
     { nonce: 1 },
     { unique: true, sparse: true }
   )
+
+  const emailVerifications = db.collection(EMAIL_VERIFICATIONS_COLLECTION)
+  const rateLimits = db.collection(EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION)
+
+  // Verify looks a link up by its hash.
+  await emailVerifications.createIndex({ tokenHash: 1 }, { unique: true })
+  // Current status, superseding older links and the /register check all read
+  // a journey's records newest first.
+  await emailVerifications.createIndex({ journeyId: 1, createdAt: -1 })
+  // Mongo deletes each document once the date in the field has passed.
+  await emailVerifications.createIndex(
+    { purgeAt: 1 },
+    { expireAfterSeconds: 0 }
+  )
+  await rateLimits.createIndex({ windowEndsAt: 1 }, { expireAfterSeconds: 0 })
 }
