@@ -1,5 +1,9 @@
 import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
-import { FIRST_VERSION, HISTORY_OPERATION } from '#/common/constants/history.js'
+import {
+  FIRST_VERSION,
+  HISTORY_OPERATION,
+  UNVERSIONED
+} from '#/common/constants/history.js'
 import {
   LIFECYCLE_FIELDS,
   SUBMITTED_AT
@@ -9,6 +13,7 @@ import {
   toMonthlyCounts
 } from '#/common/helpers/monthly-counts.js'
 import {
+  assertExpectedVersion,
   assertLimit,
   assertObject,
   assertReference
@@ -18,6 +23,7 @@ import {
   assertAudit,
   createRegistrationHistory
 } from '#/repositories/registration-history.js'
+import { VersionConflictError } from '#/repositories/version-conflict-error.js'
 
 const PROTECTED_FIELDS = new Set([
   '_id',
@@ -188,12 +194,38 @@ function readOperations(registrations) {
 const appendHistory = (history, operation, registration, audit, at, session) =>
   history.append(historyEntry(operation, registration, audit, at), { session })
 
-const changeExisting = (registrations, reference, update, session) =>
-  registrations.findOneAndUpdate(
-    visible({ reference }, false),
+const atVersion = (version) => ({
+  version: version === UNVERSIONED ? { $exists: false } : version
+})
+
+// Throws VersionConflictError when the registration is at another version.
+async function changeExisting(
+  registrations,
+  { reference, expectedVersion },
+  update,
+  session
+) {
+  const changed = await registrations.findOneAndUpdate(
+    visible({ reference, ...atVersion(expectedVersion) }, false),
     { ...update, $inc: { version: 1 } },
     { returnDocument: 'after', projection: NO_ID, session }
   )
+  if (changed) {
+    return changed
+  }
+  const current = await registrations.findOne(visible({ reference }, false), {
+    projection: { version: 1 },
+    session
+  })
+  if (current) {
+    throw new VersionConflictError({
+      reference,
+      expectedVersion,
+      currentVersion: current.version ?? UNVERSIONED
+    })
+  }
+  return null
+}
 
 function createRegistration(context, registration, options) {
   const { run, registrations, history } = context
@@ -226,7 +258,7 @@ function createRegistration(context, registration, options) {
 // null when there's no such registration, or it's deleted.
 function updateRegistration(context, reference, changes, options) {
   const { run, registrations, history } = context
-  const { by, reason, requestId, session } = options ?? {}
+  const { by, reason, requestId, expectedVersion, session } = options ?? {}
   return run(session, async (txSession) => {
     assertReference(reference)
     assertObject(changes, 'changes')
@@ -235,10 +267,11 @@ function updateRegistration(context, reference, changes, options) {
     }
     assertNoProtectedFields(changes)
     const audit = auditDetails({ by, reason, requestId })
+    assertExpectedVersion(expectedVersion)
     const at = new Date()
     const updated = await changeExisting(
       registrations,
-      reference,
+      { reference, expectedVersion },
       { $set: changes },
       txSession
     )
@@ -259,14 +292,15 @@ function updateRegistration(context, reference, changes, options) {
 // null when there's no such registration, or it's already deleted.
 function softDeleteRegistration(context, reference, options) {
   const { run, registrations, history } = context
-  const { by, reason, requestId, session } = options ?? {}
+  const { by, reason, requestId, expectedVersion, session } = options ?? {}
   return run(session, async (txSession) => {
     assertReference(reference)
     const audit = auditDetails({ by, reason, requestId })
+    assertExpectedVersion(expectedVersion)
     const at = new Date()
     const deleted = await changeExisting(
       registrations,
-      reference,
+      { reference, expectedVersion },
       {
         $set: {
           isDeleted: true,

@@ -18,3 +18,4 @@ export const VERIFICATION_FAILED = 'VERIFICATION_FAILED'
 // POST /register: the contact email has no recent verification for this
 // journey. One code for every reason, as the applicant's fix is the same.
 export const EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED'
+export const VERSION_CONFLICT = 'VERSION_CONFLICT'
