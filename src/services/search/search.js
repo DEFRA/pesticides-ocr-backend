@@ -1,4 +1,5 @@
 import { config } from '#/config.js'
+import { UNVERSIONED } from '#/common/constants/history.js'
 import { queryRegistrations } from './helpers/query-registrations.js'
 import { buildCriteriaFilter } from './helpers/search-filter.js'
 
@@ -14,7 +15,8 @@ const registerProjection = {
   address: 1,
   primaryContact: 1,
   addressActivities: 1,
-  quantity: 1
+  quantity: 1,
+  version: 1
 }
 
 export async function searchRegistrations(
@@ -34,7 +36,11 @@ export async function searchRegistrations(
   ])
 
   return {
-    data: records,
+    // The version is what a change, such as a delete, must say it loaded.
+    data: records.map((record) => ({
+      ...record,
+      version: record.version ?? UNVERSIONED
+    })),
     pagination: {
       page,
       pageSize,

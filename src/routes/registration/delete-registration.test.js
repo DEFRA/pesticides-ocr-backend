@@ -252,6 +252,25 @@ describe('DELETE /registrations/{reference}', () => {
       ])
     })
 
+    test('deletes with the version a search returned', async () => {
+      const reference = await createRegistration()
+      const search = await server.inject({
+        method: 'GET',
+        url: `/search?reference=${reference}`,
+        headers: { authorization: `Bearer ${officerToken}` }
+      })
+      const [{ version }] = search.result.data
+
+      const { statusCode, result } = await del(reference, {
+        version,
+        reason: REASON
+      })
+
+      expect(version).toBe(FIRST_VERSION)
+      expect(statusCode).toBe(200)
+      expect(result.version).toBe(FIRST_VERSION + 1)
+    })
+
     test('a deleted registration no longer appears in search', async () => {
       const reference = await createRegistration()
 

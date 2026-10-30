@@ -212,6 +212,7 @@ At least one criterion is required, blank ones are ignored, and every one suppli
     {
       "reference": "PPP-ABC-123",
       "submittedAt": "2026-08-11T09:30:00.000Z",
+      "version": 1,
       "businessName": "Example Organisation",
       "primaryContact": {
         "contactName": "Jane Doe",
@@ -228,7 +229,7 @@ At least one criterion is required, blank ones are ignored, and every one suppli
 }
 ```
 
-Rows are registrations as stored, limited to the fields the register shows (reference, submittedAt, status, business name, activities, main customer, address, primary contact, address activities, quantity); display mapping is the caller's concern.
+Rows are registrations as stored, limited to the fields the register shows (reference, submittedAt, status, business name, activities, main customer, address, primary contact, address activities, quantity), plus its `version` (`0` for a registration stored without one), which a change such as a delete must send back; display mapping is the caller's concern.
 
 ### GET /export
 
@@ -242,7 +243,7 @@ Same auth as `/search`. Soft deletes the registration: it stays in the database,
 { "version": 3, "reason": "Duplicate registration" }
 ```
 
-Both are required: `version` is the version the case officer loaded, and `reason` is up to 500 characters, trimmed. The body must be JSON, up to 2 KB. A token with no subject (`sub`) is a `403`, as the history must record who deleted the registration.
+Both are required: `version` is the version the case officer loaded (from `/search`), and `reason` is up to 500 characters, trimmed. The body must be JSON, up to 2 KB. A token with no subject (`sub`) is a `403`, as the history must record who deleted the registration.
 
 | Response | When                                                                                                                 |
 | -------- | -------------------------------------------------------------------------------------------------------------------- |
