@@ -24,3 +24,9 @@ export function assertObject(value, name) {
     throw new TypeError(`${name} must be an object`)
   }
 }
+
+export function assertExpectedVersion(version) {
+  if (!Number.isInteger(version) || version < 0) {
+    throw new TypeError('expectedVersion must be a non-negative integer')
+  }
+}

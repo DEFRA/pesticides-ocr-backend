@@ -1,4 +1,7 @@
 export const FIRST_VERSION = 1
+// A registration stored before versions were added has no version field, and
+// counts as this version.
+export const UNVERSIONED = 0
 
 export const HISTORY_OPERATION = Object.freeze({
   CREATE: 'create',
