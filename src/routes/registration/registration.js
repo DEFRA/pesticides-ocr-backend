@@ -1,13 +1,12 @@
 import Joi from 'joi'
 import Boom from '@hapi/boom'
-import { getTraceId } from '@defra/hapi-tracing'
-import { MAX_REQUEST_ID_LENGTH } from '#/common/constants/history.js'
 import { config } from '#/config.js'
 import { saveRegistration } from '#/services/registration/registration.js'
 import { isEmailVerifiedForJourney } from '#/services/email-verification/registration-gate.js'
 import { missingEmailVerificationSettings } from '#/services/email-verification/config-guard.js'
 import { normalisedEmailSchema } from '#/services/email-verification/email-address.js'
 import { requireJourneyId } from '#/common/helpers/require-journey-id.js'
+import { requestIdFromTrace } from '#/common/helpers/request-id.js'
 import { withErrorCode } from '#/common/helpers/error-code.js'
 import { HTTP_CREATED } from '#/common/constants/http-status.js'
 import { MAX_EMAIL_LENGTH } from '#/common/constants/email.js'
@@ -230,17 +229,6 @@ const schema = Joi.object({
     .max(MAX_ADDITIONAL_ADDRESSES)
     .optional()
 })
-
-// The request ID comes from a header, so one that's empty or too long is
-// dropped rather than failing the applicant's submission.
-function requestIdFromTrace() {
-  const traceId = getTraceId()
-  return typeof traceId === 'string' &&
-    traceId !== '' &&
-    traceId.length <= MAX_REQUEST_ID_LENGTH
-    ? traceId
-    : undefined
-}
 
 // The primary contact email must have been verified by magic link for the
 // submitting journey: 401 without a valid x-journey-token, 503 if any email

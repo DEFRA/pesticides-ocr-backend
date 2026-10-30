@@ -117,6 +117,7 @@ git config --global core.autocrlf false
 | `/register`                    | POST      | Submit a pesticide registration application, once its contact email is verified (see [POST /register](#post-register))                  |
 | `/search`                      | GET       | Partial-match search of the register, paginated                                                                                         |
 | `/export`                      | GET       | A reference or free-text match, as a CSV download                                                                                       |
+| `/registrations/{reference}`   | DELETE    | Soft delete a registration, recording who, when and why (see [DELETE /registrations/{reference}](#delete-registrationsreference))       |
 | `/whoami`                      | GET       | Authenticated caller's identity (case-officer scope)                                                                                    |
 | `/metrics/*`                   | GET, POST | Journey metrics (see [Journey metrics](#journey-metrics))                                                                               |
 | `/email-verifications`         | POST      | Email a magic link to confirm the applicant's address (see [POST /email-verifications](#post-email-verifications))                      |
@@ -211,6 +212,7 @@ At least one criterion is required, blank ones are ignored, and every one suppli
     {
       "reference": "PPP-ABC-123",
       "submittedAt": "2026-08-11T09:30:00.000Z",
+      "version": 1,
       "businessName": "Example Organisation",
       "primaryContact": {
         "contactName": "Jane Doe",
@@ -227,11 +229,30 @@ At least one criterion is required, blank ones are ignored, and every one suppli
 }
 ```
 
-Rows are registrations as stored, limited to the fields the register shows (reference, submittedAt, status, business name, activities, main customer, address, primary contact, address activities, quantity); display mapping is the caller's concern.
+Rows are registrations as stored, limited to the fields the register shows (reference, submittedAt, status, business name, activities, main customer, address, primary contact, address activities, quantity), plus its `version` (`0` for a registration stored without one), which a change such as a delete must send back; display mapping is the caller's concern.
 
 ### GET /export
 
 Same auth as `/search`, returned as a CSV download (`ocr-registrations.csv`). Takes exactly one of `?reference=` (one exact reference, using the configured `REFERENCE_PREFIX`) or `?q=` (a literal free-text match on the same fields as `/search`; blank exports the whole register). A reference exports one record, or just the header row if it doesn't exist. A term exports every match, up to `EXPORT_MAX_ROWS` (default 10000, at least 1); a larger match is a `400` asking for a narrower search, rather than a truncated file. Deleted registrations are never exported.
+
+### DELETE /registrations/{reference}
+
+Same auth as `/search`. Soft deletes the registration: it stays in the database, marked as deleted, and stops appearing in search and export (the registration metrics still count it as completed). Its history gets a `delete` entry recording the case officer (their Entra subject), the reason and the request ID (see [Registration history](#registration-history)).
+
+```json
+{ "version": 3, "reason": "Duplicate registration" }
+```
+
+Both are required: `version` is the version the case officer loaded (from `/search`), and `reason` is up to 500 characters, trimmed. The body must be JSON, up to 2 KB. A token with no subject (`sub`) is a `403`, as the history must record who deleted the registration.
+
+| Response | When                                                                                                                 |
+| -------- | -------------------------------------------------------------------------------------------------------------------- |
+| `200`    | Deleted: `{ "reference", "version", "deletedAt" }`, with the new version                                             |
+| `400`    | The reference isn't a valid reference, or the body is missing, has an unknown field or an invalid `version`/`reason` |
+| `404`    | There's no such registration, or it's already deleted. Nothing is changed and no history is written                  |
+| `409`    | The registration has changed since that version was loaded (`code: "VERSION_CONFLICT"`). Reload it and try again     |
+
+The deletion is also logged, tagged `audit`, with the reference, new version and the case officer's subject and roles, but not the reason, which is free text.
 
 ### POST /email-verifications
 
