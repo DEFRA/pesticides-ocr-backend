@@ -1,6 +1,7 @@
 import { SignJWT } from 'jose'
 import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 import { deletedRegistration } from '#/services/search/search.fixtures.js'
+import { UNVERSIONED } from '#/common/constants/history.js'
 
 // The API runs in mock auth mode under test (ENVIRONMENT defaults to local), so
 // tokens are decoded but not signature-verified. These helpers mint tokens that
@@ -237,7 +238,7 @@ describe('#searchRoute', () => {
   })
 
   describe('Response shape and order', () => {
-    test('returns the fields the register shows, as stored, and nothing else', async () => {
+    test('returns the fields the register shows, as stored, and its version', async () => {
       const { result } = await get('/search?applicantName=jane')
 
       const {
@@ -246,7 +247,8 @@ describe('#searchRoute', () => {
         additionalAddresses,
         ...shown
       } = greenAcres
-      expect(result.data).toEqual([shown])
+      // Stored with no version field, so it's at version 0.
+      expect(result.data).toEqual([{ ...shown, version: UNVERSIONED }])
     })
 
     test('does not expose the mongo _id', async () => {
