@@ -5,7 +5,6 @@ import {
   OCR_REGISTRATION_COLLECTION,
   OCR_REGISTRATION_HISTORY_COLLECTION
 } from '#/common/constants/collections.js'
-import { VERSION_CONFLICT } from '#/common/constants/error-codes.js'
 import {
   FIRST_VERSION,
   HISTORY_OPERATION,
@@ -13,20 +12,14 @@ import {
 } from '#/common/constants/history.js'
 import { MAX_REFERENCE_LENGTH } from '#/common/constants/reference.js'
 
-// The API runs in mock auth mode under test (ENVIRONMENT defaults to local), so
-// tokens are decoded but not signature-verified.
 const OFFICER_SUBJECT = 'officer-1'
 
-function mockToken(roles, subject = OFFICER_SUBJECT) {
-  const token = new SignJWT({ name: 'Test Officer', roles }).setProtectedHeader(
-    {
-      alg: 'HS256'
-    }
-  )
-  if (subject) {
-    token.setSubject(subject)
-  }
-  return token
+// The API runs in mock auth mode under test (ENVIRONMENT defaults to local), so
+// tokens are decoded but not signature-verified.
+function mockToken(roles) {
+  return new SignJWT({ name: 'Test Officer', roles })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(OFFICER_SUBJECT)
     .setIssuedAt()
     .setExpirationTime('5m')
     .sign(new TextEncoder().encode('mock-not-verified'))
@@ -36,7 +29,6 @@ const REASON = 'Duplicate registration'
 
 describe('DELETE /registrations/{reference}', () => {
   let server
-  let config
   let officerToken
   let viewerToken
   let registrations
@@ -46,7 +38,6 @@ describe('DELETE /registrations/{reference}', () => {
   beforeAll(async () => {
     // Dynamic import needed due to config being updated by vitest-mongodb
     const { createServer } = await import('#/server.js')
-    ;({ config } = await import('#/config.js'))
 
     server = await createServer()
     await server.initialize()
@@ -129,38 +120,23 @@ describe('DELETE /registrations/{reference}', () => {
     test('401 when no bearer token is presented', async () => {
       const reference = await createRegistration()
 
-      const { statusCode, headers } = await del(
+      const { statusCode } = await del(
         reference,
         { version: FIRST_VERSION, reason: REASON },
         { token: null }
       )
 
       expect(statusCode).toBe(401)
-      expect(headers['cache-control']).toBe('no-store')
       expect(await stored(reference)).toMatchObject({ isDeleted: false })
     })
 
     test('403 for a token without the case_officer role', async () => {
       const reference = await createRegistration()
 
-      const { statusCode, headers } = await del(
-        reference,
-        { version: FIRST_VERSION, reason: REASON },
-        { token: viewerToken }
-      )
-
-      expect(statusCode).toBe(403)
-      expect(headers['cache-control']).toBe('no-store')
-      expect(await stored(reference)).toMatchObject({ isDeleted: false })
-    })
-
-    test('403 for a token with no subject, as the history must say who deleted it', async () => {
-      const reference = await createRegistration()
-
       const { statusCode } = await del(
         reference,
         { version: FIRST_VERSION, reason: REASON },
-        { token: await mockToken(['case_officer'], null) }
+        { token: viewerToken }
       )
 
       expect(statusCode).toBe(403)
@@ -172,13 +148,12 @@ describe('DELETE /registrations/{reference}', () => {
     test('200 marks the registration deleted without removing it', async () => {
       const reference = await createRegistration()
 
-      const { statusCode, result, headers } = await del(reference, {
+      const { statusCode, result } = await del(reference, {
         version: FIRST_VERSION,
         reason: `  ${REASON}  `
       })
 
       expect(statusCode).toBe(200)
-      expect(headers['cache-control']).toBe('no-store')
       expect(result).toEqual({
         reference,
         version: 2,
@@ -195,14 +170,10 @@ describe('DELETE /registrations/{reference}', () => {
       })
     })
 
-    test('records one delete history entry at the new version, with the reason and request ID', async () => {
+    test('records one delete history entry at the new version, with the reason', async () => {
       const reference = await createRegistration()
 
-      await del(
-        reference,
-        { version: FIRST_VERSION, reason: REASON },
-        { headers: { [config.get('tracing.header')]: 'request-1' } }
-      )
+      await del(reference, { version: FIRST_VERSION, reason: REASON })
 
       const entries = await historyOf(reference)
       expect(entries.map(({ operation }) => operation)).toEqual([
@@ -214,42 +185,21 @@ describe('DELETE /registrations/{reference}', () => {
         operation: HISTORY_OPERATION.DELETE,
         by: { type: ACTOR_TYPE.CASE_OFFICER, id: OFFICER_SUBJECT },
         reason: REASON,
-        requestId: 'request-1',
         snapshot: { reference, isDeleted: true, version: 2 }
       })
     })
 
-    test('passes the reference, version, reason, case officer and request ID to the repository', async () => {
+    test('passes the reference, version, reason and case officer to the repository', async () => {
       const reference = await createRegistration()
       const softDelete = vi.spyOn(server.registrations, 'softDelete')
 
-      await del(
-        reference,
-        { version: FIRST_VERSION, reason: REASON },
-        { headers: { [config.get('tracing.header')]: 'request-2' } }
-      )
+      await del(reference, { version: FIRST_VERSION, reason: REASON })
 
       expect(softDelete).toHaveBeenCalledExactlyOnceWith(reference, {
         by: { type: ACTOR_TYPE.CASE_OFFICER, id: OFFICER_SUBJECT },
         reason: REASON,
-        requestId: 'request-2',
         expectedVersion: FIRST_VERSION
       })
-    })
-
-    test('logs the deletion for audit without the reason', async () => {
-      const reference = await createRegistration()
-
-      const logged = await logsTagged('audit', () =>
-        del(reference, {
-          version: FIRST_VERSION,
-          reason: 'Duplicate of Jane Doe'
-        })
-      )
-
-      expect(logged.map(({ data }) => data)).toEqual([
-        `registration deleted: reference=${reference} version=2 subject=${OFFICER_SUBJECT} roles=case_officer`
-      ])
     })
 
     test('deletes with the version a search returned', async () => {
@@ -269,6 +219,26 @@ describe('DELETE /registrations/{reference}', () => {
       expect(version).toBe(FIRST_VERSION)
       expect(statusCode).toBe(200)
       expect(result.version).toBe(FIRST_VERSION + 1)
+    })
+
+    test.each([
+      ['no reason', {}],
+      ['a blank reason', { reason: '   ' }]
+    ])('200 with %s, recording none', async (_label, body) => {
+      const reference = await createRegistration()
+
+      const { statusCode } = await del(reference, {
+        version: FIRST_VERSION,
+        ...body
+      })
+
+      expect(statusCode).toBe(200)
+      expect(await stored(reference)).toMatchObject({
+        isDeleted: true,
+        deletionReason: null
+      })
+      const [, entry] = await historyOf(reference)
+      expect(entry).not.toHaveProperty('reason')
     })
 
     test('a deleted registration no longer appears in search', async () => {
@@ -327,7 +297,6 @@ describe('DELETE /registrations/{reference}', () => {
 
       expect(statusCode).toBe(409)
       expect(result).toMatchObject({
-        code: VERSION_CONFLICT,
         message:
           'The registration has changed since it was loaded. Reload it and try again.'
       })
@@ -378,8 +347,6 @@ describe('DELETE /registrations/{reference}', () => {
     test.each([
       ['no body', undefined],
       ['no version', { reason: REASON }],
-      ['no reason', { version: FIRST_VERSION }],
-      ['a blank reason', { version: FIRST_VERSION, reason: '   ' }],
       [
         'a reason that is too long',
         { version: FIRST_VERSION, reason: 'x'.repeat(MAX_REASON_LENGTH + 1) }

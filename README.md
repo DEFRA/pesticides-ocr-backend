@@ -237,22 +237,20 @@ Same auth as `/search`, returned as a CSV download (`ocr-registrations.csv`). Ta
 
 ### DELETE /registrations/{reference}
 
-Same auth as `/search`. Soft deletes the registration: it stays in the database, marked as deleted, and stops appearing in search and export (the registration metrics still count it as completed). Its history gets a `delete` entry recording the case officer (their Entra subject), the reason and the request ID (see [Registration history](#registration-history)).
+Same auth as `/search`. Soft deletes the registration: it stays in the database, marked as deleted, and stops appearing in search and export (the registration metrics still count it as completed). Its history gets a `delete` entry recording the case officer (their Entra subject) and the reason, if one is given (see [Registration history](#registration-history)).
 
 ```json
 { "version": 3, "reason": "Duplicate registration" }
 ```
 
-Both are required: `version` is the version the case officer loaded (from `/search`), and `reason` is up to 500 characters, trimmed. The body must be JSON, up to 2 KB. A token with no subject (`sub`) is a `403`, as the history must record who deleted the registration.
+`version` is required: the version the case officer loaded (from `/search`). `reason` is optional, up to 500 characters, trimmed.
 
 | Response | When                                                                                                                 |
 | -------- | -------------------------------------------------------------------------------------------------------------------- |
 | `200`    | Deleted: `{ "reference", "version", "deletedAt" }`, with the new version                                             |
 | `400`    | The reference isn't a valid reference, or the body is missing, has an unknown field or an invalid `version`/`reason` |
 | `404`    | There's no such registration, or it's already deleted. Nothing is changed and no history is written                  |
-| `409`    | The registration has changed since that version was loaded (`code: "VERSION_CONFLICT"`). Reload it and try again     |
-
-The deletion is also logged, tagged `audit`, with the reference, new version and the case officer's subject and roles, but not the reason, which is free text.
+| `409`    | The registration has changed since that version was loaded. Reload it and try again                                  |
 
 ### POST /email-verifications
 
