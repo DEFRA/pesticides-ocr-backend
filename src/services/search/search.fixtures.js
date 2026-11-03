@@ -20,7 +20,7 @@ export const storedDoc = {
     contactEmail: 'john.smith@pesticides.co.uk'
   },
   addressActivities: ['use', 'store'],
-  quantity: { quantityType: 'amount', quantity: 80000 }
+  usingPPPs: { quantity: '400-plus' }
 }
 
 // A soft-deleted registration, for checking reads hide it and completion

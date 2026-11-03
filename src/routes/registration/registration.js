@@ -17,12 +17,17 @@ import {
 } from '#/common/constants/error-codes.js'
 import {
   ADDRESS_ACTIVITIES,
-  ADDRESS_ACTIVITY,
   ADDRESS_REGIONS,
+  AGRI_SUBSECTORS,
+  AMENITY_SUBSECTORS,
   BUSINESS_ACTIVITIES,
   BUSINESS_ACTIVITY,
+  HORTI_SUBSECTORS,
   PROFESSIONAL_SECTORS,
-  QUANTITY_TYPES
+  QUANTITY_BANDS,
+  STORAGE_LOCATIONS,
+  STORING_VALUES,
+  WHO_APPLIES_VALUES
 } from '#/common/constants/registration-answers.js'
 
 const MAX_SHORT_TEXT = 100
@@ -155,8 +160,96 @@ const additionalAddressSchema = Joi.object({
     })
 })
 
-const SELECT_SECTOR_MESSAGE =
-  'Select a professional sector or describe your main type of work'
+// Either the ticked codes, or the applicant's own description under Other.
+const codesOrOther = (codes, message) =>
+  Joi.alternatives()
+    .try(
+      Joi.array()
+        .items(Joi.string().valid(...codes))
+        .max(codes.length)
+        .unique(),
+      Joi.array()
+        .items(Joi.string().trim().min(1).max(MAX_SHORT_TEXT))
+        .length(1)
+    )
+    .optional()
+    .messages({
+      'alternatives.match': message,
+      'alternatives.types': message
+    })
+
+const oneOf = (values, message) =>
+  Joi.string()
+    .valid(...values)
+    .optional()
+    .messages({ 'any.only': message, 'string.empty': message })
+
+// The "Using PPPs" section. Which answers are sent depends on the applicant's
+// route through it, so every one is optional; any that are sent are validated.
+const usingPPPsSchema = Joi.object({
+  whoApplies: oneOf(
+    WHO_APPLIES_VALUES,
+    'Select who applies PPPs for your organisation'
+  ),
+  contractor: Joi.object({
+    contractorName: Joi.string()
+      .trim()
+      .min(1)
+      .max(MAX_SHORT_TEXT)
+      .required()
+      .messages({
+        'string.empty': 'Enter the business or company name',
+        'string.max': 'Business or company name must be 100 characters or less',
+        'any.required': 'Enter the business or company name'
+      }),
+    address: addressSchema.required().messages({
+      'any.required': 'Contractor address is required'
+    })
+  }).optional(),
+  professionalSectors: codesOrOther(
+    PROFESSIONAL_SECTORS,
+    'Select a sector or describe your main type of work'
+  ),
+  agriSubsectors: codesOrOther(
+    AGRI_SUBSECTORS,
+    'Select an agricultural sector or describe your main type of work'
+  ),
+  amenitySubsectors: codesOrOther(
+    AMENITY_SUBSECTORS,
+    'Select an amenity sector or describe your main type of work'
+  ),
+  hortiSubsectors: codesOrOther(
+    HORTI_SUBSECTORS,
+    'Select a horticultural sector or describe your main type of work'
+  ),
+  // The ticked schemes, the Other description, or none when skipped.
+  memberSchemes: Joi.array()
+    .items(Joi.string().trim().min(1).max(MAX_SHORT_TEXT))
+    .max(MAX_MEMBER_SCHEMES)
+    .unique()
+    .optional(),
+  storing: oneOf(STORING_VALUES, 'Select if you store the products you apply'),
+  storageLocation: oneOf(
+    STORAGE_LOCATIONS,
+    'Select where you store the products you apply'
+  ),
+  ownStorageAddress: addressSchema.optional(),
+  storageContact: contactSchema
+    .keys({
+      businessName: Joi.string()
+        .trim()
+        .min(1)
+        .max(MAX_SHORT_TEXT)
+        .required()
+        .messages({
+          'string.empty': 'Enter a business name',
+          'string.max': 'Business name must be 100 characters or less',
+          'any.required': 'Enter a business name'
+        })
+    })
+    .optional(),
+  quantity: oneOf(QUANTITY_BANDS, 'Select how much you use in a typical year')
+})
 
 const SELECT_ACTIVITIES_OR_ONLY_STORING =
   "Select either your activities or 'Only storing PPPs for other businesses'"
@@ -196,57 +289,22 @@ const schema = Joi.object({
   primaryContact: contactSchema.required().messages({
     'any.required': 'Primary contact details are required'
   }),
+  // A business that uses PPPs answers the Using PPPs section instead.
   addressActivities: Joi.array()
     .items(Joi.string().valid(...ADDRESS_ACTIVITIES))
     .min(1)
     .max(ADDRESS_ACTIVITIES.length)
     .unique()
-    .required()
+    .when('businessActivities', {
+      is: Joi.array().has(BUSINESS_ACTIVITY.USING),
+      then: Joi.optional(),
+      otherwise: Joi.required()
+    })
     .messages({
       'array.min': 'Select at least one address activity',
       'any.required': 'Select at least one address activity'
     }),
-  quantity: Joi.object({
-    quantityType: Joi.string()
-      .valid(...QUANTITY_TYPES)
-      .required()
-      .messages({
-        'any.only': 'Select a quantity type',
-        'any.required': 'Select a quantity type'
-      }),
-    quantity: Joi.number().positive().required().messages({
-      'number.base': 'Enter a valid quantity',
-      'number.positive': 'Quantity must be a positive number',
-      'any.required': 'Enter a quantity'
-    })
-  })
-    .when('addressActivities', {
-      is: Joi.array().has(ADDRESS_ACTIVITY.USE),
-      then: Joi.required(),
-      otherwise: Joi.optional()
-    })
-    .messages({ 'any.required': 'Quantity is required' }),
-  // Either the ticked sectors, or the applicant's own description under Other.
-  professionalSectors: Joi.alternatives()
-    .try(
-      Joi.array()
-        .items(Joi.string().valid(...PROFESSIONAL_SECTORS))
-        .max(PROFESSIONAL_SECTORS.length)
-        .unique(),
-      Joi.array()
-        .items(Joi.string().trim().min(1).max(MAX_SHORT_TEXT))
-        .length(1)
-    )
-    .optional()
-    .messages({
-      'alternatives.match': SELECT_SECTOR_MESSAGE,
-      'alternatives.types': SELECT_SECTOR_MESSAGE
-    }),
-  memberSchemes: Joi.array()
-    .items(Joi.string().trim().min(1).max(MAX_SHORT_TEXT))
-    .max(MAX_MEMBER_SCHEMES)
-    .unique()
-    .optional(),
+  usingPPPs: usingPPPsSchema.optional(),
   additionalAddresses: Joi.array()
     .items(additionalAddressSchema)
     .max(MAX_ADDITIONAL_ADDRESSES)

@@ -33,9 +33,32 @@ export const validRegistrationPayload = {
     contactEmail: CONTACT_EMAIL
   },
   addressActivities: ['use', 'store'],
-  quantity: { quantityType: 'area', quantity: '67' },
-  professionalSectors: ['agriculture-horticulture', 'amenity'],
-  memberSchemes: ['Scheme A'],
+  usingPPPs: {
+    whoApplies: 'contractor',
+    contractor: {
+      contractorName: 'Spray Co',
+      address: {
+        addressLine1: '2 Contractor Way',
+        addressTown: 'Sprayton',
+        addressPostcode: 'YO1 7HH',
+        addressRegion: 'england'
+      }
+    },
+    professionalSectors: ['agriculture', 'amenity', 'horticulture'],
+    agriSubsectors: ['arable', 'outdoor-vegetables'],
+    amenitySubsectors: ['parks'],
+    hortiSubsectors: ['ornamentals'],
+    memberSchemes: ['red-tractor', 'leaf'],
+    storing: 'third-party',
+    storageContact: {
+      businessName: 'Store It Ltd',
+      contactName: 'Sam Store',
+      contactJobTitle: 'Warehouse manager',
+      contactTelephone: '01234567891',
+      contactEmail: 'sam@storeit.example'
+    },
+    quantity: '60-149'
+  },
   additionalAddresses: [
     {
       address: {

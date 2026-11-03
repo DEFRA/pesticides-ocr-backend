@@ -25,7 +25,7 @@ const payload = {
     contactEmail: 'spray@everything.biz'
   },
   addressActivities: ['use'],
-  quantity: { quantityType: 'area', quantity: '67' }
+  usingPPPs: { whoApplies: 'self', quantity: '60-149' }
 }
 
 describe('POST /register through the audited repository', () => {

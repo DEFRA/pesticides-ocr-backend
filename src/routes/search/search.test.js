@@ -37,9 +37,14 @@ const greenAcres = {
     contactEmail: 'jane.doe@greenacres.example'
   },
   addressActivities: ['store'],
-  quantity: { quantityType: 'amount', quantity: 500 },
-  professionalSectors: ['agriculture-horticulture'],
-  memberSchemes: ['BASIS'],
+  usingPPPs: {
+    whoApplies: 'self',
+    professionalSectors: ['agriculture'],
+    agriSubsectors: ['arable'],
+    memberSchemes: ['red-tractor'],
+    storing: 'no',
+    quantity: '60-149'
+  },
   additionalAddresses: []
 }
 
@@ -240,12 +245,7 @@ describe('#searchRoute', () => {
     test('returns the fields the register shows, as stored, and its version', async () => {
       const { result } = await get('/search?applicantName=jane')
 
-      const {
-        professionalSectors,
-        memberSchemes,
-        additionalAddresses,
-        ...shown
-      } = greenAcres
+      const { additionalAddresses, ...shown } = greenAcres
       // Stored with no version field, so it's at version 0.
       expect(result.data).toEqual([{ ...shown, version: UNVERSIONED }])
     })
