@@ -18,6 +18,7 @@ import {
 import {
   ADDRESS_ACTIVITIES,
   ADDRESS_ACTIVITY,
+  ADDRESS_REGIONS,
   BUSINESS_ACTIVITIES,
   BUSINESS_ACTIVITY,
   PROFESSIONAL_SECTORS,
@@ -75,8 +76,22 @@ const addressSchema = Joi.object({
       'string.empty': 'Enter your postcode',
       'string.pattern.base': 'Enter a valid UK postcode',
       'any.required': 'Enter your postcode'
+    }),
+  addressRegion: Joi.string()
+    .valid(...ADDRESS_REGIONS)
+    .optional()
+    .messages({
+      'any.only': 'Select a country',
+      'string.empty': 'Select a country',
+      'any.required': 'Select a country'
     })
 })
+
+// Only the main business address asks for the country; additional addresses
+// may send one but don't have to.
+const mainAddressSchema = addressSchema.fork('addressRegion', (region) =>
+  region.required()
+)
 
 const contactSchema = Joi.object({
   contactName: Joi.string()
@@ -88,6 +103,14 @@ const contactSchema = Joi.object({
       'string.empty': 'Enter a contact name',
       'string.max': 'Contact name must be 100 characters or less',
       'any.required': 'Enter a contact name'
+    }),
+  contactJobTitle: Joi.string()
+    .trim()
+    .max(MAX_SHORT_TEXT)
+    .allow('')
+    .optional()
+    .messages({
+      'string.max': 'Job title or role must be 100 characters or less'
     }),
   contactTelephone: Joi.string()
     .trim()
@@ -135,6 +158,15 @@ const additionalAddressSchema = Joi.object({
 const SELECT_SECTOR_MESSAGE =
   'Select a professional sector or describe your main type of work'
 
+const SELECT_ACTIVITIES_OR_ONLY_STORING =
+  "Select either your activities or 'Only storing PPPs for other businesses'"
+
+// "Only storing" is exclusive: it can't be sent alongside any other activity.
+const onlyStoringOnItsOwn = (activities, helpers) =>
+  activities.includes(BUSINESS_ACTIVITY.ONLY_STORING) && activities.length > 1
+    ? helpers.error('array.exclusive')
+    : activities
+
 const schema = Joi.object({
   businessActivities: Joi.array()
     .items(Joi.string().valid(...BUSINESS_ACTIVITIES))
@@ -142,21 +174,11 @@ const schema = Joi.object({
     .max(BUSINESS_ACTIVITIES.length)
     .unique()
     .required()
+    .custom(onlyStoringOnItsOwn)
     .messages({
       'array.min': 'Select at least one business activity',
-      'any.required': 'Select at least one business activity'
-    }),
-  mainCustomer: Joi.string()
-    .trim()
-    .min(1)
-    .when('businessActivities', {
-      is: Joi.array().has(BUSINESS_ACTIVITY.SELLER_AMATEUR),
-      then: Joi.optional(),
-      otherwise: Joi.required()
-    })
-    .messages({
-      'string.empty': 'Enter your main customer',
-      'any.required': 'Enter your main customer'
+      'any.required': 'Select at least one business activity',
+      'array.exclusive': SELECT_ACTIVITIES_OR_ONLY_STORING
     }),
   businessName: Joi.string()
     .trim()
@@ -168,7 +190,7 @@ const schema = Joi.object({
       'string.max': 'Business name must be 200 characters or less',
       'any.required': 'Enter a business name'
     }),
-  address: addressSchema.required().messages({
+  address: mainAddressSchema.required().messages({
     'any.required': 'Address is required'
   }),
   primaryContact: contactSchema.required().messages({

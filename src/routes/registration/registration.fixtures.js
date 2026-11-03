@@ -16,18 +16,19 @@ export const journeyToken = (nonce, secret = JOURNEY_SECRET) =>
   `${nonce}.${createHmac('sha256', secret).update(nonce).digest('hex')}`
 
 export const validRegistrationPayload = {
-  businessActivities: ['manufacture', 'market'],
-  mainCustomer: 'professional',
+  businessActivities: ['using', 'selling'],
   businessName: 'Company 1',
   address: {
     addressLine1: '67 My Road',
     addressLine2: 'My Village',
     addressTown: 'My Town',
     addressCounty: 'North Yorkshire',
-    addressPostcode: 'AB12 3CD'
+    addressPostcode: 'AB12 3CD',
+    addressRegion: 'england'
   },
   primaryContact: {
     contactName: 'Jonny Pesticide',
+    contactJobTitle: 'Farm manager',
     contactTelephone: '01234567890',
     contactEmail: CONTACT_EMAIL
   },

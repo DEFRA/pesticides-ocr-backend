@@ -22,8 +22,7 @@ describe('generateReference', () => {
 describe('saveRegistration', () => {
   const validData = {
     businessName: 'Test Co',
-    businessActivities: ['manufacture'],
-    mainCustomer: 'professional',
+    businessActivities: ['using'],
     address: {
       addressLine1: '1 Test St',
       addressTown: 'Testville',

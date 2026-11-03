@@ -80,9 +80,48 @@ describe('POST /register', () => {
         expect.anything(),
         expect.objectContaining({
           businessName: 'Company 1',
-          businessActivities: ['manufacture', 'market']
+          businessActivities: ['using', 'selling']
         }),
         { requestId: 'request-1' }
+      )
+    })
+
+    test.each([['england'], ['scotland'], ['wales']])(
+      'accepts %s as the main address region',
+      async (addressRegion) => {
+        mockSaveRegistration.mockResolvedValue({ reference: 'PP-REG-001' })
+
+        const response = await postRegister({
+          ...validPayload,
+          address: { ...validPayload.address, addressRegion }
+        })
+
+        expect(response.statusCode).toBe(201)
+      }
+    )
+
+    test('saves the contact job title trimmed, and accepts it empty', async () => {
+      mockSaveRegistration.mockResolvedValue({ reference: 'PP-JOB-001' })
+
+      const [trimmed, empty] = await Promise.all(
+        ['  Farm manager  ', ''].map((contactJobTitle) =>
+          postRegister({
+            ...validPayload,
+            primaryContact: { ...validPayload.primaryContact, contactJobTitle }
+          })
+        )
+      )
+
+      expect(trimmed.statusCode).toBe(201)
+      expect(empty.statusCode).toBe(201)
+      expect(mockSaveRegistration).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          primaryContact: expect.objectContaining({
+            contactJobTitle: 'Farm manager'
+          })
+        }),
+        expect.anything()
       )
     })
 
@@ -109,31 +148,57 @@ describe('POST /register', () => {
       return postRegister(payload)
     }
 
+    test('accepts only storing on its own', async () => {
+      const response = await post({
+        ...validPayload,
+        businessActivities: [BUSINESS_ACTIVITY.ONLY_STORING]
+      })
+
+      expect(response.statusCode).toBe(201)
+    })
+
     test.each([
-      [[BUSINESS_ACTIVITY.SELLER_AMATEUR]],
-      [[BUSINESS_ACTIVITY.MANUFACTURE, BUSINESS_ACTIVITY.SELLER_AMATEUR]]
+      [[BUSINESS_ACTIVITY.ONLY_STORING, BUSINESS_ACTIVITY.USING]],
+      [[BUSINESS_ACTIVITY.SELLING, BUSINESS_ACTIVITY.ONLY_STORING]]
     ])(
-      'accepts no mainCustomer when the activities are %j',
+      'returns 400 when only storing is sent with another activity: %j',
       async (businessActivities) => {
-        const { mainCustomer, ...rest } = validPayload
+        const response = await post({ ...validPayload, businessActivities })
 
-        const response = await post({ ...rest, businessActivities })
-
-        expect(response.statusCode).toBe(201)
+        expect(response.statusCode).toBe(400)
+        expect(JSON.parse(response.payload).message).toBe(
+          "Select either your activities or 'Only storing PPPs for other businesses'"
+        )
       }
     )
 
-    test('still validates a mainCustomer sent by an amateur seller', async () => {
+    test('accepts an additional address without a region', async () => {
+      const [additional] = validPayload.additionalAddresses
+      const { addressRegion, ...address } = additional.address
+
       const response = await post({
         ...validPayload,
-        businessActivities: [BUSINESS_ACTIVITY.SELLER_AMATEUR],
-        mainCustomer: '   '
+        additionalAddresses: [{ ...additional, address }]
+      })
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    test('still validates a region sent on an additional address', async () => {
+      const [additional] = validPayload.additionalAddresses
+
+      const response = await post({
+        ...validPayload,
+        additionalAddresses: [
+          {
+            ...additional,
+            address: { ...additional.address, addressRegion: 'ireland' }
+          }
+        ]
       })
 
       expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toBe(
-        'Enter your main customer'
-      )
+      expect(JSON.parse(response.payload).message).toBe('Select a country')
     })
 
     test('accepts no quantity when the address activities have no use', async () => {
@@ -229,13 +294,53 @@ describe('POST /register', () => {
       expect(JSON.parse(response.payload).message).toMatch(/business name/i)
     })
 
-    test('returns 400 when mainCustomer is missing', async () => {
-      const { mainCustomer, ...rest } = validPayload
-
-      const response = await postRegister(rest)
+    test('returns 400 when mainCustomer is sent', async () => {
+      const response = await postRegister({
+        ...validPayload,
+        mainCustomer: 'professional'
+      })
 
       expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toMatch(/main customer/i)
+      expect(JSON.parse(response.payload).message).toBe(
+        '"mainCustomer" is not allowed'
+      )
+    })
+
+    test('returns 400 when the main address has no region', async () => {
+      const { addressRegion, ...address } = validPayload.address
+
+      const response = await postRegister({ ...validPayload, address })
+
+      expect(response.statusCode).toBe(400)
+      expect(JSON.parse(response.payload).message).toBe('Select a country')
+    })
+
+    test.each([['ireland'], ['England'], ['']])(
+      'returns 400 when the main address region is %j',
+      async (addressRegion) => {
+        const response = await postRegister({
+          ...validPayload,
+          address: { ...validPayload.address, addressRegion }
+        })
+
+        expect(response.statusCode).toBe(400)
+        expect(JSON.parse(response.payload).message).toBe('Select a country')
+      }
+    )
+
+    test('returns 400 when contactJobTitle is over 100 characters', async () => {
+      const response = await postRegister({
+        ...validPayload,
+        primaryContact: {
+          ...validPayload.primaryContact,
+          contactJobTitle: 'x'.repeat(101)
+        }
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(JSON.parse(response.payload).message).toBe(
+        'Job title or role must be 100 characters or less'
+      )
     })
 
     test('returns 400 for invalid UK postcode', async () => {

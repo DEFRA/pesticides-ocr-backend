@@ -25,8 +25,7 @@ const greenAcres = {
   reference: 'PPP-D4E-5F6',
   submittedAt: new Date('2026-05-02T10:00:00.000Z'),
   businessName: 'Green Acres Growers',
-  businessActivities: ['manufacture'],
-  mainCustomer: 'professional',
+  businessActivities: ['using'],
   address: {
     addressLine1: 'Highfield Farm',
     addressTown: 'Norwich',
