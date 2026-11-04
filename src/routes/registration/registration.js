@@ -36,6 +36,8 @@ const MAX_TELEPHONE = 20
 const MAX_MEMBER_SCHEMES = 50
 const MAX_ADDITIONAL_ADDRESSES = 20
 
+const ENTER_BUSINESS_NAME_MESSAGE = 'Enter a business name'
+
 const addressSchema = Joi.object({
   addressLine1: Joi.string()
     .trim()
@@ -242,9 +244,9 @@ const usingPPPsSchema = Joi.object({
         .max(MAX_SHORT_TEXT)
         .required()
         .messages({
-          'string.empty': 'Enter a business name',
+          'string.empty': ENTER_BUSINESS_NAME_MESSAGE,
           'string.max': 'Business name must be 100 characters or less',
-          'any.required': 'Enter a business name'
+          'any.required': ENTER_BUSINESS_NAME_MESSAGE
         })
     })
     .optional(),
@@ -279,9 +281,9 @@ const schema = Joi.object({
     .max(MAX_BUSINESS_NAME)
     .required()
     .messages({
-      'string.empty': 'Enter a business name',
+      'string.empty': ENTER_BUSINESS_NAME_MESSAGE,
       'string.max': 'Business name must be 200 characters or less',
-      'any.required': 'Enter a business name'
+      'any.required': ENTER_BUSINESS_NAME_MESSAGE
     }),
   address: mainAddressSchema.required().messages({
     'any.required': 'Address is required'
