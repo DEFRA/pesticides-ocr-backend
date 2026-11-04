@@ -22,8 +22,7 @@ describe('generateReference', () => {
 describe('saveRegistration', () => {
   const validData = {
     businessName: 'Test Co',
-    businessActivities: ['manufacture'],
-    mainCustomer: 'professional',
+    businessActivities: ['using'],
     address: {
       addressLine1: '1 Test St',
       addressTown: 'Testville',
@@ -35,7 +34,7 @@ describe('saveRegistration', () => {
       contactEmail: 'test@test.com'
     },
     addressActivities: ['use'],
-    quantity: { quantityType: 'area', quantity: '10' }
+    usingPPPs: { quantity: '1-29' }
   }
 
   test('returns an PPP reference by default', async () => {

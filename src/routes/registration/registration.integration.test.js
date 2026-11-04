@@ -11,13 +11,13 @@ import {
 import { config } from '#/config.js'
 
 const payload = {
-  businessActivities: ['manufacture'],
-  mainCustomer: 'professional',
+  businessActivities: ['using'],
   businessName: 'Company 1',
   address: {
     addressLine1: '67 My Road',
     addressTown: 'My Town',
-    addressPostcode: 'AB12 3CD'
+    addressPostcode: 'AB12 3CD',
+    addressRegion: 'england'
   },
   primaryContact: {
     contactName: 'Jonny Pesticide',
@@ -25,7 +25,7 @@ const payload = {
     contactEmail: 'spray@everything.biz'
   },
   addressActivities: ['use'],
-  quantity: { quantityType: 'area', quantity: '67' }
+  usingPPPs: { whoApplies: 'self', quantity: '60-149' }
 }
 
 describe('POST /register through the audited repository', () => {

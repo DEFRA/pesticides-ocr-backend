@@ -16,25 +16,49 @@ export const journeyToken = (nonce, secret = JOURNEY_SECRET) =>
   `${nonce}.${createHmac('sha256', secret).update(nonce).digest('hex')}`
 
 export const validRegistrationPayload = {
-  businessActivities: ['manufacture', 'market'],
-  mainCustomer: 'professional',
+  businessActivities: ['using', 'selling'],
   businessName: 'Company 1',
   address: {
     addressLine1: '67 My Road',
     addressLine2: 'My Village',
     addressTown: 'My Town',
     addressCounty: 'North Yorkshire',
-    addressPostcode: 'AB12 3CD'
+    addressPostcode: 'AB12 3CD',
+    addressRegion: 'england'
   },
   primaryContact: {
     contactName: 'Jonny Pesticide',
+    contactJobTitle: 'Farm manager',
     contactTelephone: '01234567890',
     contactEmail: CONTACT_EMAIL
   },
   addressActivities: ['use', 'store'],
-  quantity: { quantityType: 'area', quantity: '67' },
-  professionalSectors: ['agriculture-horticulture', 'amenity'],
-  memberSchemes: ['Scheme A'],
+  usingPPPs: {
+    whoApplies: 'contractor',
+    contractor: {
+      contractorName: 'Spray Co',
+      address: {
+        addressLine1: '2 Contractor Way',
+        addressTown: 'Sprayton',
+        addressPostcode: 'YO1 7HH',
+        addressRegion: 'england'
+      }
+    },
+    professionalSectors: ['agriculture', 'amenity', 'horticulture'],
+    agriSubsectors: ['arable', 'outdoor-vegetables'],
+    amenitySubsectors: ['parks'],
+    hortiSubsectors: ['ornamentals'],
+    memberSchemes: ['red-tractor', 'leaf'],
+    storing: 'third-party',
+    storageContact: {
+      businessName: 'Store It Ltd',
+      contactName: 'Sam Store',
+      contactJobTitle: 'Warehouse manager',
+      contactTelephone: '01234567891',
+      contactEmail: 'sam@storeit.example'
+    },
+    quantity: '60-149'
+  },
   additionalAddresses: [
     {
       address: {

@@ -132,37 +132,61 @@ Public, called by the frontend to submit an application. It needs the frontend's
 
 ```json
 {
-  "businessActivities": ["manufacture", "market"],
-  "mainCustomer": "professional",
+  "businessActivities": ["using", "selling"],
   "businessName": "Company Name",
   "address": {
     "addressLine1": "1 Example Street",
     "addressLine2": "Village",
     "addressTown": "Town",
     "addressCounty": "County",
-    "addressPostcode": "AB12 3CD"
+    "addressPostcode": "AB12 3CD",
+    "addressRegion": "england"
   },
   "primaryContact": {
     "contactName": "Full Name",
+    "contactJobTitle": "Farm manager",
     "contactTelephone": "01234567890",
     "contactEmail": "contact@example.com"
   },
   "addressActivities": ["use", "store"],
-  "quantity": {
-    "quantityType": "area",
-    "quantity": "50"
+  "usingPPPs": {
+    "whoApplies": "contractor",
+    "contractor": {
+      "contractorName": "Spray Co",
+      "address": {
+        "addressLine1": "2 Contractor Way",
+        "addressTown": "Town",
+        "addressPostcode": "AB12 3CE",
+        "addressRegion": "england"
+      }
+    },
+    "professionalSectors": ["agriculture", "horticulture"],
+    "agriSubsectors": ["arable"],
+    "hortiSubsectors": ["ornamentals"],
+    "memberSchemes": ["red-tractor"],
+    "storing": "own",
+    "storageLocation": "main-and-other",
+    "ownStorageAddress": {
+      "addressLine1": "3 Barn Lane",
+      "addressTown": "Town",
+      "addressPostcode": "AB12 3CF",
+      "addressRegion": "england"
+    },
+    "quantity": "60-149"
   },
-  "professionalSectors": ["agriculture-horticulture"],
-  "memberSchemes": ["BASIS"],
   "additionalAddresses": []
 }
 ```
 
 Some answers are only required when the journey asks for them:
 
-- `mainCustomer` is optional when `businessActivities` includes `seller-amateur`.
-- `quantity` is required only when `addressActivities` includes `use`.
-- `professionalSectors` is either a list of sector codes, or a list holding just the applicant's own description under Other (1 to 100 characters).
+- `businessActivities` can include `only-storing` only on its own, never with another activity.
+- `address.addressRegion` (`england`, `scotland` or `wales`) is required on the main business address and optional on additional addresses.
+- `contactJobTitle` is optional on any contact, trimmed, and may be empty (up to 100 characters).
+- `addressActivities` is required unless `businessActivities` includes `using`.
+- `usingPPPs` and every field in it are optional, as which ones are sent depends on the applicant's route through the Using PPPs section. A `contractor` sent must have a `contractorName` and an `address`, and a `storageContact` is a contact with a `businessName`.
+- `usingPPPs.professionalSectors`, `agriSubsectors`, `amenitySubsectors` and `hortiSubsectors` are each either a list of codes, or a list holding just the applicant's own description under Other (1 to 100 characters).
+- `usingPPPs.quantity` is a quantity band code: `1-29`, `30-59`, `60-149`, `150-399` or `400-plus` (litres or kilograms a year).
 
 Answers that are sent are always validated. The allowed values are in `src/common/constants/registration-answers.js`.
 
