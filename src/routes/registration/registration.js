@@ -31,6 +31,8 @@ const MAX_TELEPHONE = 20
 const MAX_MEMBER_SCHEMES = 50
 const MAX_ADDITIONAL_ADDRESSES = 20
 
+const SELECT_COUNTRY_MESSAGE = 'Select a country'
+
 const addressSchema = Joi.object({
   addressLine1: Joi.string()
     .trim()
@@ -81,9 +83,9 @@ const addressSchema = Joi.object({
     .valid(...ADDRESS_REGIONS)
     .optional()
     .messages({
-      'any.only': 'Select a country',
-      'string.empty': 'Select a country',
-      'any.required': 'Select a country'
+      'any.only': SELECT_COUNTRY_MESSAGE,
+      'string.empty': SELECT_COUNTRY_MESSAGE,
+      'any.required': SELECT_COUNTRY_MESSAGE
     })
 })
 
