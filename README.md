@@ -455,7 +455,7 @@ Delivery is disabled unless **both** `GA_MEASUREMENT_ID` and `GA_API_SECRET` are
 
 - Use the Measurement Protocol API secret for the configured web stream. Store `GA_API_SECRET` in CDP Secrets, never in source control or logs.
 - Configure test, ext-test and prod only after approval. Leave the settings unset on local and perf-test.
-- Confirm CDP outbound proxy access to `https://www.google-analytics.com/mp/collect`. The application uses the existing global fetch/proxy setup.
+- Confirm CDP outbound proxy access to `https://www.google-analytics.com/mp/collect`. Delivery uses `fetch` from `undici`, sharing the dispatcher configured by the existing proxy setup. Dispatcher regression tests do not replace live CDP connectivity validation.
 - The JSON payload contains only the event name, the stored milestone's timestamp in microseconds, and `client_id: server-metrics-<environment>`. The client ID is fixed per environment, not derived from an applicant, browser or session. No applicant data, journey nonce, user ID, session ID, applicant IP override or applicant user agent is forwarded.
 - Delivery is fire-and-forget with a two-second timeout and no retries. Failures produce a sanitised warning and cannot fail the saved milestone or hold up its response. A GA `2xx` acknowledges receipt, not successful processing: validate the payload and reconcile processed reports before enabling.
 - Report the separate server **event counts** only. User/session counts and funnels are not meaningful for the fixed client ID; do not add server counts to the corresponding browser event counts.

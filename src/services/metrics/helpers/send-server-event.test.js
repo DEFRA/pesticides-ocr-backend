@@ -1,10 +1,20 @@
+import {
+  fetch,
+  MockAgent,
+  getGlobalDispatcher,
+  setGlobalDispatcher
+} from 'undici'
 import { config } from '#/config.js'
 import { createLogger } from '#/common/helpers/logging/logger.js'
 import { sendServerEvent } from './send-server-event.js'
 
+vi.mock('undici', async (importOriginal) => ({
+  ...(await importOriginal()),
+  fetch: vi.fn()
+}))
+
 describe('sendServerEvent', () => {
   const recordedAt = new Date('2026-06-01T00:30:00Z')
-  let fetch
   let warn
   let originalSettings
 
@@ -12,15 +22,13 @@ describe('sendServerEvent', () => {
     originalSettings = config.get('googleAnalytics')
     config.set('googleAnalytics.measurementId', 'G-SERVERTEST')
     config.set('googleAnalytics.apiSecret', 'private-test-secret')
-    fetch = vi.fn().mockResolvedValue({ ok: true, status: 204 })
-    vi.stubGlobal('fetch', fetch)
+    fetch.mockReset().mockResolvedValue({ ok: true, status: 204 })
     warn = vi.spyOn(createLogger(), 'warn').mockImplementation(() => {})
   })
 
   afterEach(() => {
     config.set('googleAnalytics', originalSettings)
     vi.restoreAllMocks()
-    vi.unstubAllGlobals()
   })
 
   test('sends only the event, recorded timestamp and fixed environment client ID', async () => {
@@ -57,6 +65,41 @@ describe('sendServerEvent', () => {
       ([, options]) => JSON.parse(options.body).client_id
     )
     expect(new Set(ids).size).toBe(1)
+  })
+
+  test('uses the configured Undici dispatcher with the real HTTP client', async () => {
+    const undici = await vi.importActual('undici')
+    const builtInFetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('Built-in fetch must not be used'))
+    const previousDispatcher = getGlobalDispatcher()
+    const dispatcher = new MockAgent()
+    dispatcher.disableNetConnect()
+    dispatcher
+      .get('https://www.google-analytics.com')
+      .intercept({
+        path: '/mp/collect?measurement_id=G-SERVERTEST&api_secret=private-test-secret',
+        method: 'POST',
+        body: JSON.stringify({
+          client_id: `server-metrics-${config.get('cdpEnvironment')}`,
+          timestamp_micros: 1780273800000000,
+          events: [{ name: 'server_journey_start' }]
+        })
+      })
+      .reply(204)
+
+    fetch.mockImplementation(undici.fetch)
+    setGlobalDispatcher(dispatcher)
+    try {
+      await sendServerEvent('server_journey_start', recordedAt)
+
+      dispatcher.assertNoPendingInterceptors()
+      expect(builtInFetch).not.toHaveBeenCalled()
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      setGlobalDispatcher(previousDispatcher)
+      await dispatcher.close()
+    }
   })
 
   test.each([

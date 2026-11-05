@@ -1,3 +1,4 @@
+import { fetch } from 'undici'
 import { config } from '#/config.js'
 import { createLogger } from '#/common/helpers/logging/logger.js'
 
