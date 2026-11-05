@@ -5,6 +5,11 @@ import {
   saveRegistration,
   generateReference
 } from '#/services/registration/registration.js'
+import { sendServerEvent } from '#/services/metrics/helpers/send-server-event.js'
+
+vi.mock('#/services/metrics/helpers/send-server-event.js', () => ({
+  sendServerEvent: vi.fn()
+}))
 
 const makeRegistrations = (create) => ({ create })
 const savedRegistration = (create) => create.mock.calls[0][0]
@@ -20,6 +25,10 @@ describe('generateReference', () => {
 })
 
 describe('saveRegistration', () => {
+  beforeEach(() => {
+    sendServerEvent.mockReset()
+  })
+
   const validData = {
     businessName: 'Test Co',
     businessActivities: ['manufacture'],
@@ -84,6 +93,34 @@ describe('saveRegistration', () => {
     })
   })
 
+  test('sends the saved timestamp only after the repository commits', async () => {
+    let commit
+    const create = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        commit = resolve
+      })
+    )
+    const saving = saveRegistration(makeRegistrations(create), validData)
+
+    expect(sendServerEvent).not.toHaveBeenCalled()
+    commit({})
+    await saving
+
+    expect(sendServerEvent).toHaveBeenCalledExactlyOnceWith(
+      'server_registration_complete',
+      savedRegistration(create).submittedAt
+    )
+  })
+
+  test('returns the saved reference without waiting for GA delivery', async () => {
+    sendServerEvent.mockReturnValue(new Promise(() => {}))
+    const create = vi.fn().mockResolvedValue({})
+
+    await expect(
+      saveRegistration(makeRegistrations(create), validData)
+    ).resolves.toEqual({ reference: expect.any(String) })
+  })
+
   test('retries with a new reference on duplicate reference collision', async () => {
     const dupError = Object.assign(new Error('duplicate key'), {
       code: MONGO_DUPLICATE_KEY_ERROR,
@@ -98,6 +135,11 @@ describe('saveRegistration', () => {
 
     expect(create).toHaveBeenCalledTimes(2)
     expect(result.reference).toMatch(/^PPP-[A-Z0-9]{3}-[A-Z0-9]{3}$/)
+    expect(sendServerEvent).toHaveBeenCalledTimes(1)
+    expect(sendServerEvent).toHaveBeenCalledWith(
+      'server_registration_complete',
+      create.mock.calls[1][0].submittedAt
+    )
   })
 
   test('rethrows non-duplicate errors from create', async () => {
@@ -107,6 +149,7 @@ describe('saveRegistration', () => {
     await expect(
       saveRegistration(makeRegistrations(create), validData)
     ).rejects.toThrow('connection reset')
+    expect(sendServerEvent).not.toHaveBeenCalled()
   })
 
   test('rethrows a duplicate key error that has no keyPattern', async () => {
@@ -119,6 +162,7 @@ describe('saveRegistration', () => {
       saveRegistration(makeRegistrations(create), validData)
     ).rejects.toThrow('duplicate key')
     expect(create).toHaveBeenCalledTimes(1)
+    expect(sendServerEvent).not.toHaveBeenCalled()
   })
 
   test('rethrows a duplicate history version instead of retrying', async () => {
@@ -132,6 +176,7 @@ describe('saveRegistration', () => {
       saveRegistration(makeRegistrations(create), validData)
     ).rejects.toThrow('duplicate key')
     expect(create).toHaveBeenCalledTimes(1)
+    expect(sendServerEvent).not.toHaveBeenCalled()
   })
 
   test('rethrows duplicate key errors not on the reference field', async () => {
@@ -158,5 +203,6 @@ describe('saveRegistration', () => {
     ).rejects.toThrow('Failed to generate a unique reference after 10 attempts')
 
     expect(create).toHaveBeenCalledTimes(10)
+    expect(sendServerEvent).not.toHaveBeenCalled()
   })
 })

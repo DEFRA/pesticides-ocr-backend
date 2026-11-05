@@ -10,12 +10,14 @@ import {
 
 export const JOURNEY_STARTS = {
   collection: JOURNEY_STARTS_COLLECTION,
-  dateField: 'startedAt'
+  dateField: 'startedAt',
+  eventName: 'server_journey_start'
 }
 
 // Applicants who exit via the "You do not need to use this service" page — a
 // valid journey completion, counted separately from registrations.
 export const JOURNEY_NOT_ELIGIBLE = {
   collection: JOURNEY_NOT_ELIGIBLE_COLLECTION,
-  dateField: 'endedAt'
+  dateField: 'endedAt',
+  eventName: 'server_journey_not_eligible'
 }
