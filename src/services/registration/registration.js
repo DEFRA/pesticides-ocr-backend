@@ -37,7 +37,7 @@ export async function saveRegistration(
         { ...data, reference, submittedAt },
         { by: APPLICANT, requestId }
       )
-      sendServerEvent('server_registration_complete', submittedAt)
+      void sendServerEvent('server_registration_complete', submittedAt)
       return { reference }
     } catch (err) {
       if (!isReferenceCollision(err)) {
