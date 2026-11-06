@@ -193,6 +193,38 @@ describe('config email verification', () => {
   })
 })
 
+describe('config Google Analytics server events', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  test('defaults both settings to empty, disabling server delivery', async () => {
+    vi.resetModules()
+    vi.stubEnv('GA_MEASUREMENT_ID', undefined)
+    vi.stubEnv('GA_API_SECRET', undefined)
+    const { config } = await import('#/config.js')
+
+    expect(config.get('googleAnalytics')).toEqual({
+      measurementId: '',
+      apiSecret: ''
+    })
+  })
+
+  test('reads environment settings and hides the API secret in printed config', async () => {
+    vi.resetModules()
+    vi.stubEnv('GA_MEASUREMENT_ID', 'G-SERVERTEST')
+    vi.stubEnv('GA_API_SECRET', 'do-not-print-ga-secret')
+    const { config } = await import('#/config.js')
+
+    expect(config.get('googleAnalytics')).toEqual({
+      measurementId: 'G-SERVERTEST',
+      apiSecret: 'do-not-print-ga-secret'
+    })
+    expect(config.toString()).not.toContain('do-not-print-ga-secret')
+  })
+})
+
 describe('config log.redact in production', () => {
   afterEach(() => {
     vi.unstubAllEnvs()

@@ -3,6 +3,7 @@ import { config } from '#/config.js'
 import { createLogger } from '#/common/helpers/logging/logger.js'
 import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
 import { ACTOR_TYPE } from '#/common/constants/actors.js'
+import { sendServerEvent } from '#/services/metrics/helpers/send-server-event.js'
 
 const logger = createLogger()
 const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -30,11 +31,13 @@ export async function saveRegistration(
 ) {
   for (let attempt = 1; attempt <= MAX_REFERENCE_RETRIES; attempt++) {
     const reference = generateReference(prefix)
+    const submittedAt = new Date()
     try {
       await registrations.create(
-        { ...data, reference, submittedAt: new Date() },
+        { ...data, reference, submittedAt },
         { by: APPLICANT, requestId }
       )
+      void sendServerEvent('server_registration_complete', submittedAt)
       return { reference }
     } catch (err) {
       if (!isReferenceCollision(err)) {

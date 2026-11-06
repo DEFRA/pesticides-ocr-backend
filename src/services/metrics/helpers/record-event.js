@@ -1,4 +1,5 @@
 import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
+import { sendServerEvent } from './send-server-event.js'
 
 // Append one timestamped journey event. Called by the (public) beacon
 // controllers. When a verified session `nonce` is supplied it is stored under a
@@ -7,18 +8,23 @@ import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
 // therefore success, not error. Returns true when a new event was recorded,
 // false when it was a deduped replay, so callers can log actual records rather
 // than no-ops.
-export async function recordEvent(db, { collection, dateField }, nonce) {
+export async function recordEvent(
+  db,
+  { collection, dateField, eventName },
+  nonce
+) {
   const doc = { [dateField]: new Date() }
   if (nonce) {
     doc.nonce = nonce
   }
   try {
     await db.collection(collection).insertOne(doc)
-    return true
   } catch (err) {
     if (err.code === MONGO_DUPLICATE_KEY_ERROR) {
       return false
     }
     throw err
   }
+  void sendServerEvent(eventName, doc[dateField])
+  return true
 }

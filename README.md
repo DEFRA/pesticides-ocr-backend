@@ -369,7 +369,7 @@ The dashboards and alerts are set up in CDP and Grafana, not in this repository.
 
 ### Journey metrics
 
-The digital completion metric, counted from the database for every applicant whether or not they accepted analytics cookies. Google Analytics only sees applicants who accept, so these are the totals to report; GA shows how consenting applicants move through the journey.
+The digital completion metric, counted from the database for every applicant whether or not they accepted analytics cookies. Browser Google Analytics only sees applicants who accept, so these are the authoritative recorded totals; browser GA shows how consenting applicants move through the journey. Optional server delivery of milestone counts is described below.
 
 The frontend records two journey events, each at most once per session:
 
@@ -438,6 +438,29 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
 ```
 
 A journey is finished when it reaches either end point: a saved registration (`registrations`) or the "You do not need to use this service" page (`notEligible`). Drop-outs are starts minus finished, floored at zero. The completion rate is finished ÷ starts, the GDS completion rate; the registration rate is registrations ÷ starts. Rates are capped at 1, and are `null` with no starts. A journey can start in one month and finish in the next, and start events are best-effort, so monthly figures are approximate; periods before start tracking began have no starts to compare against.
+
+### Optional GA4 server event delivery
+
+Browser analytics (EQ-533) remains consent-dependent. Separately, the backend can send one Measurement Protocol event after each newly stored milestone, regardless of analytics cookie consent:
+
+| Server event                   | Stored milestone                          |
+| ------------------------------ | ----------------------------------------- |
+| `server_journey_start`         | A new journey start                       |
+| `server_journey_not_eligible`  | A new not-eligible exit                   |
+| `server_registration_complete` | A registration committed with its history |
+
+Deduplicated beacons and failed or rolled-back writes do not send events. Sending does not change the metrics API or existing dashboard.
+
+Delivery is disabled unless **both** `GA_MEASUREMENT_ID` and `GA_API_SECRET` are set. Before enabling, obtain service owner/data protection approval for this exception to EQ-533's "nothing sent without consent" requirement, and confirm any required privacy/cookie notice changes. Carmen must validate the fixed-client-ID approach and reporting in the target property.
+
+- Use the Measurement Protocol API secret for the configured web stream. Store `GA_API_SECRET` in CDP Secrets, never in source control or logs.
+- Configure test, ext-test and prod only after approval. Leave the settings unset on local and perf-test.
+- Confirm CDP outbound proxy access to `https://www.google-analytics.com/mp/collect`. Delivery uses `fetch` from `undici`, sharing the dispatcher configured by the existing proxy setup. Dispatcher regression tests do not replace live CDP connectivity validation.
+- The JSON payload contains only the event name, the stored milestone's timestamp in microseconds, and `client_id: server-metrics-<environment>`. The client ID is fixed per environment, not derived from an applicant, browser or session. No applicant data, journey nonce, user ID, session ID, applicant IP override or applicant user agent is forwarded.
+- Delivery is fire-and-forget with a two-second timeout and no retries. Failures produce a sanitised warning and cannot fail the saved milestone or hold up its response. A GA `2xx` acknowledges receipt, not successful processing: validate the payload and reconcile processed reports before enabling.
+- Report the separate server **event counts** only. User/session counts and funnels are not meaningful for the fixed client ID; do not add server counts to the corresponding browser event counts.
+- Compare processed server event counts with increases in backend metrics for controlled test journeys, using the same reporting period and timezone. Failed deliveries can leave GA below database totals; there is no guaranteed delivery or automatic reconciliation.
+- There is no historical backfill. The backend currently buckets and filters dates in UTC; monthly comparison with a `Europe/London` GA property depends on the separate timezone-alignment change.
 
 ## API authorisation (EQ-413)
 

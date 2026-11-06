@@ -328,6 +328,21 @@ export const config = convict({
       }
     }
   },
+  googleAnalytics: {
+    measurementId: {
+      doc: 'GA4 web stream for server journey event counts. Sending is disabled unless both GA settings are set; enable only after service owner/data protection approval.',
+      format: String,
+      default: '',
+      env: 'GA_MEASUREMENT_ID'
+    },
+    apiSecret: {
+      doc: 'Measurement Protocol API secret for the configured stream. Set through CDP Secrets only after approval; leave unset on local and perf-test.',
+      format: String,
+      default: '',
+      env: 'GA_API_SECRET',
+      sensitive: true
+    }
+  },
   journeyToken: {
     secret: {
       doc: 'Shared HMAC secret for verifying signed journey-tracking beacon tokens (EQ-472). Set via CDP Secrets — the SAME value as the frontend JOURNEY_TOKEN_SECRET, per tier; never committed. Empty = verification disabled (local/unconfigured tiers accept unsigned beacons).',
