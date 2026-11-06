@@ -10,8 +10,10 @@ import {
 } from '#/common/helpers/search-query.js'
 import { getRegistrationHistory } from '#/services/registration/history.js'
 
+const DEFAULT_PAGE_SIZE = 50
+
 const querySchema = Joi.object({
-  pageSize: Joi.number().integer().min(1).max(100).default(50),
+  pageSize: Joi.number().integer().min(1).max(100).default(DEFAULT_PAGE_SIZE),
   beforeVersion: Joi.number()
     .integer()
     .min(FIRST_VERSION)
