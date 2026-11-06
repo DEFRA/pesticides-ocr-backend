@@ -336,6 +336,8 @@ export function createAuditedRepository({ client, db }) {
 
   return {
     ...readOperations(registrations),
+    listHistory: (reference, options) =>
+      context.history.list(reference, options),
     create: (registration, options) =>
       createRegistration(context, registration, options),
     update: (reference, changes, options) =>

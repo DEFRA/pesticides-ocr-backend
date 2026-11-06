@@ -4,21 +4,9 @@ import Boom from '@hapi/boom'
 import { requireRole, getCaseOfficerRoles } from '#/auth/require-role.js'
 import { ACTOR_TYPE } from '#/common/constants/actors.js'
 import { MAX_REASON_LENGTH } from '#/common/constants/history.js'
-import { MAX_REFERENCE_LENGTH } from '#/common/constants/reference.js'
+import { registrationParamsSchema } from '#/common/helpers/registration-reference.js'
 import { failWithBadRequest } from '#/common/helpers/search-query.js'
 import { VersionConflictError } from '#/repositories/version-conflict-error.js'
-import { validateReferenceNumber } from '#/services/search/search.js'
-
-const paramsSchema = Joi.object({
-  reference: Joi.string()
-    .max(MAX_REFERENCE_LENGTH)
-    .custom((reference, helpers) =>
-      validateReferenceNumber(reference)
-        ? reference
-        : helpers.message('Invalid reference number')
-    )
-    .required()
-})
 
 const payloadSchema = Joi.object({
   version: Joi.number().integer().min(0).strict().required(),
@@ -32,7 +20,7 @@ export const deleteRegistration = [
     options: {
       auth: requireRole(...getCaseOfficerRoles()),
       validate: {
-        params: paramsSchema,
+        params: registrationParamsSchema,
         payload: payloadSchema,
         failAction: failWithBadRequest
       }

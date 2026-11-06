@@ -1,4 +1,4 @@
-import { MongoClient } from 'mongodb'
+import { Collection, MongoClient } from 'mongodb'
 
 import { ACTOR_TYPE } from '#/common/constants/actors.js'
 import { OCR_REGISTRATION_HISTORY_COLLECTION } from '#/common/constants/collections.js'
@@ -249,6 +249,57 @@ describe('#createRegistrationHistory', () => {
         operation: HISTORY_OPERATION.DELETE
       })
     })
+
+    test('applies an exclusive version cursor before limiting', async () => {
+      const versions = await history.list('PPP-AAA-001', {
+        limit: 1,
+        beforeVersion: 3
+      })
+
+      expect(versions.map(({ version }) => version)).toEqual([2])
+    })
+
+    test('returns an empty page before the first version', async () => {
+      expect(
+        await history.list('PPP-AAA-001', { limit: 2, beforeVersion: 1 })
+      ).toEqual([])
+    })
+
+    test('uses the compound index for bounded descending cursor reads', async () => {
+      const find = vi.spyOn(Collection.prototype, 'find')
+      const entries = await history.list('PPP-AAA-001', {
+        limit: 1,
+        beforeVersion: 3
+      })
+      const [filter, options] = find.mock.calls[0]
+      find.mockRestore()
+      expect(entries.map(({ version }) => version)).toEqual([2])
+      expect(filter).toEqual({
+        reference: 'PPP-AAA-001',
+        version: { $lt: 3 }
+      })
+
+      const plan = await collection
+        .find(filter, options)
+        .sort({ version: -1 })
+        .limit(1)
+        .explain('executionStats')
+      const winningPlan = JSON.stringify(plan.queryPlanner.winningPlan)
+      expect(winningPlan).toContain('"indexName":"reference_1_version_1"')
+      expect(winningPlan).toContain('"direction":"backward"')
+      expect(winningPlan).not.toContain('"stage":"SORT"')
+      expect(plan.executionStats.nReturned).toBe(1)
+      expect(plan.executionStats.totalDocsExamined).toBeLessThanOrEqual(1)
+    })
+
+    test.each([0, -1, 1.5, '2', null, { $gt: 1 }, Number.MAX_SAFE_INTEGER + 1])(
+      'rejects an invalid beforeVersion of %j',
+      async (beforeVersion) => {
+        await expect(
+          history.list('PPP-AAA-001', { limit: 2, beforeVersion })
+        ).rejects.toThrow('beforeVersion must be a positive safe integer')
+      }
+    )
 
     test.each([undefined, 0, -1, 1.5])(
       'rejects a limit of %s',
