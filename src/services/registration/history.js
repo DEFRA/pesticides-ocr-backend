@@ -4,7 +4,7 @@ export async function getRegistrationHistory(
   { pageSize, beforeVersion }
 ) {
   const entries = await registrations.listHistory(reference, {
-    limit: pageSize + 1,
+    pageSize,
     beforeVersion
   })
 

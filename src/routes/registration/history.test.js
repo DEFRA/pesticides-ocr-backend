@@ -162,7 +162,7 @@ describe('GET /registrations/{reference}/history', () => {
     expect(first.result.data[0].version).toBe(105)
     expect(first.result.pagination.nextBeforeVersion).toBe(56)
     expect(list).toHaveBeenCalledExactlyOnceWith(reference, {
-      limit: 51,
+      pageSize: 50,
       beforeVersion: undefined
     })
     expect(await list.mock.results[0].value).toHaveLength(51)
@@ -172,7 +172,7 @@ describe('GET /registrations/{reference}/history', () => {
     expect(maximum.result.data).toHaveLength(100)
     expect(maximum.result.pagination.nextBeforeVersion).toBe(6)
     expect(list).toHaveBeenLastCalledWith(reference, {
-      limit: 101,
+      pageSize: 100,
       beforeVersion: undefined
     })
   })
@@ -304,6 +304,21 @@ describe('GET /registrations/{reference}/history', () => {
     const list = vi.spyOn(server.registrations, 'listHistory')
     expect((await get('PPP-HIS-001', `?${query}`)).statusCode).toBe(400)
     expect(list).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    ['pageSize=abc', 'pageSize must be an integer'],
+    ['pageSize=1.5', 'pageSize must be an integer'],
+    ['pageSize=0', 'pageSize must be at least 1'],
+    ['pageSize=101', 'pageSize must be at most 100'],
+    ['beforeVersion=abc', 'beforeVersion must be an integer'],
+    ['beforeVersion=1.5', 'beforeVersion must be an integer'],
+    ['beforeVersion=0', 'beforeVersion must be a positive integer'],
+    ['beforeVersion=9007199254740992', 'beforeVersion must be a safe integer']
+  ])('returns a clear validation message for %s', async (query, message) => {
+    const response = await get('PPP-HIS-001', `?${query}`)
+    expect(response.statusCode).toBe(400)
+    expect(response.result.message).toContain(message)
   })
 
   test('logs repository errors and returns a sanitised 500, not an empty page', async () => {

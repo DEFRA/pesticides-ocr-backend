@@ -2,6 +2,7 @@ import { OCR_REGISTRATION_COLLECTION } from '#/common/constants/collections.js'
 import {
   FIRST_VERSION,
   HISTORY_OPERATION,
+  MAX_HISTORY_PAGE_SIZE,
   UNVERSIONED
 } from '#/common/constants/history.js'
 import {
@@ -132,8 +133,21 @@ function transactionRunner(client) {
   }
 }
 
-function readOperations(registrations) {
+function readOperations(registrations, history) {
   return {
+    async listHistory(reference, options) {
+      const { pageSize, beforeVersion, session } = options ?? {}
+      assertLimit(pageSize, 'pageSize')
+      if (pageSize > MAX_HISTORY_PAGE_SIZE) {
+        throw new TypeError(`pageSize must be at most ${MAX_HISTORY_PAGE_SIZE}`)
+      }
+      return history.list(reference, {
+        limit: pageSize + 1,
+        beforeVersion,
+        session
+      })
+    },
+
     async findByReference(reference, options) {
       const { includeDeleted = false, session } = options ?? {}
       assertReference(reference)
@@ -335,9 +349,7 @@ export function createAuditedRepository({ client, db }) {
   }
 
   return {
-    ...readOperations(registrations),
-    listHistory: (reference, options) =>
-      context.history.list(reference, options),
+    ...readOperations(registrations, context.history),
     create: (registration, options) =>
       createRegistration(context, registration, options),
     update: (reference, changes, options) =>

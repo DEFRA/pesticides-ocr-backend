@@ -1,3 +1,5 @@
+import { FIRST_VERSION } from '#/common/constants/history.js'
+
 // A non-string reference could be a query operator, like { $ne: '' }, that
 // matches someone else's registration.
 export function assertReference(reference) {
@@ -13,9 +15,18 @@ export function assertReference(reference) {
 }
 
 // Mongo treats a missing or 0 limit as no limit at all.
-export function assertLimit(limit) {
+export function assertLimit(limit, name = 'limit') {
   if (!Number.isInteger(limit) || limit < 1) {
-    throw new TypeError('limit must be a positive integer')
+    throw new TypeError(`${name} must be a positive integer`)
+  }
+}
+
+export function assertBeforeVersion(beforeVersion) {
+  if (
+    beforeVersion !== undefined &&
+    (!Number.isSafeInteger(beforeVersion) || beforeVersion < FIRST_VERSION)
+  ) {
+    throw new TypeError('beforeVersion must be a positive safe integer')
   }
 }
 

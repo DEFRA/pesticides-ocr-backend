@@ -9,7 +9,11 @@ import {
   MAX_REASON_LENGTH,
   MAX_REQUEST_ID_LENGTH
 } from '#/common/constants/history.js'
-import { assertLimit, assertReference } from '#/repositories/guards.js'
+import {
+  assertBeforeVersion,
+  assertLimit,
+  assertReference
+} from '#/repositories/guards.js'
 
 const emailAddress = Joi.string().email()
 
@@ -99,12 +103,7 @@ export function createRegistrationHistory({ db }) {
       const { limit, beforeVersion, session } = options ?? {}
       assertReference(reference)
       assertLimit(limit)
-      if (
-        beforeVersion !== undefined &&
-        (!Number.isSafeInteger(beforeVersion) || beforeVersion < FIRST_VERSION)
-      ) {
-        throw new TypeError('beforeVersion must be a positive safe integer')
-      }
+      assertBeforeVersion(beforeVersion)
       const filter = {
         reference,
         ...(beforeVersion !== undefined && { version: { $lt: beforeVersion } })

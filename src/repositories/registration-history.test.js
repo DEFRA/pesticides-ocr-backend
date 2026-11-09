@@ -265,6 +265,15 @@ describe('#createRegistrationHistory', () => {
       ).toEqual([])
     })
 
+    test('accepts the largest safe integer as a cursor', async () => {
+      const entries = await history.list('PPP-AAA-001', {
+        limit: 1,
+        beforeVersion: Number.MAX_SAFE_INTEGER
+      })
+
+      expect(entries.map(({ version }) => version)).toEqual([3])
+    })
+
     test('uses the compound index for bounded descending cursor reads', async () => {
       const find = vi.spyOn(Collection.prototype, 'find')
       const entries = await history.list('PPP-AAA-001', {

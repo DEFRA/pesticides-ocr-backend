@@ -25,7 +25,7 @@ describe('getRegistrationHistory', () => {
 
     expect(registrations.listHistory).toHaveBeenCalledExactlyOnceWith(
       reference,
-      { limit: 3, beforeVersion: 10 }
+      { pageSize: 2, beforeVersion: 10 }
     )
     expect(registrations.findByReference).not.toHaveBeenCalled()
     expect(result).toEqual({
@@ -62,7 +62,7 @@ describe('getRegistrationHistory', () => {
       expect(registrations.findByReference).not.toHaveBeenCalled()
       expect(registrations.listHistory).toHaveBeenCalledExactlyOnceWith(
         reference,
-        { limit: 51, beforeVersion }
+        { pageSize: 50, beforeVersion }
       )
     }
   )
