@@ -12,7 +12,8 @@ export const storedDoc = {
     addressLine2: '',
     addressTown: 'Farmtown',
     addressCounty: '',
-    addressPostcode: 'PH1 1FT'
+    addressPostcode: 'PH1 1FT',
+    addressRegion: 'england'
   },
   primaryContact: {
     contactName: 'John Smith',

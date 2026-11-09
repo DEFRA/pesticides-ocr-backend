@@ -35,6 +35,12 @@ describe('toCsv', () => {
     expect(row).toContain('"PH1 1FT"')
   })
 
+  test('fills the Country column from the stored address region code', () => {
+    const row = toCsv([storedDoc]).split('\r\n')[1]
+
+    expect(row).toContain('"PH1 1FT","england","Registered"')
+  })
+
   test('joins multi-value activities with a semicolon, as stored codes', () => {
     const row = toCsv([storedDoc]).split('\r\n')[1]
 

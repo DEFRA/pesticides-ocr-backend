@@ -26,7 +26,7 @@ const CSV_COLUMNS = [
   ['Telephone', (doc) => doc.primaryContact?.contactTelephone],
   ['Town', (doc) => doc.address?.addressTown],
   ['Postcode', (doc) => doc.address?.addressPostcode],
-  ['Country', (doc) => doc.address?.addressCountry],
+  ['Country', (doc) => doc.address?.addressRegion],
   ['Status', (doc) => doc.status ?? DEFAULT_STATUS]
 ]
 
