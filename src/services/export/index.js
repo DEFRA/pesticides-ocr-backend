@@ -21,7 +21,6 @@ const CSV_COLUMNS = [
   ['Business name', (doc) => doc.businessName],
   ['Registered date', (doc) => toIsoDate(doc.submittedAt)],
   ['Activities', (doc) => (doc.businessActivities ?? []).join('; ')],
-  ['Main customer', (doc) => doc.mainCustomer],
   ['Contact name', (doc) => doc.primaryContact?.contactName],
   ['Email', (doc) => doc.primaryContact?.contactEmail],
   ['Telephone', (doc) => doc.primaryContact?.contactTelephone],

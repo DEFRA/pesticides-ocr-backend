@@ -11,11 +11,10 @@ const registerProjection = {
   status: 1,
   businessName: 1,
   businessActivities: 1,
-  mainCustomer: 1,
   address: 1,
   primaryContact: 1,
   addressActivities: 1,
-  quantity: 1,
+  usingPPPs: 1,
   version: 1
 }
 
