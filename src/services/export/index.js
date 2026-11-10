@@ -21,13 +21,12 @@ const CSV_COLUMNS = [
   ['Business name', (doc) => doc.businessName],
   ['Registered date', (doc) => toIsoDate(doc.submittedAt)],
   ['Activities', (doc) => (doc.businessActivities ?? []).join('; ')],
-  ['Main customer', (doc) => doc.mainCustomer],
   ['Contact name', (doc) => doc.primaryContact?.contactName],
   ['Email', (doc) => doc.primaryContact?.contactEmail],
   ['Telephone', (doc) => doc.primaryContact?.contactTelephone],
   ['Town', (doc) => doc.address?.addressTown],
   ['Postcode', (doc) => doc.address?.addressPostcode],
-  ['Country', (doc) => doc.address?.addressCountry],
+  ['Country', (doc) => doc.address?.addressRegion],
   ['Status', (doc) => doc.status ?? DEFAULT_STATUS]
 ]
 

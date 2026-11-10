@@ -6,13 +6,14 @@ export const storedDoc = {
   reference: 'PPP-A1B-2C3',
   submittedAt: new Date('2026-03-11T09:30:00.000Z'),
   businessName: 'Pesticides Ltd',
-  businessActivities: ['manufacture', 'market'],
+  businessActivities: ['using', 'selling'],
   address: {
     addressLine1: 'Highfield Farm',
     addressLine2: '',
     addressTown: 'Farmtown',
     addressCounty: '',
-    addressPostcode: 'PH1 1FT'
+    addressPostcode: 'PH1 1FT',
+    addressRegion: 'england'
   },
   primaryContact: {
     contactName: 'John Smith',

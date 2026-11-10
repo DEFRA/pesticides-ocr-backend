@@ -132,18 +132,19 @@ Public, called by the frontend to submit an application. It needs the frontend's
 
 ```json
 {
-  "businessActivities": ["manufacture", "market"],
-  "mainCustomer": "professional",
+  "businessActivities": ["using", "selling"],
   "businessName": "Company Name",
   "address": {
     "addressLine1": "1 Example Street",
     "addressLine2": "Village",
     "addressTown": "Town",
     "addressCounty": "County",
-    "addressPostcode": "AB12 3CD"
+    "addressPostcode": "AB12 3CD",
+    "addressRegion": "england"
   },
   "primaryContact": {
     "contactName": "Full Name",
+    "contactJobTitle": "Farm manager",
     "contactTelephone": "01234567890",
     "contactEmail": "contact@example.com"
   },
@@ -160,7 +161,9 @@ Public, called by the frontend to submit an application. It needs the frontend's
 
 Some answers are only required when the journey asks for them:
 
-- `mainCustomer` is optional when `businessActivities` includes `seller-amateur`.
+- `businessActivities` can include `only-storing` only on its own, never with another activity.
+- `address.addressRegion` (`england`, `scotland` or `wales`) is required on the main business address and optional on additional addresses.
+- `contactJobTitle` is optional on any contact, trimmed, and may be empty (up to 100 characters).
 - `quantity` is required only when `addressActivities` includes `use`.
 - `professionalSectors` is either a list of sector codes, or a list holding just the applicant's own description under Other (1 to 100 characters).
 

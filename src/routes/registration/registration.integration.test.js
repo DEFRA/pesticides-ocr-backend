@@ -11,13 +11,13 @@ import {
 import { config } from '#/config.js'
 
 const payload = {
-  businessActivities: ['manufacture'],
-  mainCustomer: 'professional',
+  businessActivities: ['using'],
   businessName: 'Company 1',
   address: {
     addressLine1: '67 My Road',
     addressTown: 'My Town',
-    addressPostcode: 'AB12 3CD'
+    addressPostcode: 'AB12 3CD',
+    addressRegion: 'england'
   },
   primaryContact: {
     contactName: 'Jonny Pesticide',

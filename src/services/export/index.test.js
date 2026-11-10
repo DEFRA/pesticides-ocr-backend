@@ -6,10 +6,10 @@ import { storedDoc } from '#/services/search/search.fixtures.js'
 // The export is prefixed with a UTF-8 BOM so Excel reads it as UTF-8.
 const BOM = '\uFEFF'
 const HEADER =
-  '"Reference","Business name","Registered date","Activities","Main customer",' +
-  '"Contact name","Email","Telephone","Town","Postcode","Country","Status"'
+  '"Reference","Business name","Registered date","Activities","Contact name",' +
+  '"Email","Telephone","Town","Postcode","Country","Status"'
 
-const COLUMN_COUNT = 12
+const COLUMN_COUNT = 11
 
 describe('toCsv', () => {
   test('an empty list yields the header row only (BOM-prefixed)', () => {
@@ -35,10 +35,16 @@ describe('toCsv', () => {
     expect(row).toContain('"PH1 1FT"')
   })
 
+  test('fills the Country column from the stored address region code', () => {
+    const row = toCsv([storedDoc]).split('\r\n')[1]
+
+    expect(row).toContain('"PH1 1FT","england","Registered"')
+  })
+
   test('joins multi-value activities with a semicolon, as stored codes', () => {
     const row = toCsv([storedDoc]).split('\r\n')[1]
 
-    expect(row).toContain('"manufacture; market"')
+    expect(row).toContain('"using; selling"')
   })
 
   test('defaults Status to Registered, matching what the grid shows', () => {
