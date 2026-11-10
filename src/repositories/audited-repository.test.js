@@ -1,4 +1,4 @@
-import { MongoClient } from 'mongodb'
+import { Collection, MongoClient } from 'mongodb'
 
 import { ACTOR_TYPE } from '#/common/constants/actors.js'
 import {
@@ -132,6 +132,79 @@ describe('#createAuditedRepository', () => {
         repository.create({ reference: 'PPP-AAA-001' }, { by: applicant })
       ).rejects.toMatchObject({ code: MONGO_DUPLICATE_KEY_ERROR })
     })
+  })
+
+  describe('listHistory', () => {
+    test('returns a bounded look-ahead page with an exclusive cursor', async () => {
+      await historyCollection.insertMany(
+        [1, 2, 3, 4].map((version) => ({
+          reference: 'PPP-AAA-001',
+          version
+        }))
+      )
+      await historyCollection.insertOne({
+        reference: 'PPP-AAA-002',
+        version: 3
+      })
+
+      const entries = await repository.listHistory('PPP-AAA-001', {
+        pageSize: 2,
+        beforeVersion: 4
+      })
+
+      expect(entries.map(({ version }) => version)).toEqual([3, 2, 1])
+      expect(
+        entries.every(({ reference }) => reference === 'PPP-AAA-001')
+      ).toBe(true)
+    })
+
+    test.each([undefined, null, 0, -1, 1.5, '2', {}, 101, Infinity])(
+      'rejects invalid pageSize %j before querying history',
+      async (pageSize) => {
+        const find = vi.spyOn(Collection.prototype, 'find')
+        try {
+          await expect(
+            repository.listHistory('PPP-AAA-001', { pageSize })
+          ).rejects.toThrow('pageSize must')
+          expect(find).not.toHaveBeenCalled()
+        } finally {
+          find.mockRestore()
+        }
+      }
+    )
+
+    test.each([undefined, null])(
+      'rejects missing pagination options %j',
+      async (options) => {
+        await expect(
+          repository.listHistory('PPP-AAA-001', options)
+        ).rejects.toThrow('pageSize must be a positive integer')
+      }
+    )
+
+    test('rejects a query operator as the reference', async () => {
+      await expect(
+        repository.listHistory({ $ne: '' }, { pageSize: 1 })
+      ).rejects.toThrow('reference must be a non-empty string')
+    })
+
+    test.each([null, 0, -1, 1.5, '2', {}, Number.MAX_SAFE_INTEGER + 1])(
+      'rejects invalid beforeVersion %j before querying history',
+      async (beforeVersion) => {
+        const find = vi.spyOn(Collection.prototype, 'find')
+        try {
+          await expect(
+            repository.listHistory('PPP-AAA-001', {
+              pageSize: 2,
+              beforeVersion
+            })
+          ).rejects.toThrow('beforeVersion must be a positive safe integer')
+          expect(find).not.toHaveBeenCalled()
+        } finally {
+          find.mockRestore()
+        }
+      }
+    )
   })
 
   describe('reads', () => {

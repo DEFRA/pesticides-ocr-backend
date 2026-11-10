@@ -2,6 +2,7 @@ import { health } from '#/routes/health.js'
 import { search } from '#/routes/search/search.js'
 import { register } from '#/routes/registration/registration.js'
 import { deleteRegistration } from '#/routes/registration/delete-registration.js'
+import { registrationHistory } from '#/routes/registration/history.js'
 import { whoami } from '#/routes/whoami/whoami.js'
 import { exportRegistrations } from '#/routes/export/index.js'
 import { metricsRegistrations } from '#/routes/metrics/registrations.js'
@@ -28,6 +29,7 @@ export const router = {
         [health]
           .concat(register)
           .concat(deleteRegistration)
+          .concat(registrationHistory)
           .concat(search)
           .concat([whoami])
           .concat(exportRegistrations)

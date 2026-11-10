@@ -9,7 +9,11 @@ import {
   MAX_REASON_LENGTH,
   MAX_REQUEST_ID_LENGTH
 } from '#/common/constants/history.js'
-import { assertLimit, assertReference } from '#/repositories/guards.js'
+import {
+  assertBeforeVersion,
+  assertLimit,
+  assertReference
+} from '#/repositories/guards.js'
 
 const emailAddress = Joi.string().email()
 
@@ -96,11 +100,16 @@ export function createRegistrationHistory({ db }) {
 
     // Newest first, so a limit drops the oldest versions, not the latest.
     async list(reference, options) {
-      const { limit, session } = options ?? {}
+      const { limit, beforeVersion, session } = options ?? {}
       assertReference(reference)
       assertLimit(limit)
+      assertBeforeVersion(beforeVersion)
+      const filter = {
+        reference,
+        ...(beforeVersion !== undefined && { version: { $lt: beforeVersion } })
+      }
       return history
-        .find({ reference }, { projection: NO_ID, session })
+        .find(filter, { projection: NO_ID, session })
         .sort({ version: -1 })
         .limit(limit)
         .toArray()

@@ -252,6 +252,75 @@ Same auth as `/search`. Soft deletes the registration: it stays in the database,
 | `404`    | There's no such registration, or it's already deleted. Nothing is changed and no history is written                  |
 | `409`    | The registration has changed since that version was loaded. Reload it and try again                                  |
 
+### GET /registrations/{reference}/history (EQ-543)
+
+Uses the same Entra authentication and configured case-officer roles as `/search`.
+History remains accessible for soft-deleted registrations. This endpoint is for
+internal case officers, not public applicants; it adds no new role or permissions
+model. Responses (including errors) use `Cache-Control: no-store`.
+
+Returns snapshot history in descending version order through the repository.
+Optional query parameters:
+
+| Parameter       | Behaviour                                                                 |
+| --------------- | ------------------------------------------------------------------------- |
+| `pageSize`      | Integer from 1 to 100; defaults to 50                                     |
+| `beforeVersion` | Positive safe integer; only versions strictly less than this are returned |
+
+Example: `GET /registrations/PPP-ABC-123/history?pageSize=2&beforeVersion=10`
+
+```json
+{
+  "data": [
+    {
+      "reference": "PPP-ABC-123",
+      "version": 9,
+      "operation": "update",
+      "at": "2026-11-05T10:00:00.000Z",
+      "by": { "type": "case_officer", "id": "opaque-entra-subject" },
+      "reason": "Corrected business name",
+      "requestId": "request-id",
+      "snapshot": {
+        "reference": "PPP-ABC-123",
+        "version": 9,
+        "businessName": "Example Organisation"
+      }
+    }
+  ],
+  "pagination": { "pageSize": 2, "nextBeforeVersion": null }
+}
+```
+
+Each entry includes the stored metadata and full snapshot, excluding the history
+document's MongoDB `_id`; optional `reason` and `requestId` appear only when stored.
+Dates are serialised as ISO timestamps. Snapshots can contain personal data and
+must be handled with the same care as registrations.
+
+When more entries exist, `nextBeforeVersion` is the last returned version. Pass it
+as `beforeVersion`, keeping `pageSize` unchanged, to fetch the next page. A null
+cursor means there is no next page. Version gaps are supported; new versions added
+between requests do not shift older pages. This is not a transaction spanning
+multiple requests: restart without a cursor to see newer versions.
+
+The database reads at most `pageSize + 1` entries to determine whether another page
+exists, using the existing `{ reference: 1, version: 1 }` index in reverse version
+order. It queries only the history collection through the repository, without
+counting or loading the complete history or looking up the current registration.
+If no history matches the reference and optional cursor, it returns `404`,
+including when a registration exists without history or the cursor is exhausted.
+
+| Response | When                                                                                |
+| -------- | ----------------------------------------------------------------------------------- |
+| `200`    | A non-empty history page matching the reference and optional cursor                 |
+| `400`    | Invalid reference, pagination value, or unknown query parameter                     |
+| `401`    | Missing or invalid authentication                                                   |
+| `403`    | Authenticated user lacks the configured case-officer role                           |
+| `404`    | No history matches the reference and optional cursor, including an exhausted cursor |
+| `500`    | Retrieval failed; the error is logged and details are not exposed                   |
+
+History can still be read if its current registration is absent. Retrieval changes
+neither registration data nor history, and does not create an audit history entry.
+
 ### POST /email-verifications
 
 Public, called by the frontend to send (or resend) a magic link that confirms the applicant owns their email address. It needs the frontend's signed `x-journey-token` header, which binds the link to the journey. A new link supersedes the journey's earlier ones, so only the latest works. The body is at most 1 KB:
