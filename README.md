@@ -440,14 +440,16 @@ The dashboards and alerts are set up in CDP and Grafana, not in this repository.
 
 The digital completion metric, counted from the database for every applicant whether or not they accepted analytics cookies. Browser Google Analytics only sees applicants who accept, so these are the authoritative recorded totals; browser GA shows how consenting applicants move through the journey. Optional server delivery of milestone counts is described below.
 
-The frontend records two journey events, each at most once per session:
+The frontend records journey and feedback events, each at most once per session:
 
-| Endpoint                             | Records                                                    |
-| ------------------------------------ | ---------------------------------------------------------- |
-| `POST /metrics/journey-starts`       | a journey start (the first question after the start page)  |
-| `POST /metrics/journey-not-eligible` | an exit via the "You do not need to use this service" page |
+| Endpoint                             | Records                                                        |
+| ------------------------------------ | -------------------------------------------------------------- |
+| `POST /metrics/journey-starts`       | a journey start (the first question after the start page)      |
+| `POST /metrics/journey-not-eligible` | an exit via the "You do not need to use this service" page     |
+| `POST /metrics/feedback-starts`      | opening the feedback survey via the frontend `/feedback` route |
+| `POST /metrics/feedback-completions` | visiting the survey's return page, `/feedback/thank-you`       |
 
-These are public, as applicants aren't signed in. When `JOURNEY_TOKEN_SECRET` is set (the same value on the frontend), each must carry the frontend's signed per-session token in an `x-journey-token` header: a missing or forged token is a `401`, and a repeated one is stored once. Only a timestamp is stored, plus the token's session nonce when the token is required. Both return `204`.
+These are public, as applicants aren't signed in. When `JOURNEY_TOKEN_SECRET` is set (the same value on the frontend), each must carry the frontend's signed per-session token in an `x-journey-token` header: a missing or forged token is a `401`, and a repeated one is stored once. Only a timestamp is stored, plus the token's session nonce when the token is required. All return `204`.
 
 The read endpoints need case-officer bearer auth and accept optional inclusive `?from=` and `?to=` ISO dates:
 
@@ -460,11 +462,19 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
 
 `GET /metrics/journeys` returns the overall figures (the life of the service, or the `from`/`to` period), plus the same per year and per month:
 
+The dashboard API also includes `feedbackStarted` and `feedbackCompleted` in the
+overall totals and every `byYear` / `byMonth` entry (EQ-706), using the same
+case-officer auth and inclusive `from` / `to` filters. Months with only feedback
+are included. Feedback does not change `finished`, drop-outs or journey rates.
+The response example below includes these additional fields.
+
 ```json
 {
   "starts": 6,
   "registrations": 3,
   "notEligible": 1,
+  "feedbackStarted": 2,
+  "feedbackCompleted": 1,
   "finished": 4,
   "dropOuts": 2,
   "completionRate": 0.6667,
@@ -475,6 +485,8 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
       "starts": 6,
       "registrations": 3,
       "notEligible": 1,
+      "feedbackStarted": 2,
+      "feedbackCompleted": 1,
       "finished": 4,
       "dropOuts": 2,
       "completionRate": 0.6667,
@@ -487,6 +499,8 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
       "starts": 4,
       "registrations": 2,
       "notEligible": 1,
+      "feedbackStarted": 1,
+      "feedbackCompleted": 1,
       "finished": 3,
       "dropOuts": 1,
       "completionRate": 0.75,
@@ -497,6 +511,8 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
       "starts": 2,
       "registrations": 1,
       "notEligible": 0,
+      "feedbackStarted": 1,
+      "feedbackCompleted": 0,
       "finished": 1,
       "dropOuts": 1,
       "completionRate": 0.5,
@@ -507,6 +523,26 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
 ```
 
 A journey is finished when it reaches either end point: a saved registration (`registrations`) or the "You do not need to use this service" page (`notEligible`). Drop-outs are starts minus finished, floored at zero. The completion rate is finished ÷ starts, the GDS completion rate; the registration rate is registrations ÷ starts. Rates are capped at 1, and are `null` with no starts. A journey can start in one month and finish in the next, and start events are best-effort, so monthly figures are approximate; periods before start tracking began have no starts to compare against.
+
+### Feedback survey operations (EQ-706)
+
+Feedback beacons use the same signed session token, unique nonce indexes and
+timestamp-only recording pattern as journey beacons. No survey answers, scores,
+contact details or registration data are stored. The nonce is retained solely
+for deduplication. Feedback events are not sent to GA4.
+
+The frontend creates a session/token for visitors without an existing journey,
+including direct thank-you visits; the backend still rejects missing/invalid
+tokens when `JOURNEY_TOKEN_SECRET` is configured. Repeated events in the same
+session count once, but new sessions can count again. A visit to the thank-you
+URL is a return-page count, not verified evidence of survey completion.
+
+The survey owner must configure the Qualtrics end-of-survey redirect to the
+environment's frontend `/feedback/thank-you` URL. Confirm survey ownership and
+whether it is shared before changing it: use a dedicated copy or a service-specific
+survey flow if shared, and a separate survey copy for dev/test. No applicant or
+session identifiers are passed to Qualtrics or required on return. Satisfaction
+scores remain in Qualtrics reports; dashboard UI changes are tracked under EQ-385.
 
 ### Optional GA4 server event delivery
 

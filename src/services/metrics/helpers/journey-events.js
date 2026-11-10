@@ -1,6 +1,8 @@
 import {
   JOURNEY_STARTS_COLLECTION,
-  JOURNEY_NOT_ELIGIBLE_COLLECTION
+  JOURNEY_NOT_ELIGIBLE_COLLECTION,
+  FEEDBACK_STARTS_COLLECTION,
+  FEEDBACK_COMPLETIONS_COLLECTION
 } from '#/common/constants/collections.js'
 
 // Each journey event is defined once here — the collection it lives in and the
@@ -20,4 +22,14 @@ export const JOURNEY_NOT_ELIGIBLE = {
   collection: JOURNEY_NOT_ELIGIBLE_COLLECTION,
   dateField: 'endedAt',
   eventName: 'server_journey_not_eligible'
+}
+
+export const FEEDBACK_STARTS = {
+  collection: FEEDBACK_STARTS_COLLECTION,
+  dateField: 'startedAt'
+}
+
+export const FEEDBACK_COMPLETIONS = {
+  collection: FEEDBACK_COMPLETIONS_COLLECTION,
+  dateField: 'completedAt'
 }

@@ -25,6 +25,8 @@ export async function recordEvent(
     }
     throw err
   }
-  void sendServerEvent(eventName, doc[dateField])
+  if (eventName) {
+    void sendServerEvent(eventName, doc[dateField])
+  }
   return true
 }

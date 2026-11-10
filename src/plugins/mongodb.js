@@ -7,6 +7,8 @@ import {
   MONGO_LOCKS_COLLECTION,
   JOURNEY_STARTS_COLLECTION,
   JOURNEY_NOT_ELIGIBLE_COLLECTION,
+  FEEDBACK_STARTS_COLLECTION,
+  FEEDBACK_COMPLETIONS_COLLECTION,
   EMAIL_VERIFICATIONS_COLLECTION,
   EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION
 } from '#/common/constants/collections.js'
@@ -85,6 +87,15 @@ async function createIndexes(db) {
     { nonce: 1 },
     { unique: true, sparse: true }
   )
+
+  for (const [collection, dateField] of [
+    [FEEDBACK_STARTS_COLLECTION, 'startedAt'],
+    [FEEDBACK_COMPLETIONS_COLLECTION, 'completedAt']
+  ]) {
+    const feedback = db.collection(collection)
+    await feedback.createIndex({ [dateField]: 1 })
+    await feedback.createIndex({ nonce: 1 }, { unique: true, sparse: true })
+  }
 
   const emailVerifications = db.collection(EMAIL_VERIFICATIONS_COLLECTION)
   const rateLimits = db.collection(EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION)
