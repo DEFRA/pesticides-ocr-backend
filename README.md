@@ -462,12 +462,6 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
 
 `GET /metrics/journeys` returns the overall figures (the life of the service, or the `from`/`to` period), plus the same per year and per month:
 
-The dashboard API also includes `feedbackStarted` and `feedbackCompleted` in the
-overall totals and every `byYear` / `byMonth` entry (EQ-706), using the same
-case-officer auth and inclusive `from` / `to` filters. Months with only feedback
-are included. Feedback does not change `finished`, drop-outs or journey rates.
-The response example below includes these additional fields.
-
 ```json
 {
   "starts": 6,
@@ -521,6 +515,8 @@ The response example below includes these additional fields.
   ]
 }
 ```
+
+The dashboard API also includes `feedbackStarted` and `feedbackCompleted` in the overall totals and every `byYear` / `byMonth` entry (EQ-706), using the same case-officer auth and inclusive `from` / `to` filters. Months with only feedback are included. Feedback does not change `finished`, drop-outs or journey rates.
 
 A journey is finished when it reaches either end point: a saved registration (`registrations`) or the "You do not need to use this service" page (`notEligible`). Drop-outs are starts minus finished, floored at zero. The completion rate is finished ÷ starts, the GDS completion rate; the registration rate is registrations ÷ starts. Rates are capped at 1, and are `null` with no starts. A journey can start in one month and finish in the next, and start events are best-effort, so monthly figures are approximate; periods before start tracking began have no starts to compare against.
 

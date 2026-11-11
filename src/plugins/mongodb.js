@@ -88,14 +88,16 @@ async function createIndexes(db) {
     { unique: true, sparse: true }
   )
 
-  for (const [collection, dateField] of [
-    [FEEDBACK_STARTS_COLLECTION, 'startedAt'],
-    [FEEDBACK_COMPLETIONS_COLLECTION, 'completedAt']
-  ]) {
-    const feedback = db.collection(collection)
-    await feedback.createIndex({ [dateField]: 1 })
-    await feedback.createIndex({ nonce: 1 }, { unique: true, sparse: true })
-  }
+  const feedbackStarts = db.collection(FEEDBACK_STARTS_COLLECTION)
+  const feedbackCompletions = db.collection(FEEDBACK_COMPLETIONS_COLLECTION)
+
+  await feedbackStarts.createIndex({ startedAt: 1 })
+  await feedbackCompletions.createIndex({ completedAt: 1 })
+  await feedbackStarts.createIndex({ nonce: 1 }, { unique: true, sparse: true })
+  await feedbackCompletions.createIndex(
+    { nonce: 1 },
+    { unique: true, sparse: true }
+  )
 
   const emailVerifications = db.collection(EMAIL_VERIFICATIONS_COLLECTION)
   const rateLimits = db.collection(EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION)

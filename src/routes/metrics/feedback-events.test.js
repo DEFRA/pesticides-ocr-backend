@@ -34,6 +34,7 @@ describe('feedback metrics', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks()
+    config.set('journeyToken.secret', SECRET)
     await Promise.all([
       server.db.collection(FEEDBACK_STARTS_COLLECTION).deleteMany({}),
       server.db.collection(FEEDBACK_COMPLETIONS_COLLECTION).deleteMany({})
@@ -75,6 +76,33 @@ describe('feedback metrics', () => {
     }
   })
 
+  test.each([
+    ['/metrics/feedback-starts', FEEDBACK_STARTS_COLLECTION, 'startedAt'],
+    [
+      '/metrics/feedback-completions',
+      FEEDBACK_COMPLETIONS_COLLECTION,
+      'completedAt'
+    ]
+  ])(
+    '%s counts each unsigned call when the journey token secret is unset',
+    async (path, collection, dateField) => {
+      config.set('journeyToken.secret', '')
+      const request = { method: 'POST', url: path }
+
+      expect((await server.inject(request)).statusCode).toBe(204)
+      expect((await server.inject(request)).statusCode).toBe(204)
+
+      const documents = await server.db
+        .collection(collection)
+        .find({}, { projection: { _id: 0 } })
+        .toArray()
+      expect(documents).toEqual([
+        { [dateField]: expect.any(Date) },
+        { [dateField]: expect.any(Date) }
+      ])
+    }
+  )
+
   test('returns an explicit failure when storage fails', async () => {
     vi.spyOn(server.db, 'collection').mockReturnValue({
       insertOne: vi.fn().mockRejectedValue(new Error('database unavailable'))
@@ -85,6 +113,38 @@ describe('feedback metrics', () => {
       headers: { 'x-journey-token': token('failed-write') }
     })
     expect(response.statusCode).toBe(500)
+  })
+
+  test('includes the whole to date for both feedback metrics and excludes adjacent days', async () => {
+    for (const [collection, dateField] of [
+      [FEEDBACK_STARTS_COLLECTION, 'startedAt'],
+      [FEEDBACK_COMPLETIONS_COLLECTION, 'completedAt']
+    ]) {
+      await server.db
+        .collection(collection)
+        .insertMany(
+          [
+            '2026-01-01T23:59:59.999Z',
+            '2026-01-02T10:00:00Z',
+            '2026-01-02T23:59:59.999Z',
+            '2026-01-03T00:00:00Z'
+          ].map((timestamp) => ({ [dateField]: new Date(timestamp) }))
+        )
+    }
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/metrics/journeys?from=2026-01-02&to=2026-01-02',
+      headers: { authorization: `Bearer ${officerToken}` }
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.result).toMatchObject({
+      feedbackStarted: 2,
+      feedbackCompleted: 2,
+      byMonth: [{ month: '2026-01', feedbackStarted: 2, feedbackCompleted: 2 }],
+      byYear: [{ year: '2026', feedbackStarted: 2, feedbackCompleted: 2 }]
+    })
   })
 
   test('includes feedback-only months and years and applies date filters without changing journey rates', async () => {
