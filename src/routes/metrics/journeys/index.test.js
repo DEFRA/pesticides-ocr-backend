@@ -54,7 +54,7 @@ const figures = (
   registrations,
   notEligible,
   feedbackStarted: 0,
-  feedbackCompleted: 0,
+  feedbackReturned: 0,
   finished: registrations + notEligible,
   dropOuts,
   completionRate,

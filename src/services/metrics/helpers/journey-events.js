@@ -2,7 +2,7 @@ import {
   JOURNEY_STARTS_COLLECTION,
   JOURNEY_NOT_ELIGIBLE_COLLECTION,
   FEEDBACK_STARTS_COLLECTION,
-  FEEDBACK_COMPLETIONS_COLLECTION
+  FEEDBACK_RETURNS_COLLECTION
 } from '#/common/constants/collections.js'
 
 // Each journey event is defined once here — the collection it lives in and the
@@ -29,7 +29,7 @@ export const FEEDBACK_STARTS = {
   dateField: 'startedAt'
 }
 
-export const FEEDBACK_COMPLETIONS = {
-  collection: FEEDBACK_COMPLETIONS_COLLECTION,
-  dateField: 'completedAt'
+export const FEEDBACK_RETURNS = {
+  collection: FEEDBACK_RETURNS_COLLECTION,
+  dateField: 'returnedAt'
 }

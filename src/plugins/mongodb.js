@@ -8,7 +8,7 @@ import {
   JOURNEY_STARTS_COLLECTION,
   JOURNEY_NOT_ELIGIBLE_COLLECTION,
   FEEDBACK_STARTS_COLLECTION,
-  FEEDBACK_COMPLETIONS_COLLECTION,
+  FEEDBACK_RETURNS_COLLECTION,
   EMAIL_VERIFICATIONS_COLLECTION,
   EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION
 } from '#/common/constants/collections.js'
@@ -89,12 +89,12 @@ async function createIndexes(db) {
   )
 
   const feedbackStarts = db.collection(FEEDBACK_STARTS_COLLECTION)
-  const feedbackCompletions = db.collection(FEEDBACK_COMPLETIONS_COLLECTION)
+  const feedbackReturns = db.collection(FEEDBACK_RETURNS_COLLECTION)
 
   await feedbackStarts.createIndex({ startedAt: 1 })
-  await feedbackCompletions.createIndex({ completedAt: 1 })
+  await feedbackReturns.createIndex({ returnedAt: 1 })
   await feedbackStarts.createIndex({ nonce: 1 }, { unique: true, sparse: true })
-  await feedbackCompletions.createIndex(
+  await feedbackReturns.createIndex(
     { nonce: 1 },
     { unique: true, sparse: true }
   )

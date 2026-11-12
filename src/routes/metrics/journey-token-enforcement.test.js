@@ -5,7 +5,7 @@ import {
   JOURNEY_STARTS_COLLECTION,
   JOURNEY_NOT_ELIGIBLE_COLLECTION,
   FEEDBACK_STARTS_COLLECTION,
-  FEEDBACK_COMPLETIONS_COLLECTION
+  FEEDBACK_RETURNS_COLLECTION
 } from '#/common/constants/collections.js'
 
 // When journeyToken.secret is set, both public beacons must carry a valid signed
@@ -21,9 +21,9 @@ const cases = [
     collection: FEEDBACK_STARTS_COLLECTION
   },
   {
-    label: 'feedback completions',
-    path: '/metrics/feedback-completions',
-    collection: FEEDBACK_COMPLETIONS_COLLECTION
+    label: 'feedback returns',
+    path: '/metrics/feedback-returns',
+    collection: FEEDBACK_RETURNS_COLLECTION
   },
   {
     label: 'journey starts',

@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto'
 import { SignJWT } from 'jose'
 import {
   FEEDBACK_STARTS_COLLECTION,
-  FEEDBACK_COMPLETIONS_COLLECTION
+  FEEDBACK_RETURNS_COLLECTION
 } from '#/common/constants/collections.js'
 
 const SECRET = 'feedback-test-secret'
@@ -37,7 +37,7 @@ describe('feedback metrics', () => {
     config.set('journeyToken.secret', SECRET)
     await Promise.all([
       server.db.collection(FEEDBACK_STARTS_COLLECTION).deleteMany({}),
-      server.db.collection(FEEDBACK_COMPLETIONS_COLLECTION).deleteMany({})
+      server.db.collection(FEEDBACK_RETURNS_COLLECTION).deleteMany({})
     ])
   })
 
@@ -49,11 +49,7 @@ describe('feedback metrics', () => {
   test('each session can record one of each event, storing only timestamp and nonce', async () => {
     for (const [path, collection, dateField] of [
       ['/metrics/feedback-starts', FEEDBACK_STARTS_COLLECTION, 'startedAt'],
-      [
-        '/metrics/feedback-completions',
-        FEEDBACK_COMPLETIONS_COLLECTION,
-        'completedAt'
-      ]
+      ['/metrics/feedback-returns', FEEDBACK_RETURNS_COLLECTION, 'returnedAt']
     ]) {
       const request = {
         method: 'POST',
@@ -78,11 +74,7 @@ describe('feedback metrics', () => {
 
   test.each([
     ['/metrics/feedback-starts', FEEDBACK_STARTS_COLLECTION, 'startedAt'],
-    [
-      '/metrics/feedback-completions',
-      FEEDBACK_COMPLETIONS_COLLECTION,
-      'completedAt'
-    ]
+    ['/metrics/feedback-returns', FEEDBACK_RETURNS_COLLECTION, 'returnedAt']
   ])(
     '%s counts each unsigned call when the journey token secret is unset',
     async (path, collection, dateField) => {
@@ -118,7 +110,7 @@ describe('feedback metrics', () => {
   test('includes the whole to date for both feedback metrics and excludes adjacent days', async () => {
     for (const [collection, dateField] of [
       [FEEDBACK_STARTS_COLLECTION, 'startedAt'],
-      [FEEDBACK_COMPLETIONS_COLLECTION, 'completedAt']
+      [FEEDBACK_RETURNS_COLLECTION, 'returnedAt']
     ]) {
       await server.db
         .collection(collection)
@@ -141,9 +133,9 @@ describe('feedback metrics', () => {
     expect(response.statusCode).toBe(200)
     expect(response.result).toMatchObject({
       feedbackStarted: 2,
-      feedbackCompleted: 2,
-      byMonth: [{ month: '2026-01', feedbackStarted: 2, feedbackCompleted: 2 }],
-      byYear: [{ year: '2026', feedbackStarted: 2, feedbackCompleted: 2 }]
+      feedbackReturned: 2,
+      byMonth: [{ month: '2026-01', feedbackStarted: 2, feedbackReturned: 2 }],
+      byYear: [{ year: '2026', feedbackStarted: 2, feedbackReturned: 2 }]
     })
   })
 
@@ -155,8 +147,8 @@ describe('feedback metrics', () => {
         { startedAt: new Date('2026-01-01T10:00:00Z') },
         { startedAt: new Date('2026-01-02T10:00:00Z') }
       ])
-    await server.db.collection(FEEDBACK_COMPLETIONS_COLLECTION).insertOne({
-      completedAt: new Date('2026-02-01T10:00:00Z')
+    await server.db.collection(FEEDBACK_RETURNS_COLLECTION).insertOne({
+      returnedAt: new Date('2026-02-01T10:00:00Z')
     })
     const get = (query = '') =>
       server.inject({
@@ -169,26 +161,26 @@ describe('feedback metrics', () => {
     expect(response.statusCode).toBe(200)
     expect(response.result).toMatchObject({
       feedbackStarted: 3,
-      feedbackCompleted: 1,
+      feedbackReturned: 1,
       finished: 0,
       dropOuts: 0,
       completionRate: null,
       byMonth: [
-        { month: '2025-12', feedbackStarted: 1, feedbackCompleted: 0 },
-        { month: '2026-01', feedbackStarted: 2, feedbackCompleted: 0 },
-        { month: '2026-02', feedbackStarted: 0, feedbackCompleted: 1 }
+        { month: '2025-12', feedbackStarted: 1, feedbackReturned: 0 },
+        { month: '2026-01', feedbackStarted: 2, feedbackReturned: 0 },
+        { month: '2026-02', feedbackStarted: 0, feedbackReturned: 1 }
       ],
       byYear: [
-        { year: '2025', feedbackStarted: 1, feedbackCompleted: 0 },
-        { year: '2026', feedbackStarted: 2, feedbackCompleted: 1 }
+        { year: '2025', feedbackStarted: 1, feedbackReturned: 0 },
+        { year: '2026', feedbackStarted: 2, feedbackReturned: 1 }
       ]
     })
     const filtered = await get('?from=2026-01-02&to=2026-01-31')
     expect(filtered.result).toMatchObject({
       feedbackStarted: 1,
-      feedbackCompleted: 0,
-      byMonth: [{ month: '2026-01', feedbackStarted: 1, feedbackCompleted: 0 }],
-      byYear: [{ year: '2026', feedbackStarted: 1, feedbackCompleted: 0 }]
+      feedbackReturned: 0,
+      byMonth: [{ month: '2026-01', feedbackStarted: 1, feedbackReturned: 0 }],
+      byYear: [{ year: '2026', feedbackStarted: 1, feedbackReturned: 0 }]
     })
   })
 })

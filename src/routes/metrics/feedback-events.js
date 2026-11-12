@@ -1,6 +1,6 @@
 import {
   recordFeedbackStart,
-  recordFeedbackCompletion
+  recordFeedbackReturn
 } from '#/services/metrics/feedback/feedback.js'
 import { beaconRoute } from './helpers/route-options.js'
 
@@ -11,8 +11,8 @@ export const metricsFeedbackEvents = [
     'feedback start'
   ),
   beaconRoute(
-    '/metrics/feedback-completions',
-    recordFeedbackCompletion,
-    'feedback completion'
+    '/metrics/feedback-returns',
+    recordFeedbackReturn,
+    'feedback return'
   )
 ]

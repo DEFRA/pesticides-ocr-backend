@@ -3,7 +3,7 @@ import { countJourneyNotEligible } from '#/services/metrics/journey-not-eligible
 import { countRegistrations } from '#/services/metrics/registrations/registrations.js'
 import {
   countFeedbackStarts,
-  countFeedbackCompletions
+  countFeedbackReturns
 } from '#/services/metrics/feedback/feedback.js'
 
 const RATE_DECIMAL_PLACES = 4
@@ -21,7 +21,7 @@ function summarise({
   registrations,
   notEligible,
   feedbackStarted,
-  feedbackCompleted
+  feedbackReturned
 }) {
   const finished = registrations + notEligible
   return {
@@ -29,7 +29,7 @@ function summarise({
     registrations,
     notEligible,
     feedbackStarted,
-    feedbackCompleted,
+    feedbackReturned,
     finished,
     dropOuts: Math.max(0, starts - finished),
     completionRate: rate(finished, starts),
@@ -49,7 +49,7 @@ function byYear(monthly) {
     registrations,
     notEligible,
     feedbackStarted,
-    feedbackCompleted
+    feedbackReturned
   } of monthly) {
     const year = month.slice(0, YEAR_LENGTH)
     const sums = years.get(year) ?? {
@@ -57,13 +57,13 @@ function byYear(monthly) {
       registrations: 0,
       notEligible: 0,
       feedbackStarted: 0,
-      feedbackCompleted: 0
+      feedbackReturned: 0
     }
     sums.starts += starts
     sums.registrations += registrations
     sums.notEligible += notEligible
     sums.feedbackStarted += feedbackStarted
-    sums.feedbackCompleted += feedbackCompleted
+    sums.feedbackReturned += feedbackReturned
     years.set(year, sums)
   }
   return [...years].map(([year, sums]) => ({ year, ...summarise(sums) }))
@@ -75,13 +75,13 @@ export async function summariseJourneys(sources, { from, to } = {}) {
     registrations,
     notEligible,
     feedbackStarted,
-    feedbackCompleted
+    feedbackReturned
   ] = await Promise.all([
     countJourneyStarts(sources, { from, to }),
     countRegistrations(sources, { from, to }),
     countJourneyNotEligible(sources, { from, to }),
     countFeedbackStarts(sources, { from, to }),
-    countFeedbackCompletions(sources, { from, to })
+    countFeedbackReturns(sources, { from, to })
   ])
 
   // A document without its date field counts in the totals but has no month.
@@ -92,7 +92,7 @@ export async function summariseJourneys(sources, { from, to } = {}) {
         registrations,
         notEligible,
         feedbackStarted,
-        feedbackCompleted
+        feedbackReturned
       ].flatMap((series) => series.byMonth.map(({ month }) => month))
     )
   ]
@@ -105,7 +105,7 @@ export async function summariseJourneys(sources, { from, to } = {}) {
     registrations: countFor(registrations, month),
     notEligible: countFor(notEligible, month),
     feedbackStarted: countFor(feedbackStarted, month),
-    feedbackCompleted: countFor(feedbackCompleted, month)
+    feedbackReturned: countFor(feedbackReturned, month)
   }))
 
   return {
@@ -114,7 +114,7 @@ export async function summariseJourneys(sources, { from, to } = {}) {
       registrations: registrations.total,
       notEligible: notEligible.total,
       feedbackStarted: feedbackStarted.total,
-      feedbackCompleted: feedbackCompleted.total
+      feedbackReturned: feedbackReturned.total
     }),
     byYear: byYear(monthly),
     byMonth: monthly.map(({ month, ...counts }) => ({

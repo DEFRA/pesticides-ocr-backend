@@ -447,7 +447,7 @@ The frontend records journey and feedback events, each at most once per session:
 | `POST /metrics/journey-starts`       | a journey start (the first question after the start page)      |
 | `POST /metrics/journey-not-eligible` | an exit via the "You do not need to use this service" page     |
 | `POST /metrics/feedback-starts`      | opening the feedback survey via the frontend `/feedback` route |
-| `POST /metrics/feedback-completions` | visiting the survey's return page, `/feedback/thank-you`       |
+| `POST /metrics/feedback-returns`     | visiting the survey's return page, `/feedback/thank-you`       |
 
 These are public, as applicants aren't signed in. When `JOURNEY_TOKEN_SECRET` is set (the same value on the frontend), each must carry the frontend's signed per-session token in an `x-journey-token` header: a missing or forged token is a `401`, and a repeated one is stored once. Only a timestamp is stored, plus the token's session nonce when the token is required. All return `204`.
 
@@ -468,7 +468,7 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
   "registrations": 3,
   "notEligible": 1,
   "feedbackStarted": 2,
-  "feedbackCompleted": 1,
+  "feedbackReturned": 1,
   "finished": 4,
   "dropOuts": 2,
   "completionRate": 0.6667,
@@ -480,7 +480,7 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
       "registrations": 3,
       "notEligible": 1,
       "feedbackStarted": 2,
-      "feedbackCompleted": 1,
+      "feedbackReturned": 1,
       "finished": 4,
       "dropOuts": 2,
       "completionRate": 0.6667,
@@ -494,7 +494,7 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
       "registrations": 2,
       "notEligible": 1,
       "feedbackStarted": 1,
-      "feedbackCompleted": 1,
+      "feedbackReturned": 1,
       "finished": 3,
       "dropOuts": 1,
       "completionRate": 0.75,
@@ -506,7 +506,7 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
       "registrations": 1,
       "notEligible": 0,
       "feedbackStarted": 1,
-      "feedbackCompleted": 0,
+      "feedbackReturned": 0,
       "finished": 1,
       "dropOuts": 1,
       "completionRate": 0.5,
@@ -516,7 +516,7 @@ The read endpoints need case-officer bearer auth and accept optional inclusive `
 }
 ```
 
-The dashboard API also includes `feedbackStarted` and `feedbackCompleted` in the overall totals and every `byYear` / `byMonth` entry (EQ-706), using the same case-officer auth and inclusive `from` / `to` filters. Months with only feedback are included. Feedback does not change `finished`, drop-outs or journey rates.
+The dashboard API also includes `feedbackStarted` and `feedbackReturned` in the overall totals and every `byYear` / `byMonth` entry (EQ-706), using the same case-officer auth and inclusive `from` / `to` filters. Months with only feedback are included. Feedback does not change `finished`, drop-outs or journey rates.
 
 A journey is finished when it reaches either end point: a saved registration (`registrations`) or the "You do not need to use this service" page (`notEligible`). Drop-outs are starts minus finished, floored at zero. The completion rate is finished ÷ starts, the GDS completion rate; the registration rate is registrations ÷ starts. Rates are capped at 1, and are `null` with no starts. A journey can start in one month and finish in the next, and start events are best-effort, so monthly figures are approximate; periods before start tracking began have no starts to compare against.
 

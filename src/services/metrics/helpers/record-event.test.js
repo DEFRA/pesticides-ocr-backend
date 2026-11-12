@@ -5,14 +5,14 @@ import {
   JOURNEY_STARTS,
   JOURNEY_NOT_ELIGIBLE,
   FEEDBACK_STARTS,
-  FEEDBACK_COMPLETIONS
+  FEEDBACK_RETURNS
 } from './journey-events.js'
 
 vi.mock('./send-server-event.js', () => ({
   sendServerEvent: vi.fn()
 }))
 
-test.each([FEEDBACK_STARTS, FEEDBACK_COMPLETIONS])(
+test.each([FEEDBACK_STARTS, FEEDBACK_RETURNS])(
   'feedback events are stored without sending to GA4 ($collection)',
   async (event) => {
     sendServerEvent.mockReset()
