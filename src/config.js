@@ -1,4 +1,6 @@
 import convict from 'convict'
+
+import { EXTERNAL_USER_ROLE } from '#/common/constants/roles.js'
 import convictFormatWithValidator from 'convict-format-with-validator'
 
 import { convictValidateMongoUri } from '#/common/helpers/convict/validate-mongo-uri.js'
@@ -350,6 +352,32 @@ export const config = convict({
       default: '',
       env: 'JOURNEY_TOKEN_SECRET',
       sensitive: true
+    }
+  },
+  // External-user RBAC: the access token issued after a successful magic-link
+  // email verification, scoped to the single registration the applicant is
+  // permitted to view/edit. Distinct from the link token (one-time, used only
+  // to prove inbox ownership) and from the journey token (session tracking) —
+  // this is the actual authorisation credential for record-level access.
+  externalUser: {
+    role: {
+      doc: 'The RBAC role value assigned to authenticated external users (own-record access only). Not configurable via Entra — external users have no Entra identity.',
+      format: String,
+      default: EXTERNAL_USER_ROLE,
+      env: 'EXTERNAL_USER_ROLE_VALUE'
+    },
+    tokenSecret: {
+      doc: 'HMAC secret used to sign/verify external-user access tokens issued after email verification. Set via CDP Secrets, never committed. Empty = fails closed (no external-user token can be issued or verified) outside local tier.',
+      format: String,
+      default: '',
+      env: 'EXTERNAL_USER_TOKEN_SECRET',
+      sensitive: true
+    },
+    tokenTtlSeconds: {
+      doc: 'Lifetime (seconds) of an external-user access token before it must be re-issued via a fresh email verification.',
+      format: 'nat',
+      default: 1800,
+      env: 'EXTERNAL_USER_TOKEN_TTL_SECONDS'
     }
   }
 })

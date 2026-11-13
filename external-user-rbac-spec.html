@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>External User RBAC — Specification</title>
+<style>
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    max-width: 960px;
+    margin: 40px auto;
+    padding: 0 24px;
+    color: #0b0c0c;
+    line-height: 1.6;
+  }
+  h1 { font-size: 1.8em; border-bottom: 3px solid #1d70b8; padding-bottom: 8px; }
+  h2 { font-size: 1.3em; margin-top: 2em; color: #1d70b8; border-bottom: 1px solid #b1b4b6; padding-bottom: 4px; }
+  h3 { font-size: 1.1em; margin-top: 1.5em; color: #0b0c0c; }
+  code {
+    background: #f3f2f1;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+    font-size: 0.9em;
+  }
+  pre {
+    background: #f3f2f1;
+    padding: 10px 14px;
+    border-radius: 4px;
+    overflow-x: auto;
+  }
+  pre code { background: none; padding: 0; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1em 0;
+  }
+  th, td {
+    border: 1px solid #b1b4b6;
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: #1d70b8; color: #fff; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  ul, ol { margin-top: 0.3em; }
+  li { margin-bottom: 4px; }
+  blockquote {
+    border-left: 4px solid #1d70b8;
+    margin: 1em 0;
+    padding: 0.2em 1em;
+    color: #505a5f;
+    font-style: italic;
+    background: #f8f8f8;
+  }
+  hr { border: none; border-top: 1px solid #b1b4b6; margin: 2em 0; }
+  footer {
+    margin-top: 3em;
+    font-size: 0.85em;
+    color: #505a5f;
+    border-top: 1px solid #b1b4b6;
+    padding-top: 1em;
+  }
+</style>
+</head>
+<body>
+
+<h1>External User RBAC — Specification</h1>
+
+<blockquote>
+This is a dedicated specification for <strong>External User RBAC</strong> (applicant self-service access to an
+existing registration), split out from the magic-link email-verification documents it builds on top of. For the
+underlying email-verification mechanism itself (requesting/resending/verifying a link for a brand-new submission),
+see <code>magic-link-api-design.md</code>. This document covers only what RBAC adds on top of that.
+</blockquote>
+
+<table>
+  <tr><th>Service</th><td>pesticides-ocr-backend (API)</td></tr>
+  <tr><th>Builds on</th><td>Magic-link email verification (<code>magic-link-api-design.md</code>) — specifically <code>POST /email-verifications/verify</code></td></tr>
+  <tr><th>Status</th><td>Implemented; all design decisions confirmed (2026-11-11)</td></tr>
+  <tr><th>Related docs</th><td><code>magic-link-tickets.md</code> → "Complete secure applicant access to registrations: decisions confirmed"; <code>external-user-rbac.postman_collection.json</code>; <code>magic-link-tester-guide.md</code> §1a for a plain-English summary</td></tr>
+</table>
+
+<hr>
+
+<h2>1. Purpose and scope</h2>
+
+<p>Magic-link email verification (see <code>magic-link-api-design.md</code>) proves an applicant owns an email address, for the duration of a single journey, with no lasting session or token. That's sufficient for completing a brand-new submission, but it doesn't let an applicant <strong>come back later</strong> to view or edit a registration they already made.</p>
+
+<p><strong>External User RBAC</strong> is the additive capability that lets them do that: an applicant who already owns a registration (as its <code>primaryContact.contactEmail</code>) can prove that ownership again by magic link, and in exchange receive a short-lived access token scoped to <em>that one registration only</em>.</p>
+
+<p><strong>In scope:</strong> entitlement checking (does this verified email really own this registration), issuing/renewing/revoking scoped access tokens, and the two protected endpoints (<code>GET</code>/<code>PATCH /registrations/&#123;reference&#125;</code>) that accept them.</p>
+
+<p><strong>Out of scope:</strong> the email-verification mechanism itself (link generation, Notify sending, rate limiting — unchanged, see <code>magic-link-api-design.md</code>); any change to internal (staff) authentication or authorisation.</p>
+
+<h3>Relationship to internal (staff) RBAC</h3>
+
+<p>This is entirely additive and isolated from staff access. Internal users (case officers, etc.) authenticate via a completely separate auth strategy (<code>entra-bearer</code>, backed by Microsoft Entra / Azure AD) and are unaffected by anything in this document. The two strategies cannot accept each other's tokens — see §4.</p>
+
+<hr>
+
+<h2>2. How entitlement works</h2>
+
+<p>Verifying an email address only proves the caller controls that inbox. It does <strong>not</strong> by itself prove they're entitled to any particular registration. Before any access is granted, the backend performs an explicit entitlement check:</p>
+
+<pre><code>verified email (lower-cased, trimmed)
+    ==
+registration.primaryContact.contactEmail (lower-cased, trimmed)</code></pre>
+
+<p>This is the <strong>only</strong> relationship that grants entitlement (see decision §6.1 below) — not any other contact on the registration, such as an additional address's contact.</p>
+
+<p>A failed check — whether because the email genuinely doesn't match, or because the supplied <code>reference</code> doesn't exist at all — returns the identical generic <code>403 REGISTRATION_ACCESS_DENIED</code>, so a caller can never use the response to learn whether a reference exists or who owns it (see decision §6.6).</p>
+
+<hr>
+
+<h2>3. API contract (addition to <code>POST /email-verifications/verify</code>)</h2>
+
+<p>The existing magic-link verify endpoint gains one optional field:</p>
+
+<table>
+  <tr><th>Field</th><th>Type</th><th>Notes</th></tr>
+  <tr><td><code>reference</code></td><td>string, optional</td><td>The registration the applicant wants access to. Omit entirely for a brand-new submission — behaviour is then <strong>completely unchanged</strong> from the base magic-link design (no entitlement check, no token, no lasting access)</td></tr>
+</table>
+
+<h3>Request</h3>
+<pre><code>POST /email-verifications/verify
+{
+  "token": "&lt;the 43-character link token&gt;",
+  "reference": "OCR-ABC-123"
+}</code></pre>
+
+<h3>Response — entitled (200)</h3>
+<pre><code>{
+  "outcome": "VERIFIED",
+  "sameJourney": true,
+  "externalAccessToken": "&lt;jwt, ~30 minutes&gt;"
+}</code></pre>
+
+<h3>Response — not entitled (403)</h3>
+<pre><code>{
+  "statusCode": 403,
+  "error": "Forbidden",
+  "message": "Not authorised to access this registration",
+  "code": "REGISTRATION_ACCESS_DENIED"
+}</code></pre>
+
+<p>Every other outcome of the underlying link verification (expired, superseded, already used, invalid) is completely unchanged — see <code>magic-link-api-design.md</code> §7.3 / README "POST /email-verifications/verify".</p>
+
+<hr>
+
+<h2>4. The two protected endpoints</h2>
+
+<table>
+  <tr><th>Endpoint</th><th>Auth</th><th>Purpose</th></tr>
+  <tr><td><code>GET /registrations/&#123;reference&#125;</code></td><td><code>Authorization: Bearer &lt;externalAccessToken&gt;</code></td><td>Read the applicant's own registration, as stored, including its current <code>version</code></td></tr>
+  <tr><td><code>PATCH /registrations/&#123;reference&#125;</code></td><td><code>Authorization: Bearer &lt;externalAccessToken&gt;</code></td><td>Update fields on the applicant's own registration (optimistic concurrency via <code>version</code>, same rule as the internal <code>DELETE</code>)</td></tr>
+</table>
+
+<p>Both are guarded by <strong>two independent checks</strong>, layered:</p>
+
+<ol>
+  <li><strong>Role check</strong> (<code>requireExternalUser</code>) — is this a validly-signed external-user token at all? (<code>src/auth/external-bearer-scheme.js</code>)</li>
+  <li><strong>Record check</strong> (<code>requireOwnRegistration</code>) — does the token's own claim name <em>this</em> reference, <strong>and</strong> does a currently active (not expired, not revoked) grant still exist for it? (<code>src/auth/require-own-registration.js</code>, backed by <code>src/repositories/registration-access.js</code>)</li>
+</ol>
+
+<p>Both must pass. A token that's merely <em>valid</em> is never enough on its own — the persisted grant is re-checked on every request, so a revoked or expired grant can't be used for the remainder of an otherwise-still-valid token's lifetime.</p>
+
+<h3>Token shape (<code>src/services/external-user/access-token.js</code>)</h3>
+
+<table>
+  <tr><th>Claim</th><th>Value</th></tr>
+  <tr><td>Algorithm</td><td>HS256</td></tr>
+  <tr><td>Issuer</td><td><code>pesticides-ocr-backend</code></td></tr>
+  <tr><td>Audience</td><td><code>pesticides-ocr-external-user</code></td></tr>
+  <tr><td>Subject</td><td>The verified identity (opaque, never the raw email)</td></tr>
+  <tr><td><code>reference</code></td><td>The one registration this token is scoped to</td></tr>
+  <tr><td>Lifetime</td><td><code>externalUser.tokenTtlSeconds</code>, default 1800s (30 minutes)</td></tr>
+  <tr><td>Secret</td><td><code>EXTERNAL_USER_TOKEN_SECRET</code> (CDP secret). Fails closed if unset — the service cannot issue or verify any token</td></tr>
+</table>
+
+<p>Deliberately distinct issuer, audience and signing material from the internal Entra tokens, so the two auth strategies (<code>entra-bearer</code> vs <code>external-bearer</code>) can never accept each other's credentials, even by accident — see the dedicated cross-strategy test in <code>src/auth/external-bearer-scheme.test.js</code>.</p>
+
+<hr>
+
+<h2>5. Grant lifecycle (<code>ocr-registration-access</code> collection)</h2>
+
+<p>A <strong>grant</strong> is a persisted record that a given verified identity may access a given registration. It's the thing <code>requireOwnRegistration</code> re-checks on every request — distinct from (but deliberately tied to the lifetime of) the access token itself.</p>
+
+<table>
+  <tr><th>Event</th><th>Effect on grants</th></tr>
+  <tr><td>Successful entitlement check (verify + <code>reference</code>)</td><td>Creates a new grant, or <strong>renews</strong> an existing one in place (new <code>grantedAt</code>/<code>expiresAt</code>, any prior revocation cleared) — never a duplicate</td></tr>
+  <tr><td>Grant expiry</td><td><code>expiresAt</code> is set to match the access token's TTL (30 minutes) at the moment of grant/renewal — grant and token expire together</td></tr>
+  <tr><td><code>PATCH</code> changes <code>primaryContact.contactEmail</code></td><td><strong>Every</strong> existing grant on that registration is revoked immediately, for every identity that ever held one, not just the caller's</td></tr>
+</table>
+
+<p>An inactive grant (expired <strong>or</strong> revoked) is treated identically by <code>isPermitted</code> — both mean "not permitted", with no way to distinguish the two from the outside.</p>
+
+<hr>
+
+<h2>6. Design decisions (all confirmed 2026-11-11)</h2>
+
+<p>Full rationale for each of these lives in <code>magic-link-tickets.md</code> → "Complete secure applicant access to registrations: decisions confirmed". Summarised here for quick reference:</p>
+
+<h3>6.1 Which contact establishes entitlement</h3>
+<p><strong>Decision:</strong> only the registration's own <code>primaryContact.contactEmail</code>. No other contact (e.g. an additional address's) is ever entitled.</p>
+
+<h3>6.2 Which routes accept applicants vs staff</h3>
+<p><strong>Decision:</strong> completely separate routes/strategies. No route is genuinely shared between the two populations.</p>
+
+<h3>6.3 Grant expiry, revocation and re-verification</h3>
+<p><strong>Decision:</strong> grant and token lifetimes are tied together (30 minutes); re-verifying renews the existing grant rather than duplicating it.</p>
+
+<h3>6.4 Effect of a contact-email change</h3>
+<p><strong>Decision:</strong> immediate, unconditional revocation of every existing grant on that registration — no "let the current session finish" grace period.</p>
+
+<h3>6.5 Token issuer/audience/algorithm/lifetime</h3>
+<p><strong>Decision:</strong> HS256, distinct issuer/audience from Entra tokens, 30-minute lifetime (intentionally matching the frontend's planned 30-minute session TTL).</p>
+
+<h3>6.6 403 vs non-disclosing 404 for denied access</h3>
+<p><strong>Decision:</strong> generic <code>403</code> (matches the rest of the API's convention for "authenticated but not allowed"), with an identical body whether the registration doesn't exist or simply isn't the caller's.</p>
+
+<hr>
+
+<h2>7. Testing</h2>
+
+<p>See:</p>
+<ul>
+  <li><code>external-user-rbac.postman_collection.json</code> — API-level request/response checks, covering entitlement success/failure, cross-record denial, token expiry, and internal-route isolation.</li>
+  <li><code>scripts/test-external-user-flow.js</code> — an automated end-to-end script walking the whole flow (see <code>magic-link-tester-guide.md</code> §1a onward for the plain-English tester guide, or a dedicated RBAC tester guide if split out separately).</li>
+  <li><code>src/auth/external-bearer-scheme.test.js</code>, <code>src/auth/require-own-registration.test.js</code>, <code>src/repositories/registration-access.test.js</code>, <code>src/services/external-user/*.test.js</code>, <code>src/routes/registration/external-user-rbac.integration.test.js</code> — unit and integration coverage.</li>
+</ul>
+
+<footer>
+  See also: <code>magic-link-api-design.md</code> (the email-verification mechanism this builds on), <code>magic-link-tickets.md</code> (ticket breakdown and confirmed decisions), <code>README.md</code> → "External-user RBAC" (API reference, kept in the main API spec since the two protected endpoints are documented there alongside every other route).
+</footer>
+
+</body>
+</html>

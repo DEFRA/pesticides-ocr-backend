@@ -374,6 +374,105 @@ describe('email verification: verify and current status', () => {
     })
   })
 
+  describe('POST /email-verifications/verify with a reference (external-user RBAC entitlement)', () => {
+    const REGISTRATION_COLLECTION = 'ocr-registration'
+    const REGISTRATION_ACCESS_COLLECTION = 'ocr-registration-access'
+    const REFERENCE = 'OCR-ENT-001'
+
+    const seedRegistration = (
+      contactEmail,
+      reference = REFERENCE,
+      version = 1
+    ) =>
+      server.db.collection(REGISTRATION_COLLECTION).insertOne({
+        reference,
+        version,
+        businessName: 'Entitlement Test Co',
+        primaryContact: { contactEmail }
+      })
+
+    beforeEach(async () => {
+      config.set('externalUser.tokenSecret', 'external-user-test-secret')
+      await server.db.collection(REGISTRATION_COLLECTION).deleteMany({})
+      await server.db
+        .collection(REGISTRATION_ACCESS_COLLECTION)
+        .deleteMany({})
+    })
+
+    test('issues a grant and an externalAccessToken when the verified email matches the registration contact', async () => {
+      await seedRegistration(EMAIL)
+      const token = await sendLink()
+
+      const response = await server.inject({
+        method: 'POST',
+        url: '/email-verifications/verify',
+        headers: journeyHeaders(JOURNEY),
+        payload: { token, reference: REFERENCE }
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.result.externalAccessToken).toBeTypeOf('string')
+      const grant = await server.db
+        .collection(REGISTRATION_ACCESS_COLLECTION)
+        .findOne({ reference: REFERENCE })
+      expect(grant).toMatchObject({ reference: REFERENCE })
+    })
+
+    test('returns 403 REGISTRATION_ACCESS_DENIED, no token and no grant, when the verified email does not match the registration contact', async () => {
+      await seedRegistration('someone-else@example.com')
+      const token = await sendLink()
+
+      const response = await server.inject({
+        method: 'POST',
+        url: '/email-verifications/verify',
+        headers: journeyHeaders(JOURNEY),
+        payload: { token, reference: REFERENCE }
+      })
+
+      expect(response.statusCode).toBe(403)
+      expect(response.result).toMatchObject({
+        code: 'REGISTRATION_ACCESS_DENIED'
+      })
+      expect(response.result.externalAccessToken).toBeUndefined()
+      expect(
+        await server.db
+          .collection(REGISTRATION_ACCESS_COLLECTION)
+          .findOne({ reference: REFERENCE })
+      ).toBeNull()
+    })
+
+    test('returns the same generic denial for a reference that does not exist at all, not a different error', async () => {
+      const token = await sendLink()
+
+      const response = await server.inject({
+        method: 'POST',
+        url: '/email-verifications/verify',
+        headers: journeyHeaders(JOURNEY),
+        payload: { token, reference: 'OCR-NOT-REAL' }
+      })
+
+      expect(response.statusCode).toBe(403)
+      expect(response.result).toMatchObject({
+        code: 'REGISTRATION_ACCESS_DENIED'
+      })
+      expect(response.payload).not.toContain('Entitlement Test Co')
+    })
+
+    test('verifying without a reference is unaffected (no entitlement check, no token issued)', async () => {
+      await seedRegistration(EMAIL)
+      const token = await sendLink()
+
+      const response = await verify(token)
+
+      expect(response.statusCode).toBe(200)
+      expect(response.result).toEqual({
+        outcome: 'VERIFIED',
+        sameJourney: true
+      })
+      expect(response.result.externalAccessToken).toBeUndefined()
+    })
+  })
+
   describe('GET /email-verifications/current', () => {
     test('returns none, with no dates, before any link is requested', async () => {
       const response = await current()

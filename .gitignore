@@ -5,6 +5,7 @@
 .server
 node_modules
 npm-debug.log
+dev-server.log
 coverage
 .cache
 .eslintcache

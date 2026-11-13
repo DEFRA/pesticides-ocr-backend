@@ -19,3 +19,9 @@ export const VERIFICATION_FAILED = 'VERIFICATION_FAILED'
 // journey. One code for every reason, as the applicant's fix is the same.
 export const EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED'
 export const VERSION_CONFLICT = 'VERSION_CONFLICT'
+// POST /email-verifications/verify with a reference: the verified email is
+// not entitled to the requested registration (completion ticket AC1). Shares
+// one generic code/response with "no such registration" — the two cases must
+// not be distinguishable by the caller.
+export const REGISTRATION_ACCESS_DENIED = 'REGISTRATION_ACCESS_DENIED'
+

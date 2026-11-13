@@ -1,0 +1,501 @@
+{
+  "info": {
+    "name": "Pesticides OCR Backend: External User RBAC",
+    "description": "Applicant self-service access to an EXISTING registration (view/edit), built on top of magic-link email verification. This collection covers only the RBAC-specific additions — for the underlying request/resend/verify flow itself, see `email-verification-magic-link.postman_collection.json`.\n\nFull spec: `external-user-rbac-spec.html`. Design decisions (all confirmed): `magic-link-tickets.md` → \"Complete secure applicant access to registrations: decisions confirmed\".\n\n## Setup\n1. Set `baseUrl` (local default `http://localhost:3001`).\n2. Set `journeyTokenSecret` to the backend's `JOURNEY_TOKEN_SECRET` (same as the email-verification collection).\n3. Set `email` to an address on the Notify team-key guest list, OR skip real email sending by seeding a verification record directly in Mongo and setting `linkToken` yourself (the API never returns the raw token, by design) — see `scripts/test-external-user-flow.js` for how the automated test script does this.\n4. Submit a registration first (folder 1) to get a `reference` and set it, with `contactEmail` matching `email`.\n\n## Why two tokens look similar but aren't\n`x-journey-token` binds a request to one frontend session (used throughout email verification). `externalAccessToken` (returned by verify, only when `reference` is supplied) is a completely different, longer-lived credential scoped to one registration. Don't confuse the two — they use different secrets and neither can substitute for the other.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Signs the journey token the same way the frontend/backend do: <nonce>.<hex HMAC-SHA256(nonce)>.",
+          "const secret = pm.collectionVariables.get('journeyTokenSecret')",
+          "if (!secret) { throw new Error('Set the journeyTokenSecret collection variable to the backend JOURNEY_TOKEN_SECRET') }",
+          "let nonce = pm.collectionVariables.get('journeyNonce')",
+          "if (!nonce) {",
+          "  nonce = pm.variables.replaceIn('{{$guid}}')",
+          "  pm.collectionVariables.set('journeyNonce', nonce)",
+          "}",
+          "const signature = CryptoJS.HmacSHA256(nonce, secret).toString(CryptoJS.enc.Hex)",
+          "pm.collectionVariables.set('journeyToken', `${nonce}.${signature}`)"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3001" },
+    { "key": "journeyTokenSecret", "value": "" },
+    { "key": "email", "value": "your.name@example.com" },
+    { "key": "otherEmail", "value": "someone.else@example.com" },
+    { "key": "journeyNonce", "value": "" },
+    { "key": "journeyToken", "value": "" },
+    { "key": "linkToken", "value": "", "description": "Raw magic-link token. The API never returns this — paste it from the email, or seed it directly in Mongo for local testing (see the collection description)." },
+    { "key": "otherLinkToken", "value": "" },
+    { "key": "reference", "value": "", "description": "Set after submitting 'Create own registration' in folder 1." },
+    { "key": "otherReference", "value": "", "description": "Set after submitting 'Create unrelated registration' in folder 1." },
+    { "key": "externalAccessToken", "value": "", "description": "Set automatically by the verify request's test script once obtained." },
+    { "key": "version", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "1. Set up test registrations",
+      "description": "Create your own registration (contact email = {{email}}) and a second, unrelated one (different contact email), so entitlement checks have something real to pass and fail against.",
+      "item": [
+        {
+          "name": "Create own registration",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201))",
+                  "const body = pm.response.json()",
+                  "pm.collectionVariables.set('reference', body.reference)",
+                  "console.log('Own reference:', body.reference)"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessActivities\": [\"manufacture\", \"market\"],\n  \"mainCustomer\": \"professional\",\n  \"businessName\": \"My Own Business Ltd\",\n  \"address\": {\n    \"addressLine1\": \"1 Example Street\",\n    \"addressLine2\": \"\",\n    \"addressTown\": \"Town\",\n    \"addressCounty\": \"\",\n    \"addressPostcode\": \"AB12 3CD\"\n  },\n  \"primaryContact\": {\n    \"contactName\": \"Postman Tester\",\n    \"contactTelephone\": \"01234567890\",\n    \"contactEmail\": \"{{email}}\"\n  },\n  \"addressActivities\": [\"use\", \"store\"],\n  \"quantity\": {\n    \"quantityType\": \"area\",\n    \"quantity\": \"50\"\n  },\n  \"professionalSectors\": [\"agriculture-horticulture\"],\n  \"memberSchemes\": [\"BASIS\"],\n  \"additionalAddresses\": []\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["register"]
+            },
+            "description": "Submitting bypasses the email-verification gate on /register in most local setups (EMAIL_VERIFICATION_REQUIRED_FOR_REGISTRATION=false by default) — if your tier has it enabled, run the full email-verification collection's 'Happy path' folder first instead."
+          }
+        },
+        {
+          "name": "Create unrelated registration (different owner)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201))",
+                  "const body = pm.response.json()",
+                  "pm.collectionVariables.set('otherReference', body.reference)",
+                  "console.log('Other reference:', body.reference)"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessActivities\": [\"manufacture\"],\n  \"mainCustomer\": \"professional\",\n  \"businessName\": \"Someone Else's Business Ltd\",\n  \"address\": {\n    \"addressLine1\": \"2 Example Street\",\n    \"addressLine2\": \"\",\n    \"addressTown\": \"Town\",\n    \"addressCounty\": \"\",\n    \"addressPostcode\": \"AB12 3CD\"\n  },\n  \"primaryContact\": {\n    \"contactName\": \"Someone Else\",\n    \"contactTelephone\": \"01234567891\",\n    \"contactEmail\": \"{{otherEmail}}\"\n  },\n  \"addressActivities\": [\"use\"],\n  \"quantity\": {\n    \"quantityType\": \"area\",\n    \"quantity\": \"10\"\n  },\n  \"professionalSectors\": [\"agriculture-horticulture\"],\n  \"memberSchemes\": [],\n  \"additionalAddresses\": []\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["register"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Verify with reference (entitlement + token issuance)",
+      "description": "Before each request here, make sure `linkToken` holds a fresh, unused link requested for `{{email}}` (see the email-verification collection's 'Request a magic link', or seed one directly for local testing).",
+      "item": [
+        {
+          "name": "Verify for own registration -> 200 + externalAccessToken",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "const body = pm.response.json()",
+                  "pm.test('outcome is VERIFIED', () => pm.expect(body.outcome).to.eql('VERIFIED'))",
+                  "pm.test('includes an externalAccessToken', () => pm.expect(body.externalAccessToken).to.be.a('string'))",
+                  "pm.collectionVariables.set('externalAccessToken', body.externalAccessToken)"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-journey-token", "value": "{{journeyToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{linkToken}}\",\n  \"reference\": \"{{reference}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/email-verifications/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["email-verifications", "verify"]
+            },
+            "description": "The verified email ({{email}}) matches this registration's own primaryContact.contactEmail, so entitlement passes and a scoped access token is issued."
+          }
+        },
+        {
+          "name": "Verify for someone else's registration -> 403 REGISTRATION_ACCESS_DENIED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403))",
+                  "pm.test('code is REGISTRATION_ACCESS_DENIED', () => pm.expect(pm.response.json().code).to.eql('REGISTRATION_ACCESS_DENIED'))",
+                  "pm.test('response does not leak the other business name', () => pm.expect(pm.response.text()).to.not.include(\"Someone Else's Business\"))"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-journey-token", "value": "{{journeyToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{linkToken}}\",\n  \"reference\": \"{{otherReference}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/email-verifications/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["email-verifications", "verify"]
+            },
+            "description": "Proves that owning an inbox alone is not enough: the verified email ({{email}}) does not match otherReference's contact email, so this is refused even though the link itself is genuinely valid. Needs a FRESH, unused linkToken for this test (a magic link is single-use)."
+          }
+        },
+        {
+          "name": "Verify with a non-existent reference -> same 403 (no disclosure)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403))",
+                  "pm.test('code is REGISTRATION_ACCESS_DENIED (identical to a wrong-owner denial)', () => pm.expect(pm.response.json().code).to.eql('REGISTRATION_ACCESS_DENIED'))"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-journey-token", "value": "{{journeyToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{linkToken}}\",\n  \"reference\": \"OCR-DOES-NOT-EXIST\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/email-verifications/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["email-verifications", "verify"]
+            },
+            "description": "Confirms the response is identical whether the reference doesn't exist or just isn't the caller's — the 403 never discloses which. Needs a FRESH, unused linkToken."
+          }
+        },
+        {
+          "name": "Verify with no reference -> unchanged base behaviour (no token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "const body = pm.response.json()",
+                  "pm.test('outcome is VERIFIED', () => pm.expect(body.outcome).to.eql('VERIFIED'))",
+                  "pm.test('no externalAccessToken is issued', () => pm.expect(body.externalAccessToken).to.be.undefined)"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-journey-token", "value": "{{journeyToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{linkToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/email-verifications/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["email-verifications", "verify"]
+            },
+            "description": "Omitting reference entirely must behave exactly as the base magic-link design always has: verified, no entitlement check, no token, no lasting access. Needs a FRESH, unused linkToken."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. View and edit own registration",
+      "item": [
+        {
+          "name": "GET own registration -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "const body = pm.response.json()",
+                  "pm.test('reference matches', () => pm.expect(body.reference).to.eql(pm.collectionVariables.get('reference')))",
+                  "pm.collectionVariables.set('version', body.version)"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{externalAccessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{reference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["registrations", "{{reference}}"]
+            },
+            "description": "Always GET immediately before a PATCH, to read the current version (optimistic concurrency)."
+          }
+        },
+        {
+          "name": "PATCH own registration -> 200, updated + incremented version",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "const body = pm.response.json()",
+                  "pm.test('businessName updated', () => pm.expect(body.businessName).to.eql('My Own Business Ltd (edited)'))",
+                  "pm.collectionVariables.set('version', body.version)"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{externalAccessToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{version}},\n  \"businessName\": \"My Own Business Ltd (edited)\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{reference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["registrations", "{{reference}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Cross-record and cross-population denial",
+      "item": [
+        {
+          "name": "GET someone else's registration with a VALID token -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403', () => pm.response.to.have.status(403))",
+                  "pm.test('no data leakage in the error body', () => { pm.expect(pm.response.text()).to.not.include('businessName'); pm.expect(pm.response.text()).to.not.include(pm.collectionVariables.get('otherReference')) })"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{externalAccessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{otherReference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["registrations", "{{otherReference}}"]
+            },
+            "description": "A GENUINELY VALID token (correctly signed, not expired) for the WRONG reference. requireOwnRegistration rejects it before even reaching the repository, because the token's own claim doesn't name this reference."
+          }
+        },
+        {
+          "name": "PATCH someone else's registration with a VALID token -> 403",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{externalAccessToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 1,\n  \"businessName\": \"Hijacked\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{otherReference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["registrations", "{{otherReference}}"]
+            }
+          }
+        },
+        {
+          "name": "No bearer token at all -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 401', () => pm.response.to.have.status(401))"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{reference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["registrations", "{{reference}}"]
+            }
+          }
+        },
+        {
+          "name": "Garbage / malformed bearer token -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 401', () => pm.response.to.have.status(401))"]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer not-a-real-token" }],
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{reference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["registrations", "{{reference}}"]
+            }
+          }
+        },
+        {
+          "name": "External-user token cannot reach an internal-only route (/search)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('rejected (401/403/404), proving the two auth strategies are isolated', () => pm.expect([401, 403, 404]).to.include(pm.response.code))"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{externalAccessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/search?reference={{reference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["search"],
+              "query": [{ "key": "reference", "value": "{{reference}}" }]
+            },
+            "description": "/search requires the entra-bearer strategy (internal/staff). An external-user token, however validly signed for its own purpose, must be rejected here — the two strategies share nothing."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Contact-email change revokes access",
+      "description": "Run folder 2 and 3 first so externalAccessToken is set and valid.",
+      "item": [
+        {
+          "name": "PATCH contact email -> 200 (succeeds)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.collectionVariables.set('version', pm.response.json().version)"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{externalAccessToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{version}},\n  \"primaryContact\": {\n    \"contactName\": \"Postman Tester\",\n    \"contactTelephone\": \"01234567890\",\n    \"contactEmail\": \"new-address-{{$timestamp}}@example.com\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{reference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["registrations", "{{reference}}"]
+            }
+          }
+        },
+        {
+          "name": "Same (now-stale) token can no longer GET -> 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 403 (grant revoked immediately, token itself unchanged)', () => pm.response.to.have.status(403))"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{externalAccessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{reference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["registrations", "{{reference}}"]
+            },
+            "description": "The token itself is still validly signed and not expired, but its persisted grant was revoked by the PATCH above (immediate, unconditional revocation on contact-email change — decision 6.4 in external-user-rbac-spec.html)."
+          }
+        }
+      ]
+    }
+  ]
+}
