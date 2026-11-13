@@ -11,6 +11,12 @@ import { requireJourneyId } from '#/common/helpers/require-journey-id.js'
 import { withErrorCode } from '#/common/helpers/error-code.js'
 import { HTTP_CREATED } from '#/common/constants/http-status.js'
 import { MAX_EMAIL_LENGTH } from '#/common/constants/email.js'
+import { ACTOR_TYPE } from '#/common/constants/actors.js'
+import {
+  requireExternalUser,
+  requireOwnRegistration
+} from '#/auth/require-own-registration.js'
+import { createRegistrationAccessRepository } from '#/repositories/registration-access.js'
 import {
   EMAIL_NOT_VERIFIED,
   SERVICE_NOT_CONFIGURED
@@ -310,6 +316,106 @@ export const register = [
       } catch (err) {
         request.log(['error'], err)
         throw Boom.internal('Failed to save registration')
+      }
+    }
+  },
+  // External-user RBAC: a verified applicant viewing/editing their own
+  // registration. Authentication is the external-access token issued by
+  // POST /email-verifications/verify (requireExternalUser); authorisation is
+  // then checked per-record (requireOwnRegistration) so the role alone is
+  // never enough to reach another applicant's data (AC2-AC5).
+  {
+    method: 'GET',
+    path: '/registrations/{reference}',
+    options: {
+      auth: requireExternalUser()
+    },
+    handler: async (request, h) => {
+      const { reference } = request.params
+      await requireOwnRegistration(request, reference)
+
+      const registration = await request.registrations.findByReference(
+        reference
+      )
+      // Ownership was already confirmed, so a missing registration here is
+      // an internal inconsistency, not an authorisation failure — but the
+      // response stays generic either way, per AC4/AC5 (no data leakage).
+      if (!registration) {
+        throw Boom.notFound('Registration not found')
+      }
+      return h.response(registration)
+    }
+  },
+  {
+    method: 'PATCH',
+    path: '/registrations/{reference}',
+    options: {
+      auth: requireExternalUser(),
+      validate: {
+        payload: Joi.object().min(1).unknown(true).required(),
+        failAction: async (_request, _h, err) => {
+          throw Boom.badRequest(err.message, {
+            validation: err.details.map((d) => ({
+              field: d.path.join('.'),
+              message: d.message
+            }))
+          })
+        }
+      }
+    },
+    handler: async (request, h) => {
+      const { reference } = request.params
+      await requireOwnRegistration(request, reference)
+
+      const { version, ...changes } = request.payload
+      if (!Number.isInteger(version)) {
+        throw Boom.badRequest('expectedVersion (version) is required')
+      }
+
+      // Confirmed decision (completion ticket AC6 — see
+      // magic-link-tickets.md "Complete secure applicant access to
+      // registrations: decisions confirmed" §4): changing the contact email
+      // alone must not carry over the old email's entitlement. Every existing
+      // grant on this registration (for every identity, not just the
+      // caller's) is revoked as soon as the change is persisted; the new
+      // email must re-verify — via the normal
+      // POST /email-verifications(/verify) flow with this reference — before
+      // anyone can access the registration again. This is deliberately
+      // unconditional (not just "if it differs from the caller's own
+      // verified identity") so a changed email can never retain implicit
+      // access through a stale grant.
+      const changingContactEmail =
+        typeof changes?.primaryContact?.contactEmail === 'string'
+
+      try {
+        const updated = await request.registrations.update(
+          reference,
+          changes,
+          {
+            by: {
+              type: ACTOR_TYPE.EXTERNAL_USER,
+              id: request.auth.credentials.subject
+            },
+            expectedVersion: version,
+            requestId: requestIdFromTrace()
+          }
+        )
+        if (!updated) {
+          throw Boom.notFound('Registration not found')
+        }
+        if (changingContactEmail) {
+          const accessRepository = createRegistrationAccessRepository({
+            db: request.db
+          })
+          await accessRepository.revokeAllForReference(reference)
+        }
+        return h.response(updated)
+      } catch (err) {
+        if (err.isBoom) {
+          throw err
+        }
+        request.log(['error'], err)
+        throw Boom.internal('Failed to update registration')
       }
     }
   }
