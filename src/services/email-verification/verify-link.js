@@ -1,4 +1,5 @@
 import { createLogger } from '#/common/helpers/logging/logger.js'
+import { config } from '#/config.js'
 import {
   EMAIL_VERIFICATION_REJECTED,
   EMAIL_VERIFICATION_VERIFIED
@@ -10,6 +11,7 @@ import {
   TOKEN_SUPERSEDED
 } from '#/common/constants/error-codes.js'
 import { auditEmailVerification } from '#/services/email-verification/audit.js'
+import { hashEmail } from '#/services/email-verification/email-hash.js'
 import { hashLinkToken } from '#/services/email-verification/link-token.js'
 import {
   METRICS,
@@ -51,10 +53,26 @@ export function recordVerifyRejected({ journeyId, email, code }) {
   countEmailVerification(METRICS.REJECTED, { outcome: code })
 }
 
+// Derives a stable external-user "subject" from a verified email address —
+// an HMAC, like the rate-limit keys, so the raw address is never carried on
+// credentials, but the same address always maps to the same subject (needed
+// so a later re-verification matches the same registration-access grant).
+function subjectForEmail(email) {
+  const secret = config.get('emailVerification.hashSecret')
+  return hashEmail(email, secret)
+}
+
 // Verifies the email address a magic link was sent to, for the journey that
 // requested it. `journeyId` is the caller's journey, or null: it only decides
 // `sameJourney`, so a link opened in another browser still verifies. Resolves
-// to { verified: true, sameJourney } or { verified: false, code, sameJourney }.
+// to { verified: true, sameJourney, subject, email } or
+// { verified: false, code, sameJourney }.
+//
+// `email` is returned (not just its hash/subject) only so the caller can run
+// an entitlement check against a registration's contact email immediately
+// after verification — proving control of an inbox is not, by itself,
+// entitlement to any particular registration (completion ticket AC1). It must
+// never be put on a response payload or a token claim.
 export async function verifyLinkToken(db, { token, journeyId }) {
   const tokenHash = hashLinkToken(token)
   const now = new Date()
@@ -74,7 +92,12 @@ export async function verifyLinkToken(db, { token, journeyId }) {
       sameJourney: verifiedSameJourney
     })
     countEmailVerification(METRICS.VERIFIED)
-    return { verified: true, sameJourney: verifiedSameJourney }
+    return {
+      verified: true,
+      sameJourney: verifiedSameJourney,
+      subject: subjectForEmail(verified.email),
+      email: verified.email
+    }
   }
 
   const record = await findByTokenHash(db, tokenHash)

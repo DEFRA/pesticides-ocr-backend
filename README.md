@@ -117,11 +117,13 @@ git config --global core.autocrlf false
 | `/register`                    | POST      | Submit a pesticide registration application, once its contact email is verified (see [POST /register](#post-register))                  |
 | `/search`                      | GET       | Partial-match search of the register, paginated                                                                                         |
 | `/export`                      | GET       | A reference or free-text match, as a CSV download                                                                                       |
+| `/registrations/{reference}`   | GET       | An applicant's own registration, with an external-access token (see [External-user RBAC](#external-user-rbac))                         |
+| `/registrations/{reference}`   | PATCH     | Update an applicant's own registration, with an external-access token (see [External-user RBAC](#external-user-rbac))                   |
 | `/registrations/{reference}`   | DELETE    | Soft delete a registration, recording who, when and why (see [DELETE /registrations/{reference}](#delete-registrationsreference))       |
 | `/whoami`                      | GET       | Authenticated caller's identity (case-officer scope)                                                                                    |
 | `/metrics/*`                   | GET, POST | Journey metrics (see [Journey metrics](#journey-metrics))                                                                               |
 | `/email-verifications`         | POST      | Email a magic link to confirm the applicant's address (see [POST /email-verifications](#post-email-verifications))                      |
-| `/email-verifications/verify`  | POST      | Use up a magic link, confirming the address (see [POST /email-verifications/verify](#post-email-verificationsverify))                   |
+| `/email-verifications/verify`  | POST      | Use up a magic link, confirming the address, and optionally authorise access to one registration (see [POST /email-verifications/verify](#post-email-verificationsverify)) |
 | `/email-verifications/current` | GET       | The journey's latest link: none, pending, expired or verified (see [GET /email-verifications/current](#get-email-verificationscurrent)) |
 
 ### POST /register
@@ -234,6 +236,56 @@ Rows are registrations as stored, limited to the fields the register shows (refe
 ### GET /export
 
 Same auth as `/search`, returned as a CSV download (`ocr-registrations.csv`). Takes exactly one of `?reference=` (one exact reference, using the configured `REFERENCE_PREFIX`) or `?q=` (a literal free-text match on the same fields as `/search`; blank exports the whole register). A reference exports one record, or just the header row if it doesn't exist. A term exports every match, up to `EXPORT_MAX_ROWS` (default 10000, at least 1); a larger match is a `400` asking for a narrower search, rather than a truncated file. Deleted registrations are never exported.
+
+### GET /registrations/{reference} (applicant)
+
+Applicant-only (see [External-user RBAC](#external-user-rbac)): requires `Authorization: Bearer <externalAccessToken>`, where the token's registration must match `{reference}` **and** a currently active grant must exist for it. Returns the registration exactly as stored, including its current `version` — read this response's `version` immediately before a `PATCH`, since it may have changed since any earlier read.
+
+```json
+{
+  "reference": "OCR-ABC-123",
+  "version": 2,
+  "businessName": "Example Organisation",
+  "primaryContact": {
+    "contactName": "Jane Doe",
+    "contactTelephone": "01234567890",
+    "contactEmail": "jane.doe@example.com"
+  }
+}
+```
+
+| Response | When                                                                                     |
+| -------- | ----------------------------------------------------------------------------------------- |
+| `200`    | The applicant's own registration                                                          |
+| `401`    | The bearer token is missing, invalid, expired, or not an external-user token               |
+| `403`    | The token does not name this reference, or its grant is missing, expired or revoked       |
+
+### PATCH /registrations/{reference} (applicant)
+
+Same auth as the `GET` above. The body must include the **`version` from the applicant's own most recent `GET`** of this registration (optimistic concurrency, same rule as the internal `DELETE` below), plus the changed fields:
+
+```json
+{
+  "version": 2,
+  "primaryContact": {
+    "contactName": "Jane Doe",
+    "contactTelephone": "01234567890",
+    "contactEmail": "jane.doe@example.com"
+  }
+}
+```
+
+**Response (200):** the updated registration, with its new `version`.
+
+| Response | When                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------- |
+| `200`    | Updated: the registration as stored, with the incremented `version`                          |
+| `400`    | `version` is missing or not an integer, or the body is otherwise invalid                    |
+| `401`    | The bearer token is missing, invalid, expired, or not an external-user token                 |
+| `403`    | The token does not name this reference, or its grant is missing, expired or revoked         |
+| `404`    | There's no such registration (ownership was already confirmed, so this means data inconsistency, not an authorisation failure) |
+
+Changing `primaryContact.contactEmail` in this call **revokes every existing grant on the registration** (for every identity that ever held one), immediately after the update is saved — see [External-user RBAC](#external-user-rbac). The new email must go through `POST /email-verifications` → `POST /email-verifications/verify` (with this `reference`) again before anyone, including the same applicant, can access the registration.
 
 ### DELETE /registrations/{reference}
 
@@ -377,6 +429,28 @@ A link verifies once: of any number of concurrent attempts, exactly one succeeds
 | 410    | `TOKEN_SUPERSEDED`    | A newer link was sent for the journey                                                     |
 | 409    | `TOKEN_ALREADY_USED`  | The link has been used. The body also has `sameJourney`, as for a 200                     |
 | 500    | `VERIFICATION_FAILED` | Unexpected error                                                                          |
+
+#### Optional `reference`: authorise access to an existing registration
+
+An applicant returning to view/edit a registration they already submitted includes its `reference` in the body:
+
+```json
+{ "token": "<the 43-character token from the link>", "reference": "OCR-ABC-123" }
+```
+
+The link must still verify exactly as above. Only once it has, the backend checks that the **verified email matches that registration's own `primaryContact.contactEmail`** (trimmed, lower-cased comparison) before doing anything else — verifying an email only proves control of the inbox, not entitlement to any particular registration. If it matches, the response additionally includes a short-lived `externalAccessToken` (see [External-user RBAC](#external-user-rbac)):
+
+```json
+{ "outcome": "VERIFIED", "sameJourney": true, "externalAccessToken": "<jwt>" }
+```
+
+If it does not match — including when `reference` does not correspond to any registration at all — the request is refused with the same generic denial either way, so the response can never be used to learn whether a reference exists or who owns it:
+
+| Status | `code`                       | When                                                                                                          |
+| ------ | ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 403    | `REGISTRATION_ACCESS_DENIED` | The link verified, but the verified email is not the registration's own contact email, or the reference does not exist |
+
+Omitting `reference` entirely keeps the original behaviour unchanged (no entitlement check, no token) — this is the path a brand-new submission's verification still takes.
 
 ### GET /email-verifications/current
 
@@ -556,6 +630,52 @@ The role value(s) are configurable — `GET /whoami` reads `auth.entra.roleValue
 Routes without `options.auth` (e.g. `/health`) stay open. A request with no/invalid token gets `401`; a valid token lacking the required role gets `403`. Configure live mode via `AUTH_MODE=live` + the `ENTRA_*` variables (see `.env.example`). `GET /whoami` is a worked example.
 
 > The exact token contract (whether the frontend forwards the Entra access token or ID token, i.e. the expected `audience`/`issuer`) is confirmed at Entra onboarding and is fully config-driven — no code change needed.
+
+### External-user RBAC
+
+Verified external applicants (not Entra/staff users) are authorised through a **second**, independent auth strategy, `external-bearer` (`src/auth/external-bearer-scheme.js`), so Entra-only routes can never accept an external-user credential and vice versa.
+
+The registration's own owner (its `primaryContact.contactEmail`) gets access by supplying a `reference` when confirming their magic-link email:
+
+```http
+POST /email-verifications/verify
+{ "token": "<link token>", "reference": "OCR-ABC-123" }
+
+200 OK
+{ "outcome": "VERIFIED", "sameJourney": true, "externalAccessToken": "<jwt>" }
+```
+
+**Entitlement is checked before any grant or token is issued.** Verifying the email only proves control of the inbox; it does not by itself prove entitlement to the requested registration. The backend compares the verified email against that registration's own `primaryContact.contactEmail` (`src/services/external-user/entitlement.js`) — a mismatch, or a reference that doesn't exist, both return the same generic `403 REGISTRATION_ACCESS_DENIED`, so the response never discloses which case applies, or whether the reference exists at all.
+
+Only on a successful entitlement check does the backend:
+
+1. record (or renew) an ownership grant (`ocr-registration-access` collection, `src/repositories/registration-access.js`);
+2. return a short-lived, signed JWT (`externalUser.tokenTtlSeconds`, default 1800s) scoped to that one registration.
+
+Omitting `reference` keeps today's behaviour unchanged: no entitlement check, no token, no lasting access — exactly as for a brand-new submission.
+
+**Grant lifecycle**:
+
+- A grant's `expiresAt` matches the access token's TTL — grant and token expire together.
+- Re-verifying the same email for the same reference **renews** the existing grant (new `grantedAt`/`expiresAt`, any prior revocation cleared) rather than creating a duplicate; entitlement is re-checked every time.
+- A grant can be explicitly revoked (`revokeAllForReference`); an expired or revoked grant is treated as not-permitted.
+- **Changing the registration's contact email** (`PATCH /registrations/{reference}` with a new `primaryContact.contactEmail`) revokes every existing grant on that registration immediately — the new email must re-verify (and pass the entitlement check again) before anyone can access the registration.
+
+The token authorises `GET`/`PATCH /registrations/{reference}` (`src/routes/registration/registration.js`), guarded by two checks in combination:
+
+```js
+import { requireExternalUser, requireOwnRegistration } from '#/auth/require-own-registration.js'
+
+options: { auth: requireExternalUser() }, // role check: is this an external-user token?
+handler: async (request, h) => {
+  await requireOwnRegistration(request, request.params.reference) // record check: is it THIS reference, and is the grant still active?
+  // ...
+}
+```
+
+`requireOwnRegistration` checks both the token's own claim **and** the persisted grant (active, not expired, not revoked), so a stale/revoked/expired grant can't be used for the rest of the token's lifetime. Any mismatch returns a generic `403` with no information about whether the requested reference exists. Internal routes (`/search`, `/export`, `/whoami`) are unaffected: they require the `entra-bearer` strategy, which an external-user token can never satisfy.
+
+Requires `EXTERNAL_USER_TOKEN_SECRET` to be set (see `.env.example`) — without it the service fails closed (cannot issue or verify any external-user token).
 
 ## Registration history
 

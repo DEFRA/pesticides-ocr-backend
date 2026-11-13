@@ -18,3 +18,9 @@ export const JOURNEY_NOT_ELIGIBLE_COLLECTION = 'ocr-journey-not-eligible'
 export const EMAIL_VERIFICATIONS_COLLECTION = 'ocr-email-verifications'
 export const EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION =
   'ocr-email-verification-rate-limits'
+
+// External-user RBAC: one record per verified external identity that has been
+// granted access to a registration. Looked up to authorise external-user
+// requests against a specific registration (record-level scope), separate
+// from the one-off email-verification records used only to gate submission.
+export const REGISTRATION_ACCESS_COLLECTION = 'ocr-registration-access'
