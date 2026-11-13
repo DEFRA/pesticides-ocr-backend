@@ -11,6 +11,7 @@ import { metricsJourneyStartEvents } from '#/routes/metrics/journey-start-events
 import { metricsJourneyNotEligible } from '#/routes/metrics/journey-not-eligible.js'
 import { metricsJourneyNotEligibleEvents } from '#/routes/metrics/journey-not-eligible-events.js'
 import { metricsJourneys } from '#/routes/metrics/journeys/index.js'
+import { metricsFeedbackEvents } from '#/routes/metrics/feedback-events.js'
 import { emailVerifications } from '#/routes/email-verification/email-verifications.js'
 import { warnIfJourneyTokenUnset } from '#/routes/metrics/helpers/journey-token-guard.js'
 import {
@@ -39,6 +40,7 @@ export const router = {
           .concat(metricsJourneyNotEligible)
           .concat(metricsJourneyNotEligibleEvents)
           .concat(metricsJourneys)
+          .concat(metricsFeedbackEvents)
           .concat(emailVerifications)
       )
     }

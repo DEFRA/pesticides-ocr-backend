@@ -1,11 +1,32 @@
 import { MONGO_DUPLICATE_KEY_ERROR } from '#/common/constants/mongo.js'
 import { recordEvent } from './record-event.js'
 import { sendServerEvent } from './send-server-event.js'
-import { JOURNEY_STARTS, JOURNEY_NOT_ELIGIBLE } from './journey-events.js'
+import {
+  JOURNEY_STARTS,
+  JOURNEY_NOT_ELIGIBLE,
+  FEEDBACK_STARTS,
+  FEEDBACK_RETURNS
+} from './journey-events.js'
 
 vi.mock('./send-server-event.js', () => ({
   sendServerEvent: vi.fn()
 }))
+
+test.each([FEEDBACK_STARTS, FEEDBACK_RETURNS])(
+  'feedback events are stored without sending to GA4 ($collection)',
+  async (event) => {
+    sendServerEvent.mockReset()
+    const insertOne = vi.fn().mockResolvedValue({})
+    const db = { collection: vi.fn().mockReturnValue({ insertOne }) }
+
+    expect(await recordEvent(db, event, 'feedback-nonce')).toBe(true)
+    expect(insertOne).toHaveBeenCalledExactlyOnceWith({
+      [event.dateField]: expect.any(Date),
+      nonce: 'feedback-nonce'
+    })
+    expect(sendServerEvent).not.toHaveBeenCalled()
+  }
+)
 
 describe.each([JOURNEY_STARTS, JOURNEY_NOT_ELIGIBLE])(
   'recordEvent $eventName',

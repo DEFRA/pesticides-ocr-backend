@@ -3,7 +3,9 @@ import { createHmac } from 'node:crypto'
 
 import {
   JOURNEY_STARTS_COLLECTION,
-  JOURNEY_NOT_ELIGIBLE_COLLECTION
+  JOURNEY_NOT_ELIGIBLE_COLLECTION,
+  FEEDBACK_STARTS_COLLECTION,
+  FEEDBACK_RETURNS_COLLECTION
 } from '#/common/constants/collections.js'
 
 // When journeyToken.secret is set, both public beacons must carry a valid signed
@@ -13,6 +15,16 @@ const signedToken = (nonce) =>
   `${nonce}.${createHmac('sha256', SECRET).update(nonce).digest('hex')}`
 
 const cases = [
+  {
+    label: 'feedback starts',
+    path: '/metrics/feedback-starts',
+    collection: FEEDBACK_STARTS_COLLECTION
+  },
+  {
+    label: 'feedback returns',
+    path: '/metrics/feedback-returns',
+    collection: FEEDBACK_RETURNS_COLLECTION
+  },
   {
     label: 'journey starts',
     path: '/metrics/journey-starts',

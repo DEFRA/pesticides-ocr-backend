@@ -11,6 +11,8 @@ export const MONGO_LOCKS_COLLECTION = 'mongo-locks'
 // No PII: just a timestamp. Completions come from the registrations collection.
 export const JOURNEY_STARTS_COLLECTION = 'ocr-journey-starts'
 export const JOURNEY_NOT_ELIGIBLE_COLLECTION = 'ocr-journey-not-eligible'
+export const FEEDBACK_STARTS_COLLECTION = 'ocr-feedback-starts'
+export const FEEDBACK_RETURNS_COLLECTION = 'ocr-feedback-returns'
 
 // Magic-link email verification. One record per link issued; only the token's
 // sha256 is stored. The rate-limit collection holds fixed-window counters keyed
