@@ -24,4 +24,3 @@ export const VERSION_CONFLICT = 'VERSION_CONFLICT'
 // one generic code/response with "no such registration" — the two cases must
 // not be distinguishable by the caller.
 export const REGISTRATION_ACCESS_DENIED = 'REGISTRATION_ACCESS_DENIED'
-

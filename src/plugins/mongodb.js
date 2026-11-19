@@ -8,7 +8,8 @@ import {
   JOURNEY_STARTS_COLLECTION,
   JOURNEY_NOT_ELIGIBLE_COLLECTION,
   EMAIL_VERIFICATIONS_COLLECTION,
-  EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION
+  EMAIL_VERIFICATION_RATE_LIMITS_COLLECTION,
+  REGISTRATION_ACCESS_COLLECTION
 } from '#/common/constants/collections.js'
 import { HISTORY_VERSION_INDEX } from '#/common/constants/history.js'
 import { createAuditedRepository } from '#/repositories/audited-repository.js'
@@ -100,4 +101,10 @@ async function createIndexes(db) {
     { expireAfterSeconds: 0 }
   )
   await rateLimits.createIndex({ windowEndsAt: 1 }, { expireAfterSeconds: 0 })
+
+  // One active grant per (subject, reference): grant() relies on this to
+  // renew in place (upsert) rather than ever creating a duplicate.
+  await db
+    .collection(REGISTRATION_ACCESS_COLLECTION)
+    .createIndex({ subject: 1, reference: 1 }, { unique: true })
 }

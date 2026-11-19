@@ -13,12 +13,10 @@ import { assertReference } from '#/repositories/guards.js'
 // services/external-user/access-token.js) and stored alongside the reference
 // it was granted for.
 //
-// Lifecycle (completion ticket AC5 — confirmed decision, see
-// magic-link-tickets.md "Complete secure applicant access to registrations:
-// decisions confirmed" §3 for the rationale): a grant is only active while BOTH
+// Lifecycle: a grant is only active while BOTH
 //   - it has not been explicitly revoked (`revokedAt` unset), and
 //   - it has not passed its `expiresAt`.
-// `expiresAt` defaults to the same lifetime as the access token minted
+// `expiresAt` is set to the same lifetime as the access token minted
 // alongside it (externalUser.tokenTtlSeconds) — the grant and the token it
 // backs expire together, so a grant can never outlive every token issued
 // from it. Re-verifying renews an existing grant in place (same `grantedAt`
@@ -32,13 +30,13 @@ function assertSubject(subject) {
   }
 }
 
-// An active grant has no revokedAt and either no expiresAt (never set, legacy
-// data) or an expiresAt still in the future.
+// An active grant has no revokedAt and has not passed its expiresAt (now
+// required on every grant — see grant() below).
 const activeFilter = (subject, reference, now) => ({
   subject,
   reference,
   revokedAt: { $exists: false },
-  $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: now } }]
+  expiresAt: { $gt: now }
 })
 
 export function createRegistrationAccessRepository({ db }) {
@@ -46,16 +44,21 @@ export function createRegistrationAccessRepository({ db }) {
 
   return {
     // Grants (or renews) `subject` access to `reference`, active until
-    // `expiresAt`. Idempotent: re-verifying the same email for the same
-    // registration renews the one record — extending its expiry and
-    // clearing any prior revocation — rather than creating a duplicate.
+    // `expiresAt` (required — a grant can never be set up to never expire).
+    // Idempotent: re-verifying the same email for the same registration
+    // renews the one record — extending its expiry and clearing any prior
+    // revocation — rather than creating a duplicate (enforced by the unique
+    // index on { subject, reference }, see plugins/mongodb.js).
     async grant({ subject, reference, grantedAt = new Date(), expiresAt }) {
       assertSubject(subject)
       assertReference(reference)
+      if (!(expiresAt instanceof Date) || Number.isNaN(expiresAt.getTime())) {
+        throw new TypeError('expiresAt must be a valid Date')
+      }
       await collection.updateOne(
         { subject, reference },
         {
-          $set: { grantedAt, ...(expiresAt && { expiresAt }) },
+          $set: { grantedAt, expiresAt },
           $unset: { revokedAt: '' }
         },
         { upsert: true }
@@ -76,28 +79,25 @@ export function createRegistrationAccessRepository({ db }) {
       return grant !== null
     },
 
-    // All registrations a subject currently holds a grant for, newest first.
-    async listForSubject(subject) {
-      assertSubject(subject)
-      return collection
-        .find({ subject }, { projection: NO_ID })
-        .sort({ grantedAt: -1 })
-        .toArray()
-    },
-
     // Revokes every grant on `reference` (across every subject that was ever
     // granted access to it), regardless of expiry. Used when the
     // registration's contact email changes (completion ticket AC6 — default
     // decision): entitlement was established against the old email, so every
     // existing grant stops being valid and must be re-established by
-    // re-verifying the new email.
-    async revokeAllForReference(reference, { revokedAt = new Date() } = {}) {
+    // re-verifying the new email. Accepts a Mongo `session` so it can run in
+    // the same transaction as the registration update that changed the
+    // email — a failure partway through must never leave the old email
+    // still holding access.
+    async revokeAllForReference(
+      reference,
+      { revokedAt = new Date(), session } = {}
+    ) {
       assertReference(reference)
       await collection.updateMany(
         { reference, revokedAt: { $exists: false } },
-        { $set: { revokedAt } }
+        { $set: { revokedAt } },
+        { session }
       )
     }
   }
 }
-

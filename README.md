@@ -117,8 +117,8 @@ git config --global core.autocrlf false
 | `/register`                    | POST      | Submit a pesticide registration application, once its contact email is verified (see [POST /register](#post-register))                  |
 | `/search`                      | GET       | Partial-match search of the register, paginated                                                                                         |
 | `/export`                      | GET       | A reference or free-text match, as a CSV download                                                                                       |
-| `/registrations/{reference}`   | GET       | An applicant's own registration, with an external-access token (see [External-user RBAC](#external-user-rbac))                         |
-| `/registrations/{reference}`   | PATCH     | Update an applicant's own registration, with an external-access token (see [External-user RBAC](#external-user-rbac))                   |
+| `/registrations/{reference}`   | GET       | A registration, as a case officer (Entra) or its own applicant (external-access token) — a shared route (see [External-user RBAC](#external-user-rbac)) |
+| `/registrations/{reference}`   | PATCH     | Update a registration, as a case officer (Entra) or its own applicant (external-access token) — a shared route (see [External-user RBAC](#external-user-rbac)) |
 | `/registrations/{reference}`   | DELETE    | Soft delete a registration, recording who, when and why (see [DELETE /registrations/{reference}](#delete-registrationsreference))       |
 | `/whoami`                      | GET       | Authenticated caller's identity (case-officer scope)                                                                                    |
 | `/metrics/*`                   | GET, POST | Journey metrics (see [Journey metrics](#journey-metrics))                                                                               |
@@ -237,9 +237,9 @@ Rows are registrations as stored, limited to the fields the register shows (refe
 
 Same auth as `/search`, returned as a CSV download (`ocr-registrations.csv`). Takes exactly one of `?reference=` (one exact reference, using the configured `REFERENCE_PREFIX`) or `?q=` (a literal free-text match on the same fields as `/search`; blank exports the whole register). A reference exports one record, or just the header row if it doesn't exist. A term exports every match, up to `EXPORT_MAX_ROWS` (default 10000, at least 1); a larger match is a `400` asking for a narrower search, rather than a truncated file. Deleted registrations are never exported.
 
-### GET /registrations/{reference} (applicant)
+### GET /registrations/{reference} (shared: case officer or applicant)
 
-Applicant-only (see [External-user RBAC](#external-user-rbac)): requires `Authorization: Bearer <externalAccessToken>`, where the token's registration must match `{reference}` **and** a currently active grant must exist for it. Returns the registration exactly as stored, including its current `version` — read this response's `version` immediately before a `PATCH`, since it may have changed since any earlier read.
+A shared route (see [External-user RBAC](#external-user-rbac)): accepts **either** a case officer's Entra bearer token (any of the configured case-officer roles) **or** an applicant's `Authorization: Bearer <externalAccessToken>`, where the token's registration must match `{reference}` **and** a currently active grant must exist for it. Returns the registration exactly as stored, including its current `version` — read this response's `version` immediately before a `PATCH`, since it may have changed since any earlier read.
 
 ```json
 {
@@ -256,13 +256,13 @@ Applicant-only (see [External-user RBAC](#external-user-rbac)): requires `Author
 
 | Response | When                                                                                     |
 | -------- | ----------------------------------------------------------------------------------------- |
-| `200`    | The applicant's own registration                                                          |
-| `401`    | The bearer token is missing, invalid, expired, or not an external-user token               |
-| `403`    | The token does not name this reference, or its grant is missing, expired or revoked       |
+| `200`    | The registration                                                                           |
+| `401`    | The bearer token is missing, invalid or expired (on whichever strategy actually matched it) |
+| `403`    | External caller: the token does not name this reference, or its grant is missing, expired or revoked. Internal caller: denied by `requireInternalPermission` (currently a no-op — any case officer may read any registration) |
 
-### PATCH /registrations/{reference} (applicant)
+### PATCH /registrations/{reference} (shared: case officer or applicant)
 
-Same auth as the `GET` above. The body must include the **`version` from the applicant's own most recent `GET`** of this registration (optimistic concurrency, same rule as the internal `DELETE` below), plus the changed fields:
+Same auth as the `GET` above. The body must include the **`version` from the caller's own most recent `GET`** of this registration (optimistic concurrency, same rule as `DELETE` below), plus the changed fields. Unlike the old `unknown(true)` behaviour, the payload is validated against an explicit field schema: unknown or dotted keys (e.g. `"primaryContact.contactEmail"`) are rejected with `400` rather than silently accepted.
 
 ```json
 {
@@ -280,12 +280,13 @@ Same auth as the `GET` above. The body must include the **`version` from the app
 | Response | When                                                                                       |
 | -------- | ------------------------------------------------------------------------------------------- |
 | `200`    | Updated: the registration as stored, with the incremented `version`                          |
-| `400`    | `version` is missing or not an integer, or the body is otherwise invalid                    |
-| `401`    | The bearer token is missing, invalid, expired, or not an external-user token                 |
-| `403`    | The token does not name this reference, or its grant is missing, expired or revoked         |
-| `404`    | There's no such registration (ownership was already confirmed, so this means data inconsistency, not an authorisation failure) |
+| `400`    | `version` is missing or not an integer, the body has an unknown/dotted field, or is otherwise invalid |
+| `401`    | The bearer token is missing, invalid or expired (on whichever strategy actually matched it)   |
+| `403`    | External caller: the token does not name this reference, or its grant is missing, expired or revoked. Internal caller: denied by `requireInternalPermission` |
+| `404`    | There's no such registration (authorisation was already confirmed, so this means data inconsistency, not an authorisation failure) |
+| `409`    | The registration has changed since `version` was loaded — reload and retry (`VersionConflictError`) |
 
-Changing `primaryContact.contactEmail` in this call **revokes every existing grant on the registration** (for every identity that ever held one), immediately after the update is saved — see [External-user RBAC](#external-user-rbac). The new email must go through `POST /email-verifications` → `POST /email-verifications/verify` (with this `reference`) again before anyone, including the same applicant, can access the registration.
+Changing `primaryContact.contactEmail` in this call **revokes every existing grant on the registration** (for every identity that ever held one), in the **same transaction** as the update itself — see [External-user RBAC](#external-user-rbac). The new email must go through `POST /email-verifications` → `POST /email-verifications/verify` (with this `reference`) again before anyone, including the same applicant, can access the registration.
 
 ### DELETE /registrations/{reference}
 
@@ -633,7 +634,7 @@ Routes without `options.auth` (e.g. `/health`) stay open. A request with no/inva
 
 ### External-user RBAC
 
-Verified external applicants (not Entra/staff users) are authorised through a **second**, independent auth strategy, `external-bearer` (`src/auth/external-bearer-scheme.js`), so Entra-only routes can never accept an external-user credential and vice versa.
+Verified external applicants (not Entra/staff users) are authorised through a **second**, independent auth strategy, `external-bearer` (`src/auth/external-bearer-scheme.js`). Both bearer schemes read the same `Authorization` header; each recognises only its own tokens (by issuer) and otherwise reports the token as "missing" rather than "invalid", so Hapi falls through to try the other strategy — a case officer's Entra token and an applicant's external-access token can each only ever be accepted by their own strategy, never the other's.
 
 The registration's own owner (its `primaryContact.contactEmail`) gets access by supplying a `reference` when confirming their magic-link email:
 
@@ -656,26 +657,36 @@ Omitting `reference` keeps today's behaviour unchanged: no entitlement check, no
 
 **Grant lifecycle**:
 
-- A grant's `expiresAt` matches the access token's TTL — grant and token expire together.
+- A grant's `expiresAt` matches the access token's TTL — grant and token expire together. `expiresAt` is now required on every grant (it can never be set up to never expire), and a unique index on `{ subject, reference }` guarantees one active grant per pair.
 - Re-verifying the same email for the same reference **renews** the existing grant (new `grantedAt`/`expiresAt`, any prior revocation cleared) rather than creating a duplicate; entitlement is re-checked every time.
 - A grant can be explicitly revoked (`revokeAllForReference`); an expired or revoked grant is treated as not-permitted.
-- **Changing the registration's contact email** (`PATCH /registrations/{reference}` with a new `primaryContact.contactEmail`) revokes every existing grant on that registration immediately — the new email must re-verify (and pass the entitlement check again) before anyone can access the registration.
+- **Changing the registration's contact email** (`PATCH /registrations/{reference}` with a new `primaryContact.contactEmail`) revokes every existing grant on that registration, in the **same transaction** as the update itself (via `request.registrations.withTransaction`) — so a failure part-way through can never leave the old email still holding access. The new email must re-verify (and pass the entitlement check again) before anyone can access the registration.
 
-The token authorises `GET`/`PATCH /registrations/{reference}` (`src/routes/registration/registration.js`), guarded by two checks in combination:
+#### `GET`/`PATCH /registrations/{reference}` are shared routes
+
+Unlike every other route, these two accept **either** population — a case officer (Entra) or a verified external applicant — because an admin editing UI needs the same endpoints case officers already have no other way to reach. The route declares both strategies and every role that may call it:
 
 ```js
-import { requireExternalUser, requireOwnRegistration } from '#/auth/require-own-registration.js'
+import { requireSharedAccess } from '#/auth/require-own-registration.js'
+import { authorise } from '#/auth/authorise.js'
 
-options: { auth: requireExternalUser() }, // role check: is this an external-user token?
+options: { auth: requireSharedAccess() }, // either entra-bearer + a case-officer role, or external-bearer + external_user
 handler: async (request, h) => {
-  await requireOwnRegistration(request, request.params.reference) // record check: is it THIS reference, and is the grant still active?
+  await authorise(request, { action: 'registration:read', reference: request.params.reference })
   // ...
 }
 ```
 
-`requireOwnRegistration` checks both the token's own claim **and** the persisted grant (active, not expired, not revoked), so a stale/revoked/expired grant can't be used for the rest of the token's lifetime. Any mismatch returns a generic `403` with no information about whether the requested reference exists. Internal routes (`/search`, `/export`, `/whoami`) are unaffected: they require the `entra-bearer` strategy, which an external-user token can never satisfy.
+`requireSharedAccess()` is only the **role**-level check (does the caller hold a recognised role on a strategy this route accepts at all). `authorise()` then applies the **record**-level rule for whichever population actually authenticated, read off `request.auth.credentials.identityType` (`'internal'` or `'external'`, set identically by both bearer schemes):
 
-Requires `EXTERNAL_USER_TOKEN_SECRET` to be set (see `.env.example`) — without it the service fails closed (cannot issue or verify any external-user token).
+- **External** (`identityType: 'external'`) → `requireOwnRegistration`: checks both the token's own `reference` claim **and** the persisted grant (active, not expired, not revoked), so a stale/revoked/expired grant can't be used for the rest of the token's lifetime. Any mismatch returns a generic `403` with no information about whether the requested reference exists.
+- **Internal** (`identityType: 'internal'`) → `requireInternalPermission`: today a no-op once the role check has passed (any case officer may act on any registration) — a placeholder seam for future per-officer/jurisdiction scoping, not yet built.
+
+Role alone is still never enough for either population — `authorise()` must be called from the handler on every request. Other internal routes (`/search`, `/export`, `/whoami`) are unaffected: they still require only the `entra-bearer` strategy, which an external-user token can never satisfy, and vice versa.
+
+`PATCH`'s payload is validated against an explicit field schema (`unknown(false)`) rather than accepting arbitrary keys — a dotted key such as `"primaryContact.contactEmail"` is rejected outright, so the contact-email-change check can safely read the parsed, nested value rather than guessing at a flattened key. A version conflict on either shared route returns `409`; a bad request (including an unknown/dotted PATCH field) returns `400`.
+
+Requires `EXTERNAL_USER_TOKEN_SECRET` to be set (see `.env.example`) — the service now **fails to start** outside the local tier without it, rather than only failing at request time, so a missing secret can never turn into a `500` for a caller who has already used up their one-time magic link.
 
 ## Registration history
 

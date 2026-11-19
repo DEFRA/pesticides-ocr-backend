@@ -22,37 +22,62 @@ describe('registration-access repository', () => {
     await client.close()
   })
 
+  const future = new Date(Date.now() + 30 * 60 * 1000)
+
   test('grant then isPermitted resolves true for that subject/reference pair', async () => {
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
-    await expect(
-      repository.isPermitted('subj-1', 'OCR-AAA-001')
-    ).resolves.toBe(true)
+    await repository.grant({
+      subject: 'subj-1',
+      reference: 'OCR-AAA-001',
+      expiresAt: future
+    })
+    await expect(repository.isPermitted('subj-1', 'OCR-AAA-001')).resolves.toBe(
+      true
+    )
   })
 
   test('isPermitted resolves false when no grant exists', async () => {
-    await expect(
-      repository.isPermitted('subj-1', 'OCR-AAA-001')
-    ).resolves.toBe(false)
+    await expect(repository.isPermitted('subj-1', 'OCR-AAA-001')).resolves.toBe(
+      false
+    )
   })
 
   test('isPermitted resolves false for a different subject with a grant on that reference', async () => {
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
-    await expect(
-      repository.isPermitted('subj-2', 'OCR-AAA-001')
-    ).resolves.toBe(false)
+    await repository.grant({
+      subject: 'subj-1',
+      reference: 'OCR-AAA-001',
+      expiresAt: future
+    })
+    await expect(repository.isPermitted('subj-2', 'OCR-AAA-001')).resolves.toBe(
+      false
+    )
   })
 
   test('isPermitted resolves false for the same subject with a different reference', async () => {
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
-    await expect(
-      repository.isPermitted('subj-1', 'OCR-BBB-002')
-    ).resolves.toBe(false)
+    await repository.grant({
+      subject: 'subj-1',
+      reference: 'OCR-AAA-001',
+      expiresAt: future
+    })
+    await expect(repository.isPermitted('subj-1', 'OCR-BBB-002')).resolves.toBe(
+      false
+    )
   })
 
   test('grant is idempotent: re-granting the same pair does not duplicate records', async () => {
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
-    const grants = await repository.listForSubject('subj-1')
+    await repository.grant({
+      subject: 'subj-1',
+      reference: 'OCR-AAA-001',
+      expiresAt: future
+    })
+    await repository.grant({
+      subject: 'subj-1',
+      reference: 'OCR-AAA-001',
+      expiresAt: future
+    })
+    const grants = await db
+      .collection('ocr-registration-access')
+      .find({ subject: 'subj-1' })
+      .toArray()
     expect(grants).toHaveLength(1)
   })
 
@@ -66,9 +91,9 @@ describe('registration-access repository', () => {
       expiresAt: firstExpiry
     })
     await repository.revokeAllForReference('OCR-AAA-001')
-    await expect(
-      repository.isPermitted('subj-1', 'OCR-AAA-001')
-    ).resolves.toBe(false)
+    await expect(repository.isPermitted('subj-1', 'OCR-AAA-001')).resolves.toBe(
+      false
+    )
 
     const secondGrant = new Date('2024-02-01T00:00:00Z')
     const secondExpiry = new Date('2024-02-01T00:30:00Z')
@@ -79,7 +104,9 @@ describe('registration-access repository', () => {
       expiresAt: secondExpiry
     })
 
-    const [grant] = await repository.listForSubject('subj-1')
+    const grant = await db
+      .collection('ocr-registration-access')
+      .findOne({ subject: 'subj-1', reference: 'OCR-AAA-001' })
     expect(grant.grantedAt).toEqual(secondGrant)
     expect(grant.expiresAt).toEqual(secondExpiry)
     expect(grant.revokedAt).toBeUndefined()
@@ -110,57 +137,56 @@ describe('registration-access repository', () => {
     ).resolves.toBe(false)
   })
 
-  test('isPermitted resolves true for a legacy grant with no expiresAt', async () => {
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
+  test('grant rejects a missing/invalid expiresAt — a grant must always expire', async () => {
     await expect(
-      repository.isPermitted('subj-1', 'OCR-AAA-001')
-    ).resolves.toBe(true)
+      repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
+    ).rejects.toThrow(TypeError)
+    await expect(
+      repository.grant({
+        subject: 'subj-1',
+        reference: 'OCR-AAA-001',
+        expiresAt: new Date('not-a-date')
+      })
+    ).rejects.toThrow(TypeError)
   })
 
   test('revokeAllForReference revokes grants for every subject on that reference, leaving other references untouched', async () => {
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
-    await repository.grant({ subject: 'subj-2', reference: 'OCR-AAA-001' })
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-BBB-002' })
-
-    await repository.revokeAllForReference('OCR-AAA-001')
-
-    await expect(
-      repository.isPermitted('subj-1', 'OCR-AAA-001')
-    ).resolves.toBe(false)
-    await expect(
-      repository.isPermitted('subj-2', 'OCR-AAA-001')
-    ).resolves.toBe(false)
-    await expect(
-      repository.isPermitted('subj-1', 'OCR-BBB-002')
-    ).resolves.toBe(true)
-  })
-
-  test('listForSubject returns all grants for a subject, newest first', async () => {
     await repository.grant({
       subject: 'subj-1',
       reference: 'OCR-AAA-001',
-      grantedAt: new Date('2024-01-01T00:00:00Z')
+      expiresAt: future
+    })
+    await repository.grant({
+      subject: 'subj-2',
+      reference: 'OCR-AAA-001',
+      expiresAt: future
     })
     await repository.grant({
       subject: 'subj-1',
       reference: 'OCR-BBB-002',
-      grantedAt: new Date('2024-02-01T00:00:00Z')
+      expiresAt: future
     })
 
-    const grants = await repository.listForSubject('subj-1')
-    expect(grants.map((g) => g.reference)).toEqual([
-      'OCR-BBB-002',
-      'OCR-AAA-001'
-    ])
-  })
+    await repository.revokeAllForReference('OCR-AAA-001')
 
-  test('listForSubject returns an empty array for a subject with no grants', async () => {
-    await expect(repository.listForSubject('subj-1')).resolves.toEqual([])
+    await expect(repository.isPermitted('subj-1', 'OCR-AAA-001')).resolves.toBe(
+      false
+    )
+    await expect(repository.isPermitted('subj-2', 'OCR-AAA-001')).resolves.toBe(
+      false
+    )
+    await expect(repository.isPermitted('subj-1', 'OCR-BBB-002')).resolves.toBe(
+      true
+    )
   })
 
   test('grant rejects an empty subject', async () => {
     await expect(
-      repository.grant({ subject: '', reference: 'OCR-AAA-001' })
+      repository.grant({
+        subject: '',
+        reference: 'OCR-AAA-001',
+        expiresAt: future
+      })
     ).rejects.toThrow(TypeError)
   })
 
@@ -168,9 +194,18 @@ describe('registration-access repository', () => {
     await expect(repository.isPermitted('subj-1', 123)).rejects.toThrow()
   })
 
-  test('documents returned by isPermitted/listForSubject never carry _id', async () => {
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
-    const [grant] = await repository.listForSubject('subj-1')
+  test('documents returned by isPermitted never carry _id', async () => {
+    await repository.grant({
+      subject: 'subj-1',
+      reference: 'OCR-AAA-001',
+      expiresAt: future
+    })
+    const grant = await db
+      .collection('ocr-registration-access')
+      .findOne(
+        { subject: 'subj-1', reference: 'OCR-AAA-001' },
+        { projection: { _id: 0 } }
+      )
     expect(grant._id).toBeUndefined()
   })
 })

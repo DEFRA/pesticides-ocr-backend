@@ -361,10 +361,9 @@ export const config = convict({
   // this is the actual authorisation credential for record-level access.
   externalUser: {
     role: {
-      doc: 'The RBAC role value assigned to authenticated external users (own-record access only). Not configurable via Entra — external users have no Entra identity.',
+      doc: 'The RBAC role value assigned to authenticated external users (own-record access only). Fixed as a code constant (common/constants/roles.js), not configurable via env var — an env override that disagreed with the constant would make every external call fail, since the two are compared directly (see require-own-registration.js).',
       format: String,
-      default: EXTERNAL_USER_ROLE,
-      env: 'EXTERNAL_USER_ROLE_VALUE'
+      default: EXTERNAL_USER_ROLE
     },
     tokenSecret: {
       doc: 'HMAC secret used to sign/verify external-user access tokens issued after email verification. Set via CDP Secrets, never committed. Empty = fails closed (no external-user token can be issued or verified) outside local tier.',
@@ -384,3 +383,16 @@ export const config = convict({
 
 config.validate({ allowed: 'strict' })
 validateEmailVerificationConfig(config)
+
+// Fail at startup, not at request time: a missing secret must never turn
+// into a 500 for a caller who has already used up their one-time magic
+// link. Local tier is exempt so the app can boot without CDP Secrets while
+// the external-user routes are simply unusable until it's set.
+if (
+  config.get('cdpEnvironment') !== 'local' &&
+  !config.get('externalUser.tokenSecret')
+) {
+  throw new Error(
+    'externalUser.tokenSecret (EXTERNAL_USER_TOKEN_SECRET) must be set outside the local tier'
+  )
+}
