@@ -377,7 +377,7 @@ describe('email verification: verify and current status', () => {
   describe('POST /email-verifications/verify with a reference (external-user RBAC entitlement)', () => {
     const REGISTRATION_COLLECTION = 'ocr-registration'
     const REGISTRATION_ACCESS_COLLECTION = 'ocr-registration-access'
-    const REFERENCE = 'OCR-ENT-001'
+    const REFERENCE = 'PPP-ENT-001'
 
     const seedRegistration = (
       contactEmail,
@@ -394,9 +394,7 @@ describe('email verification: verify and current status', () => {
     beforeEach(async () => {
       config.set('externalUser.tokenSecret', 'external-user-test-secret')
       await server.db.collection(REGISTRATION_COLLECTION).deleteMany({})
-      await server.db
-        .collection(REGISTRATION_ACCESS_COLLECTION)
-        .deleteMany({})
+      await server.db.collection(REGISTRATION_ACCESS_COLLECTION).deleteMany({})
     })
 
     test('issues a grant and an externalAccessToken when the verified email matches the registration contact', async () => {
@@ -448,7 +446,7 @@ describe('email verification: verify and current status', () => {
         method: 'POST',
         url: '/email-verifications/verify',
         headers: journeyHeaders(JOURNEY),
-        payload: { token, reference: 'OCR-NOT-REAL' }
+        payload: { token, reference: 'PPP-NOT-REL' }
       })
 
       expect(response.statusCode).toBe(403)

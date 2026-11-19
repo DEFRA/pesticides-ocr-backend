@@ -14,8 +14,10 @@ import { config } from '#/config.js'
 // issuer/audience, so the two token families can never be confused by
 // external-bearer / entra-bearer (AC2 of the completion ticket).
 const ALG = 'HS256'
-const ISSUER = 'pesticides-ocr-backend'
-const AUDIENCE = 'pesticides-ocr-external-user'
+export const EXTERNAL_TOKEN_ISSUER = 'pesticides-ocr-backend'
+export const EXTERNAL_TOKEN_AUDIENCE = 'pesticides-ocr-external-user'
+const ISSUER = EXTERNAL_TOKEN_ISSUER
+const AUDIENCE = EXTERNAL_TOKEN_AUDIENCE
 
 function requireSecret() {
   const secret = config.get('externalUser.tokenSecret')

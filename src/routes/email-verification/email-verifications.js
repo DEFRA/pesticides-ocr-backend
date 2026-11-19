@@ -5,6 +5,7 @@ import { createLogger } from '#/common/helpers/logging/logger.js'
 import { loggableError } from '#/common/helpers/loggable-error.js'
 import { withErrorCode } from '#/common/helpers/error-code.js'
 import { addSeconds } from '#/common/helpers/time.js'
+import { registrationParamsSchema } from '#/common/helpers/registration-reference.js'
 import {
   optionalJourneyId,
   requireJourneyId
@@ -62,7 +63,7 @@ const verifyPayloadSchema = Joi.object({
     .custom((value, helpers) =>
       isLinkTokenFormat(value) ? value : helpers.error('any.invalid')
     ),
-  reference: Joi.string().trim().optional()
+  reference: registrationParamsSchema.extract('reference').optional()
 })
 
 // The server-wide failAction logs the whole Joi error, whose details hold the
@@ -248,9 +249,8 @@ export const emailVerifications = [
       let externalAccessToken
       if (request.payload.reference) {
         const { reference } = request.payload
-        const registration = await request.registrations.findByReference(
-          reference
-        )
+        const registration =
+          await request.registrations.findByReference(reference)
         if (!isEntitledToRegistration(registration, result.email)) {
           throw withErrorCode(
             Boom.forbidden('Not authorised to access this registration'),
@@ -261,12 +261,9 @@ export const emailVerifications = [
         const accessRepository = createRegistrationAccessRepository({
           db: request.db
         })
-        // Confirmed decision (completion ticket AC5 — see
-        // magic-link-tickets.md "Complete secure applicant access to
-        // registrations: decisions confirmed" §3): the grant's expiry
-        // matches the token's TTL, and re-verifying renews (not duplicates)
-        // the existing grant, clearing any prior revocation — see
-        // registration-access.js for the full rationale.
+        // The grant's expiry matches the token's TTL, and re-verifying
+        // renews (not duplicates) the existing grant, clearing any prior
+        // revocation — see registration-access.js for the full rationale.
         const tokenTtlSeconds = config.get('externalUser.tokenTtlSeconds')
         const grantedAt = new Date()
         await accessRepository.grant({

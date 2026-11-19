@@ -40,8 +40,14 @@ describe('requireOwnRegistration', () => {
     return { auth: { credentials }, db }
   }
 
+  const future = new Date(Date.now() + 30 * 60 * 1000)
+
   test('resolves when the token reference matches and a grant exists', async () => {
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
+    await repository.grant({
+      subject: 'subj-1',
+      reference: 'OCR-AAA-001',
+      expiresAt: future
+    })
     const request = requestWith({
       subject: 'subj-1',
       registrationReference: 'OCR-AAA-001'
@@ -53,7 +59,11 @@ describe('requireOwnRegistration', () => {
   })
 
   test('rejects with a generic 403 when the token reference does not match', async () => {
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
+    await repository.grant({
+      subject: 'subj-1',
+      reference: 'OCR-AAA-001',
+      expiresAt: future
+    })
     const request = requestWith({
       subject: 'subj-1',
       registrationReference: 'OCR-AAA-001'
@@ -101,7 +111,11 @@ describe('requireOwnRegistration', () => {
   })
 
   test('rejects with a generic 403 when the grant has been revoked (e.g. contact-email change)', async () => {
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
+    await repository.grant({
+      subject: 'subj-1',
+      reference: 'OCR-AAA-001',
+      expiresAt: future
+    })
     await repository.revokeAllForReference('OCR-AAA-001')
     const request = requestWith({
       subject: 'subj-1',
@@ -116,7 +130,11 @@ describe('requireOwnRegistration', () => {
   })
 
   test('does not leak whether the other reference exists in the error message', async () => {
-    await repository.grant({ subject: 'subj-1', reference: 'OCR-AAA-001' })
+    await repository.grant({
+      subject: 'subj-1',
+      reference: 'OCR-AAA-001',
+      expiresAt: future
+    })
     const request = requestWith({
       subject: 'subj-1',
       registrationReference: 'OCR-AAA-001'

@@ -1,6 +1,10 @@
 import Boom from '@hapi/boom'
 import { decodeJwt, jwtVerify } from 'jose'
 
+import { EXTERNAL_TOKEN_ISSUER } from '#/services/external-user/access-token.js'
+
+import { IDENTITY_TYPE } from './strategy-name.js'
+
 const BEARER_PREFIX = 'Bearer '
 
 function extractBearerToken(request) {
@@ -17,9 +21,13 @@ function extractBearerToken(request) {
 // checking (see require-role.js). Only the fields the app needs are exposed —
 // the raw token claims (email, oid, tid, ipaddr, …) are deliberately NOT carried
 // on credentials, so a handler that logs/returns credentials can't leak PII.
+// `identityType` lets shared routes (e.g. registration GET/PATCH) branch on
+// who is calling without caring which strategy authenticated the request —
+// see also external-bearer-scheme.js, which produces the same shape.
 function toCredentials(payload) {
   const roles = Array.isArray(payload.roles) ? payload.roles : []
   return {
+    identityType: IDENTITY_TYPE.INTERNAL,
     subject: payload.sub ?? '',
     name: payload.name ?? '',
     roles,
@@ -46,6 +54,31 @@ function tokenHasScope(payload, requiredScope) {
 //   resolveEntra () => { issuer, audience, jwksUri, requiredScope }
 //   getKeySet    () => key input for jose.jwtVerify (defaults to the remote
 //                JWKS; overridable in tests to avoid a network fetch)
+// Both bearer schemes read the same Authorization header. Always
+// (regardless of mode) refuse to treat a token this service itself minted
+// for an external user as ours — otherwise mock mode (which doesn't check
+// the Entra issuer at all) would happily authenticate an external-user
+// token as "internal", skipping the record-level check entirely. In live
+// mode, also require the token's issuer to match Entra's. Either way, throw
+// with no message ("missing") so Hapi falls through to try external-bearer
+// next, instead of a hard 401 that would stop it ever being tried — only a
+// token that IS ours but fails signature/expiry later should get a real 401
+// with a message.
+function rejectIfNotOurs(token, { mode, issuer }) {
+  let unverifiedPayload
+  try {
+    unverifiedPayload = decodeJwt(token)
+  } catch {
+    throw Boom.unauthorized(null, 'Bearer')
+  }
+  const looksForeign =
+    unverifiedPayload.iss === EXTERNAL_TOKEN_ISSUER ||
+    (mode === 'live' && issuer && unverifiedPayload.iss !== issuer)
+  if (looksForeign) {
+    throw Boom.unauthorized(null, 'Bearer')
+  }
+}
+
 export function entraBearerScheme(_server, options = {}) {
   const { mode, resolveEntra, getKeySet } = options
 
@@ -57,6 +90,7 @@ export function entraBearerScheme(_server, options = {}) {
       }
 
       const { issuer, audience, requiredScope } = resolveEntra()
+      rejectIfNotOurs(token, { mode, issuer })
 
       let payload
       try {

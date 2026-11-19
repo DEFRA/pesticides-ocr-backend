@@ -89,8 +89,28 @@ describe('externalBearerScheme', () => {
   })
 
   test('does not leak the failure reason in the 401 body', async () => {
-    const { result } = await get(server, 'not-a-real-token')
+    // A well-formed-looking JWT (so it decodes) but signed with the wrong
+    // secret — the scheme recognises the issuer as its own, verifies, and
+    // only then rejects generically. (Pure garbage, "not-a-real-token",
+    // fails to decode at all, which is the "maybe not mine, try the other
+    // strategy" path — see the fallback test below — not this one.)
+    const token = await issueExternalAccessToken({
+      subject: 'subj-1',
+      reference: 'OCR-AAA-001'
+    })
+    config.set('externalUser.tokenSecret', 'a-different-secret')
+    const { result } = await get(server, token)
     expect(result.message).toBe('Invalid bearer token')
+  })
+
+  // Step 1 (shared routes): a token this scheme can't even decode, or whose
+  // issuer isn't its own, must look like "missing" (no message) rather than
+  // a hard 401 — so Hapi falls through to try entra-bearer next on a shared
+  // route, instead of a malformed/foreign token for one strategy stopping
+  // the other from ever being tried.
+  test('a token that fails to decode looks like "missing", not "invalid"', async () => {
+    const { result } = await get(server, 'not-a-real-token')
+    expect(result.message).not.toBe('Invalid bearer token')
   })
 
   // AC2 (completion ticket): tokens from the other auth family must not

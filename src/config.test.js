@@ -13,6 +13,12 @@ describe('config auth.mode default per environment', () => {
     vi.resetModules()
     vi.stubEnv('ENVIRONMENT', environment)
     vi.stubEnv('AUTH_MODE', undefined) // unset so the default (not an override) is exercised
+    // Deployed tiers fail startup without this secret (see config.js) — this
+    // suite is about the auth.mode default, not that guard, so stub a value
+    // whenever we're not exercising the local tier.
+    if (environment !== 'local') {
+      vi.stubEnv('EXTERNAL_USER_TOKEN_SECRET', 'test-secret')
+    }
     const { config } = await import('#/config.js')
     return config
   }
@@ -93,6 +99,11 @@ describe('config email verification', () => {
     vi.resetModules()
     for (const [name, value] of Object.entries(env)) {
       vi.stubEnv(name, value)
+    }
+    // Deployed tiers fail startup without this secret (see config.js); this
+    // suite is about email-verification settings, not that guard.
+    if (env.ENVIRONMENT && env.ENVIRONMENT !== 'local') {
+      vi.stubEnv('EXTERNAL_USER_TOKEN_SECRET', 'test-secret')
     }
     return import('#/config.js')
   }

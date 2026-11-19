@@ -1,6 +1,12 @@
 import Boom from '@hapi/boom'
+import { decodeJwt } from 'jose'
 
-import { verifyExternalAccessToken } from '#/services/external-user/access-token.js'
+import {
+  EXTERNAL_TOKEN_ISSUER,
+  verifyExternalAccessToken
+} from '#/services/external-user/access-token.js'
+
+import { IDENTITY_TYPE } from './strategy-name.js'
 
 const BEARER_PREFIX = 'Bearer '
 
@@ -14,15 +20,16 @@ function extractBearerToken(request) {
 }
 
 // Maps a verified external-user token payload onto Hapi credentials, in the
-// same shape entra-bearer produces (subject, roles, scope) plus the one extra
-// field this strategy's credentials carry: registrationReference, the single
-// record the token is scoped to. `scope` drives Hapi's route-level role check
-// (requireExternalUser); registrationReference is read by
+// same shape entra-bearer produces (identityType, subject, roles, scope) plus
+// the one extra field this strategy's credentials carry: registrationReference,
+// the single record the token is scoped to. `scope` drives Hapi's route-level
+// role check (requireExternalUser); registrationReference is read by
 // requireOwnRegistration for the record-level check — role alone is never
 // enough for this population.
 function toCredentials(payload) {
   const roles = Array.isArray(payload.roles) ? payload.roles : []
   return {
+    identityType: IDENTITY_TYPE.EXTERNAL,
     subject: payload.sub ?? '',
     registrationReference: payload.reference ?? '',
     roles,
@@ -45,6 +52,21 @@ export function externalBearerScheme() {
       const token = extractBearerToken(request)
       if (!token) {
         throw Boom.unauthorized('Missing bearer token', 'Bearer')
+      }
+
+      // Both bearer schemes read the same Authorization header. If this
+      // token isn't ours (wrong/absent issuer), say "missing" (no message)
+      // so Hapi falls through to try entra-bearer instead of hard-failing a
+      // case officer's request. A token that IS ours but fails verification
+      // below still gets a real 401 with a message.
+      let unverifiedPayload
+      try {
+        unverifiedPayload = decodeJwt(token)
+      } catch {
+        throw Boom.unauthorized(null, 'Bearer')
+      }
+      if (unverifiedPayload.iss !== EXTERNAL_TOKEN_ISSUER) {
+        throw Boom.unauthorized(null, 'Bearer')
       }
 
       let payload

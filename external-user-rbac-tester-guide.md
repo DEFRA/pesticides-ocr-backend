@@ -178,6 +178,8 @@ A few behaviours were initially implemented with a stated default while awaiting
 - Changing the contact email revokes *every* applicant's access immediately, rather than letting the current session keep working until it naturally expires.
 - Only the registration's own primary contact — not, for example, an additional address's contact — is ever entitled to access it.
 
+**Since confirmed (feature/BE-717, not yet sign-off reviewed):** `GET`/`PATCH /registrations/{reference}` are now **shared routes** — a case officer's existing Entra bearer token works on them too, alongside an applicant's `externalAccessToken`, so you may see either token type succeed in tests against these two endpoints. See `external-user-rbac-spec.html` §4/§6.2/§6.7 for the mechanics and the open questions this raised.
+
 ---
 
 ## 8. Related documents
