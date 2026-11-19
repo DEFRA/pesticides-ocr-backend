@@ -1,11 +1,16 @@
 import { randomBytes } from 'node:crypto'
 
+import { SignJWT } from 'jose'
+
 import {
   EMAIL_VERIFICATIONS_COLLECTION,
   OCR_REGISTRATION_COLLECTION,
   REGISTRATION_ACCESS_COLLECTION
 } from '#/common/constants/collections.js'
 import { addSeconds } from '#/common/helpers/time.js'
+import { getCaseOfficerRoles } from '#/auth/require-role.js'
+import { createRegistrationAccessRepository } from '#/repositories/registration-access.js'
+import { issueExternalAccessToken } from '#/services/external-user/access-token.js'
 import { hashLinkToken } from '#/services/email-verification/link-token.js'
 import { STATUS } from '#/services/email-verification/verification-records.js'
 import {
@@ -15,6 +20,19 @@ import {
   journeyToken,
   validRegistrationPayload
 } from '#/routes/registration/registration.fixtures.js'
+
+const OFFICER_SUBJECT = 'officer-1'
+
+// The API runs in mock auth mode under test (ENVIRONMENT defaults to local),
+// so tokens are decoded but not signature-verified.
+function mockOfficerToken() {
+  return new SignJWT({ name: 'Test Officer', roles: getCaseOfficerRoles() })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(OFFICER_SUBJECT)
+    .setIssuedAt()
+    .setExpirationTime('5m')
+    .sign(new TextEncoder().encode('mock-not-verified'))
+}
 
 const HASH_SECRET = 'hash-test-secret'
 const EXTERNAL_SECRET = 'external-user-test-secret'
@@ -226,5 +244,141 @@ describe('External user RBAC: end-to-end flow', () => {
       headers: { authorization: `Bearer ${accessToken}` }
     })
     expect(getResponse.statusCode).toBe(403)
+  })
+
+  // Shared route: a case officer (entra-bearer) can also reach GET/PATCH, via
+  // requireSharedAccess + authorise()'s internal branch (requireInternalPermission).
+  test('a case officer can view and edit a registration via the shared route', async () => {
+    const reference = await submitRegistration()
+    const officerToken = await mockOfficerToken()
+
+    const getResponse = await server.inject({
+      method: 'GET',
+      url: `/registrations/${reference}`,
+      headers: { authorization: `Bearer ${officerToken}` }
+    })
+    expect(getResponse.statusCode).toBe(200)
+    expect(JSON.parse(getResponse.payload)).toMatchObject({ reference })
+
+    const patchResponse = await server.inject({
+      method: 'PATCH',
+      url: `/registrations/${reference}`,
+      headers: { authorization: `Bearer ${officerToken}` },
+      payload: { version: 1, businessName: 'Officer Updated Name' }
+    })
+    expect(patchResponse.statusCode).toBe(200)
+    expect(JSON.parse(patchResponse.payload)).toMatchObject({
+      businessName: 'Officer Updated Name',
+      version: 2
+    })
+  })
+
+  // PATCH with a stale `version` must return 409, not silently overwrite.
+  test('PATCH with a stale version returns 409 Conflict', async () => {
+    const reference = await submitRegistration()
+    const accessToken = await verifyForReference(reference)
+
+    // Advance the registration to version 2 first.
+    const firstPatch = await server.inject({
+      method: 'PATCH',
+      url: `/registrations/${reference}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { version: 1, businessName: 'First Update' }
+    })
+    expect(firstPatch.statusCode).toBe(200)
+
+    // Retry with the now-stale version 1.
+    const staleResponse = await server.inject({
+      method: 'PATCH',
+      url: `/registrations/${reference}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { version: 1, businessName: 'Stale Update' }
+    })
+    expect(staleResponse.statusCode).toBe(409)
+  })
+
+  // A grant can outlive the registration it names (e.g. deleted or never
+  // created) — this should be an internal-inconsistency 404, not a leak.
+  test('GET/PATCH return 404 when the token is valid but the registration no longer exists', async () => {
+    const missingReference = 'PPP-ZZZ-999'
+    const subject = 'missing-reg-subject'
+    const accessRepository = createRegistrationAccessRepository({
+      db: server.db
+    })
+    const future = new Date(Date.now() + 30 * 60 * 1000)
+    await accessRepository.grant({
+      subject,
+      reference: missingReference,
+      expiresAt: future
+    })
+    const accessToken = await issueExternalAccessToken({
+      subject,
+      reference: missingReference
+    })
+
+    const getResponse = await server.inject({
+      method: 'GET',
+      url: `/registrations/${missingReference}`,
+      headers: { authorization: `Bearer ${accessToken}` }
+    })
+    expect(getResponse.statusCode).toBe(404)
+
+    const patchResponse = await server.inject({
+      method: 'PATCH',
+      url: `/registrations/${missingReference}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { version: 1, businessName: 'Nope' }
+    })
+    expect(patchResponse.statusCode).toBe(404)
+  })
+
+  // Any error from the transaction that isn't a VersionConflictError, a Boom,
+  // or a TypeError must be logged and surfaced as a generic 500, never leak
+  // internals to the caller.
+  test('PATCH returns 500 for an unexpected error from the transaction', async () => {
+    const reference = await submitRegistration()
+    const accessToken = await verifyForReference(reference)
+
+    const original = server.registrations.withTransaction
+    server.registrations.withTransaction = vi
+      .fn()
+      .mockRejectedValue(new Error('unexpected database failure'))
+
+    try {
+      const response = await server.inject({
+        method: 'PATCH',
+        url: `/registrations/${reference}`,
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: { version: 1, businessName: 'Should Fail' }
+      })
+      expect(response.statusCode).toBe(500)
+    } finally {
+      server.registrations.withTransaction = original
+    }
+  })
+
+  // A TypeError from the repository layer (e.g. a guard assertion) is mapped
+  // to 400, not 500 — it indicates a bad caller input the Joi schema didn't
+  // catch, not a server fault.
+  test('PATCH returns 400 when the transaction throws a TypeError', async () => {
+    const reference = await submitRegistration()
+    const accessToken = await verifyForReference(reference)
+
+    const original = server.registrations.withTransaction
+    server.registrations.withTransaction = vi
+      .fn()
+      .mockRejectedValue(new TypeError('bad input shape'))
+
+    try {
+      const response = await server.inject({
+        method: 'PATCH',
+        url: `/registrations/${reference}`,
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: { version: 1, businessName: 'Should Fail' }
+      })
+      expect(response.statusCode).toBe(400)
+    } finally {
+      server.registrations.withTransaction = original
+    }
   })
 })
