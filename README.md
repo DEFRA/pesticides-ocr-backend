@@ -111,20 +111,20 @@ git config --global core.autocrlf false
 
 ## API endpoints
 
-| Endpoint                       | Method    | Description                                                                                                                             |
-| :----------------------------- | :-------- | :-------------------------------------------------------------------------------------------------------------------------------------- |
-| `/health`                      | GET       | Health check                                                                                                                            |
-| `/register`                    | POST      | Submit a pesticide registration application, once its contact email is verified (see [POST /register](#post-register))                  |
-| `/search`                      | GET       | Partial-match search of the register, paginated                                                                                         |
-| `/export`                      | GET       | A reference or free-text match, as a CSV download                                                                                       |
-| `/registrations/{reference}`   | GET       | A registration, as a case officer (Entra) or its own applicant (external-access token) — a shared route (see [External-user RBAC](#external-user-rbac)) |
-| `/registrations/{reference}`   | PATCH     | Update a registration, as a case officer (Entra) or its own applicant (external-access token) — a shared route (see [External-user RBAC](#external-user-rbac)) |
-| `/registrations/{reference}`   | DELETE    | Soft delete a registration, recording who, when and why (see [DELETE /registrations/{reference}](#delete-registrationsreference))       |
-| `/whoami`                      | GET       | Authenticated caller's identity (case-officer scope)                                                                                    |
-| `/metrics/*`                   | GET, POST | Journey metrics (see [Journey metrics](#journey-metrics))                                                                               |
-| `/email-verifications`         | POST      | Email a magic link to confirm the applicant's address (see [POST /email-verifications](#post-email-verifications))                      |
+| Endpoint                       | Method    | Description                                                                                                                                                                |
+| :----------------------------- | :-------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/health`                      | GET       | Health check                                                                                                                                                               |
+| `/register`                    | POST      | Submit a pesticide registration application, once its contact email is verified (see [POST /register](#post-register))                                                     |
+| `/search`                      | GET       | Partial-match search of the register, paginated                                                                                                                            |
+| `/export`                      | GET       | A reference or free-text match, as a CSV download                                                                                                                          |
+| `/registrations/{reference}`   | GET       | A registration, as a case officer (Entra) or its own applicant (external-access token) — a shared route (see [External-user RBAC](#external-user-rbac))                    |
+| `/registrations/{reference}`   | PATCH     | Update a registration, as a case officer (Entra) or its own applicant (external-access token) — a shared route (see [External-user RBAC](#external-user-rbac))             |
+| `/registrations/{reference}`   | DELETE    | Soft delete a registration, recording who, when and why (see [DELETE /registrations/{reference}](#delete-registrationsreference))                                          |
+| `/whoami`                      | GET       | Authenticated caller's identity (case-officer scope)                                                                                                                       |
+| `/metrics/*`                   | GET, POST | Journey metrics (see [Journey metrics](#journey-metrics))                                                                                                                  |
+| `/email-verifications`         | POST      | Email a magic link to confirm the applicant's address (see [POST /email-verifications](#post-email-verifications))                                                         |
 | `/email-verifications/verify`  | POST      | Use up a magic link, confirming the address, and optionally authorise access to one registration (see [POST /email-verifications/verify](#post-email-verificationsverify)) |
-| `/email-verifications/current` | GET       | The journey's latest link: none, pending, expired or verified (see [GET /email-verifications/current](#get-email-verificationscurrent)) |
+| `/email-verifications/current` | GET       | The journey's latest link: none, pending, expired or verified (see [GET /email-verifications/current](#get-email-verificationscurrent))                                    |
 
 ### POST /register
 
@@ -254,10 +254,10 @@ A shared route (see [External-user RBAC](#external-user-rbac)): accepts **either
 }
 ```
 
-| Response | When                                                                                     |
-| -------- | ----------------------------------------------------------------------------------------- |
-| `200`    | The registration                                                                           |
-| `401`    | The bearer token is missing, invalid or expired (on whichever strategy actually matched it) |
+| Response | When                                                                                                                                                                                                                          |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `200`    | The registration                                                                                                                                                                                                              |
+| `401`    | The bearer token is missing, invalid or expired (on whichever strategy actually matched it)                                                                                                                                   |
 | `403`    | External caller: the token does not name this reference, or its grant is missing, expired or revoked. Internal caller: denied by `requireInternalPermission` (currently a no-op — any case officer may read any registration) |
 
 ### PATCH /registrations/{reference} (shared: case officer or applicant)
@@ -277,14 +277,14 @@ Same auth as the `GET` above. The body must include the **`version` from the cal
 
 **Response (200):** the updated registration, with its new `version`.
 
-| Response | When                                                                                       |
-| -------- | ------------------------------------------------------------------------------------------- |
-| `200`    | Updated: the registration as stored, with the incremented `version`                          |
-| `400`    | `version` is missing or not an integer, the body has an unknown/dotted field, or is otherwise invalid |
-| `401`    | The bearer token is missing, invalid or expired (on whichever strategy actually matched it)   |
+| Response | When                                                                                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `200`    | Updated: the registration as stored, with the incremented `version`                                                                                          |
+| `400`    | `version` is missing or not an integer, the body has an unknown/dotted field, or is otherwise invalid                                                        |
+| `401`    | The bearer token is missing, invalid or expired (on whichever strategy actually matched it)                                                                  |
 | `403`    | External caller: the token does not name this reference, or its grant is missing, expired or revoked. Internal caller: denied by `requireInternalPermission` |
-| `404`    | There's no such registration (authorisation was already confirmed, so this means data inconsistency, not an authorisation failure) |
-| `409`    | The registration has changed since `version` was loaded — reload and retry (`VersionConflictError`) |
+| `404`    | There's no such registration (authorisation was already confirmed, so this means data inconsistency, not an authorisation failure)                           |
+| `409`    | The registration has changed since `version` was loaded — reload and retry (`VersionConflictError`)                                                          |
 
 Changing `primaryContact.contactEmail` in this call **revokes every existing grant on the registration** (for every identity that ever held one), in the **same transaction** as the update itself — see [External-user RBAC](#external-user-rbac). The new email must go through `POST /email-verifications` → `POST /email-verifications/verify` (with this `reference`) again before anyone, including the same applicant, can access the registration.
 
@@ -436,7 +436,10 @@ A link verifies once: of any number of concurrent attempts, exactly one succeeds
 An applicant returning to view/edit a registration they already submitted includes its `reference` in the body:
 
 ```json
-{ "token": "<the 43-character token from the link>", "reference": "OCR-ABC-123" }
+{
+  "token": "<the 43-character token from the link>",
+  "reference": "OCR-ABC-123"
+}
 ```
 
 The link must still verify exactly as above. Only once it has, the backend checks that the **verified email matches that registration's own `primaryContact.contactEmail`** (trimmed, lower-cased comparison) before doing anything else — verifying an email only proves control of the inbox, not entitlement to any particular registration. If it matches, the response additionally includes a short-lived `externalAccessToken` (see [External-user RBAC](#external-user-rbac)):
@@ -447,8 +450,8 @@ The link must still verify exactly as above. Only once it has, the backend check
 
 If it does not match — including when `reference` does not correspond to any registration at all — the request is refused with the same generic denial either way, so the response can never be used to learn whether a reference exists or who owns it:
 
-| Status | `code`                       | When                                                                                                          |
-| ------ | ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Status | `code`                       | When                                                                                                                   |
+| ------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | 403    | `REGISTRATION_ACCESS_DENIED` | The link verified, but the verified email is not the registration's own contact email, or the reference does not exist |
 
 Omitting `reference` entirely keeps the original behaviour unchanged (no entitlement check, no token) — this is the path a brand-new submission's verification still takes.

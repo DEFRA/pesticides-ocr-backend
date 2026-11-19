@@ -18,6 +18,7 @@ But **external applicants** (people outside the organisation who've submitted a 
 The **External User RBAC ("magic link")** feature gives them a secure way to do this **without a username or password**, using only their **email address**.
 
 ### In short:
+
 1. The applicant enters their email address on a page.
 2. We email them a **special one-time link** (the "magic link").
 3. They click the link, which logs them in automatically.
@@ -32,15 +33,15 @@ No Azure AD, no passwords — just "prove you own this email address" security.
 
 This is the heart of what this ticket changes, so it's worth being explicit about the difference:
 
-| | **Internal users** (HSE/DEFRA staff, e.g. case officers) | **External users** (applicants, via magic link) |
-|---|---|---|
-| How they prove who they are | Sign in with their **work Microsoft account** (Azure AD / Entra) | Prove they own an **email address** by clicking a one-time link |
-| What "logging in" gets them | A Microsoft-issued token, checked against the organisation's staff directory | A token this system itself issues, after checking the email matches a registration |
-| What they can see/do | Search, view and edit **any** registration (an internal "case officer" role) | View/edit **only the one registration** whose contact email they just proved they own |
-| Technical mechanism | The `entra-bearer` authentication strategy | A completely separate `external-bearer` authentication strategy |
-| Can one type's credential be used as the other? | **No** — these are two independent mechanisms. A magic-link token is cryptographically impossible to use on a staff-only page, and vice versa, even if you tried | — |
-| How long access lasts | Governed by the organisation's normal Microsoft sign-in session rules | 30 minutes, then they must click a fresh magic link to continue |
-| What happens if the applicant's own registration's contact email changes | N/A — doesn't affect staff at all | Their current access is **immediately cancelled** — they must verify the new email address again before they (or anyone) can get back in |
+|                                                                          | **Internal users** (HSE/DEFRA staff, e.g. case officers)                                                                                                         | **External users** (applicants, via magic link)                                                                                          |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| How they prove who they are                                              | Sign in with their **work Microsoft account** (Azure AD / Entra)                                                                                                 | Prove they own an **email address** by clicking a one-time link                                                                          |
+| What "logging in" gets them                                              | A Microsoft-issued token, checked against the organisation's staff directory                                                                                     | A token this system itself issues, after checking the email matches a registration                                                       |
+| What they can see/do                                                     | Search, view and edit **any** registration (an internal "case officer" role)                                                                                     | View/edit **only the one registration** whose contact email they just proved they own                                                    |
+| Technical mechanism                                                      | The `entra-bearer` authentication strategy                                                                                                                       | A completely separate `external-bearer` authentication strategy                                                                          |
+| Can one type's credential be used as the other?                          | **No** — these are two independent mechanisms. A magic-link token is cryptographically impossible to use on a staff-only page, and vice versa, even if you tried | —                                                                                                                                        |
+| How long access lasts                                                    | Governed by the organisation's normal Microsoft sign-in session rules                                                                                            | 30 minutes, then they must click a fresh magic link to continue                                                                          |
+| What happens if the applicant's own registration's contact email changes | N/A — doesn't affect staff at all                                                                                                                                | Their current access is **immediately cancelled** — they must verify the new email address again before they (or anyone) can get back in |
 
 **Why two separate mechanisms, not one shared login?** Staff need broad access across many registrations and already have an organisational identity (their work account) to prove who they are. Applicants have neither — they're not "in the system" in that sense, only an email address is known about them, and that's deliberately as far as the trust goes: it proves inbox ownership of one address, and that's used only to unlock the one record that address is already associated with. Keeping the two completely separate (rather than one login screen that branches) means a bug or bypass in one can never accidentally grant access through the other.
 
@@ -48,17 +49,18 @@ This is the heart of what this ticket changes, so it's worth being explicit abou
 
 ## 2. How it works (behind the scenes, simplified)
 
-| Step | What happens | Analogy |
-|---|---|---|
-| 1. Request | Applicant types their email into a form | "I'd like to log in" |
-| 2. We create a one-time code | The system generates a random, secret code and stores a *record* of it in the database (marked "pending") | A one-time password written on a sealed envelope |
-| 3. Email sent | We email the applicant a link containing that code (via GOV.UK Notify) | We post them the envelope |
-| 4. Applicant clicks link | The system checks the code matches what's stored, hasn't expired, and hasn't been used already | Door bouncer checks the envelope is genuine and not already used |
-| 5. Exchange for access | If valid, the system issues the applicant a temporary secure "pass" (a token) tied to their specific registration | Wristband for the night — only works for this applicant, only for a little while |
-| 6. View/Edit | The applicant uses that pass to view or update **their own registration only** | Wristband only opens their own hotel room door |
-| 7. Expiry | After a set time (or if unused), the one-time code and the pass both stop working | Wristband stops working after the event |
+| Step                         | What happens                                                                                                      | Analogy                                                                          |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| 1. Request                   | Applicant types their email into a form                                                                           | "I'd like to log in"                                                             |
+| 2. We create a one-time code | The system generates a random, secret code and stores a _record_ of it in the database (marked "pending")         | A one-time password written on a sealed envelope                                 |
+| 3. Email sent                | We email the applicant a link containing that code (via GOV.UK Notify)                                            | We post them the envelope                                                        |
+| 4. Applicant clicks link     | The system checks the code matches what's stored, hasn't expired, and hasn't been used already                    | Door bouncer checks the envelope is genuine and not already used                 |
+| 5. Exchange for access       | If valid, the system issues the applicant a temporary secure "pass" (a token) tied to their specific registration | Wristband for the night — only works for this applicant, only for a little while |
+| 6. View/Edit                 | The applicant uses that pass to view or update **their own registration only**                                    | Wristband only opens their own hotel room door                                   |
+| 7. Expiry                    | After a set time (or if unused), the one-time code and the pass both stop working                                 | Wristband stops working after the event                                          |
 
 **Key security rules (already tested and confirmed working):**
+
 - A one-time code can only be used **once**.
 - **Proving you own an email address is not, by itself, enough to access a registration.** The email on the magic link request must also match that specific registration's own contact email — the system checks this before handing out any access, every time (not just the first time).
 - A pass only works for **the applicant's own registration** — trying to view someone else's is blocked, and the error message is identical whether the registration doesn't exist or just isn't theirs (so nobody can use the error to go "fishing" for valid references).
@@ -72,13 +74,14 @@ This is the heart of what this ticket changes, so it's worth being explicit abou
 
 Think of the database as a filing cabinet with different drawers ("collections"). This feature touches three drawers:
 
-| Collection name | What it stores | What you'd see change during a test |
-|---|---|---|
-| `ocr-email-verifications` | Temporary one-time codes — one entry per "log me in" request. Each has a status: `pending` → `verified` (or `expired`/`superseded`). | A new entry appears when the applicant requests a link; it flips from `pending` to `verified` once they click it. |
+| Collection name           | What it stores                                                                                                                                                                         | What you'd see change during a test                                                                                                                                                              |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ocr-email-verifications` | Temporary one-time codes — one entry per "log me in" request. Each has a status: `pending` → `verified` (or `expired`/`superseded`).                                                   | A new entry appears when the applicant requests a link; it flips from `pending` to `verified` once they click it.                                                                                |
 | `ocr-registration-access` | Which verified applicant is currently allowed into which registration — the "pass list". One entry per applicant/registration pair, with an expiry and (if applicable) a revoked time. | A new entry appears the first time an applicant verifies for a reference; it gets a fresh expiry each time they re-verify, and is marked revoked if the registration's contact email is changed. |
-| `ocr-registration` | The applicant's actual registration/application data | Unchanged unless the applicant edits something after logging in — then you'd see their edit reflected here. |
+| `ocr-registration`        | The applicant's actual registration/application data                                                                                                                                   | Unchanged unless the applicant edits something after logging in — then you'd see their edit reflected here.                                                                                      |
 
 You don't need to understand the technical field names — just know:
+
 - **`ocr-email-verifications`** = short-lived "login codes", cleans itself up automatically.
 - **`ocr-registration-access`** = the "pass list" — who currently has a valid pass to which registration, and until when.
 - **`ocr-registration`** = the real data the applicant is allowed to view/edit.
@@ -90,9 +93,11 @@ You don't need to understand the technical field names — just know:
 There are **three ways** to test, depending on whether you want a real email sent:
 
 ### Option A — Quick test, no real email (recommended for most testing)
+
 This "fakes" the email step so you don't need a real inbox. A developer runs one command and it walks through the entire journey automatically, printing out each step and whether it passed.
 
 **Steps for the developer to run (you can watch the output):**
+
 1. Make sure the backend is running locally (`npm run dev`).
 2. In a second terminal, run:
    ```
@@ -112,11 +117,13 @@ This "fakes" the email step so you don't need a real inbox. A developer runs one
 If every line ends in ✅, the feature works correctly.
 
 ### Option B — Full real-email test (closer to real life)
+
 This sends an actual email via GOV.UK Notify to a real inbox, and you manually click the link.
 
 **Requirements:** the email address must be on the Notify "guestlist" (ask a developer to check/add it) — this is a safety feature so test emails don't go to random addresses.
 
 **Steps:**
+
 1. Developer runs:
    ```
    npm run test:external-user-flow -- --mode=notify --email=your.email@example.com
@@ -126,11 +133,14 @@ This sends an actual email via GOV.UK Notify to a real inbox, and you manually c
 4. The script continues automatically and shows the same ✅/❌ checklist as Option A.
 
 ### Option C — Manual click-through (for non-technical sign-off / demo)
+
 If you'd prefer to see the actual applicant experience in a browser rather than terminal output, ask a developer to:
+
 1. Run the Notify-mode test above to get a real email, **or**
 2. Give you a magic-link URL directly in a test environment.
 
 Then you simply:
+
 1. Open the emailed link in your browser.
 2. Confirm you land on a page showing **your own registration only**.
 3. Try editing a field and saving — confirm it's saved.
@@ -149,7 +159,7 @@ See `external-user-rbac.postman_collection.json` — set up as described in its 
 ✅ Clicking the link logs them in (no password needed)
 ✅ Applicant sees their own registration details
 ✅ Applicant can edit and save their own registration
-✅ Applicant **cannot** see or edit another applicant's registration, even when they are genuinely the owner of the verified email address used — it must also be *that registration's own* contact email
+✅ Applicant **cannot** see or edit another applicant's registration, even when they are genuinely the owner of the verified email address used — it must also be _that registration's own_ contact email
 ✅ The error shown for "wrong registration" and "registration doesn't exist" look identical — nothing about the message gives away which one it is
 ✅ Applicant **cannot** access staff/internal-only pages
 ✅ The link only works once
@@ -163,6 +173,7 @@ If any of the above fails, that's a bug to report — please note exactly which 
 ## 6. Who to ask if something's unclear
 
 Contact the development team with:
+
 - Which test option you used (A, B, C or D)
 - The email address used (if Option B/C)
 - A screenshot or copy of any error message
@@ -175,7 +186,7 @@ Contact the development team with:
 A few behaviours were initially implemented with a stated default while awaiting sign-off, and have since been **confirmed** (2026-11-11) — see `magic-link-tickets.md` → "Complete secure applicant access to registrations: decisions confirmed", or the full rationale in `external-user-rbac-spec.html` §6, for the full detail behind each:
 
 - A "wrong registration" access attempt returns a generic `403`, identical whether the registration doesn't exist or just isn't yours.
-- Changing the contact email revokes *every* applicant's access immediately, rather than letting the current session keep working until it naturally expires.
+- Changing the contact email revokes _every_ applicant's access immediately, rather than letting the current session keep working until it naturally expires.
 - Only the registration's own primary contact — not, for example, an additional address's contact — is ever entitled to access it.
 
 **Since confirmed (feature/BE-717, not yet sign-off reviewed):** `GET`/`PATCH /registrations/{reference}` are now **shared routes** — a case officer's existing Entra bearer token works on them too, alongside an applicant's `externalAccessToken`, so you may see either token type succeed in tests against these two endpoints. See `external-user-rbac-spec.html` §4/§6.2/§6.7 for the mechanics and the open questions this raised.
