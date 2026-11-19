@@ -142,6 +142,7 @@ const additionalAddressSchema = Joi.object({
 
 const SELECT_SECTOR_MESSAGE =
   'Select a professional sector or describe your main type of work'
+const ENTER_MAIN_CUSTOMER_MESSAGE = 'Enter your main customer'
 
 const schema = Joi.object({
   businessActivities: Joi.array()
@@ -163,8 +164,8 @@ const schema = Joi.object({
       otherwise: Joi.required()
     })
     .messages({
-      'string.empty': 'Enter your main customer',
-      'any.required': 'Enter your main customer'
+      'string.empty': ENTER_MAIN_CUSTOMER_MESSAGE,
+      'any.required': ENTER_MAIN_CUSTOMER_MESSAGE
     }),
   businessName: Joi.string()
     .trim()
@@ -254,7 +255,7 @@ const patchSchema = Joi.object({
   }),
   businessActivities: schema.extract('businessActivities').optional(),
   mainCustomer: Joi.string().trim().min(1).optional().messages({
-    'string.empty': 'Enter your main customer'
+    'string.empty': ENTER_MAIN_CUSTOMER_MESSAGE
   }),
   businessName: schema.extract('businessName').optional(),
   address: schema.extract('address').optional(),
