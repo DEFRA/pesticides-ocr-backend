@@ -11,6 +11,14 @@ import { requireJourneyId } from '#/common/helpers/require-journey-id.js'
 import { withErrorCode } from '#/common/helpers/error-code.js'
 import { HTTP_CREATED } from '#/common/constants/http-status.js'
 import { MAX_EMAIL_LENGTH } from '#/common/constants/email.js'
+import { ACTOR_TYPE } from '#/common/constants/actors.js'
+import { IDENTITY_TYPE } from '#/auth/strategy-name.js'
+import { authorise } from '#/auth/authorise.js'
+import { requireSharedAccess } from '#/auth/require-own-registration.js'
+import { registrationParamsSchema } from '#/common/helpers/registration-reference.js'
+import { failWithBadRequest } from '#/common/helpers/search-query.js'
+import { createRegistrationAccessRepository } from '#/repositories/registration-access.js'
+import { VersionConflictError } from '#/repositories/version-conflict-error.js'
 import {
   EMAIL_NOT_VERIFIED,
   SERVICE_NOT_CONFIGURED
@@ -134,6 +142,7 @@ const additionalAddressSchema = Joi.object({
 
 const SELECT_SECTOR_MESSAGE =
   'Select a professional sector or describe your main type of work'
+const ENTER_MAIN_CUSTOMER_MESSAGE = 'Enter your main customer'
 
 const schema = Joi.object({
   businessActivities: Joi.array()
@@ -155,8 +164,8 @@ const schema = Joi.object({
       otherwise: Joi.required()
     })
     .messages({
-      'string.empty': 'Enter your main customer',
-      'any.required': 'Enter your main customer'
+      'string.empty': ENTER_MAIN_CUSTOMER_MESSAGE,
+      'any.required': ENTER_MAIN_CUSTOMER_MESSAGE
     }),
   businessName: Joi.string()
     .trim()
@@ -230,6 +239,40 @@ const schema = Joi.object({
     .max(MAX_ADDITIONAL_ADDRESSES)
     .optional()
 })
+
+// Explicit partial schema for PATCH /registrations/{reference}: every field
+// is optional (a patch may touch only some of them), but unknown/dotted keys
+// are rejected outright (unknown(false), the default) — a key such as
+// "primaryContact.contactEmail" would otherwise write straight to Mongo and
+// bypass the email-change revocation check below, which only inspects
+// payload.primaryContact?.contactEmail on the *parsed* nested object.
+// Shared by both populations for now (see README §"External-user RBAC" open
+// question: whether case officers and external users should eventually have
+// different editable-field sets).
+const patchSchema = Joi.object({
+  version: Joi.number().integer().min(0).strict().required().messages({
+    'any.required': 'expectedVersion (version) is required'
+  }),
+  businessActivities: schema.extract('businessActivities').optional(),
+  mainCustomer: Joi.string().trim().min(1).optional().messages({
+    'string.empty': ENTER_MAIN_CUSTOMER_MESSAGE
+  }),
+  businessName: schema.extract('businessName').optional(),
+  address: schema.extract('address').optional(),
+  primaryContact: schema.extract('primaryContact').optional(),
+  addressActivities: schema.extract('addressActivities').optional(),
+  quantity: Joi.object({
+    quantityType: Joi.string()
+      .valid(...QUANTITY_TYPES)
+      .required(),
+    quantity: Joi.number().positive().required()
+  }).optional(),
+  professionalSectors: schema.extract('professionalSectors'),
+  memberSchemes: schema.extract('memberSchemes'),
+  additionalAddresses: schema.extract('additionalAddresses')
+})
+  .min(2) // version + at least one real change
+  .messages({ 'object.min': 'At least one field must be changed' })
 
 // The request ID comes from a header, so one that's empty or too long is
 // dropped rather than failing the applicant's submission.
@@ -310,6 +353,129 @@ export const register = [
       } catch (err) {
         request.log(['error'], err)
         throw Boom.internal('Failed to save registration')
+      }
+    }
+  },
+  // Shared route: both verified external applicants (external-bearer) and
+  // case officers/admins (entra-bearer) can reach GET/PATCH
+  // /registrations/{reference} — requireSharedAccess accepts either
+  // strategy, and authorise() then applies the record-level rule for
+  // whichever population actually authenticated (AC2-AC5 for external
+  // users; case-officer roles are dataset-scoped already, see
+  // requireInternalPermission). Role alone is never enough on its own.
+  {
+    method: 'GET',
+    path: '/registrations/{reference}',
+    options: {
+      auth: requireSharedAccess(),
+      validate: {
+        params: registrationParamsSchema,
+        failAction: failWithBadRequest
+      }
+    },
+    handler: async (request, h) => {
+      const { reference } = request.params
+      await authorise(request, { action: 'registration:read', reference })
+
+      const registration =
+        await request.registrations.findByReference(reference)
+      // Ownership/permission was already confirmed, so a missing
+      // registration here is an internal inconsistency, not an
+      // authorisation failure — but the response stays generic either way,
+      // per AC4/AC5 (no data leakage).
+      if (!registration) {
+        throw Boom.notFound('Registration not found')
+      }
+      return h.response(registration)
+    }
+  },
+  {
+    method: 'PATCH',
+    path: '/registrations/{reference}',
+    options: {
+      auth: requireSharedAccess(),
+      validate: {
+        params: registrationParamsSchema,
+        payload: patchSchema,
+        failAction: failWithBadRequest
+      }
+    },
+    handler: async (request, h) => {
+      const { reference } = request.params
+      await authorise(request, { action: 'registration:update', reference })
+
+      const { identityType, subject } = request.auth.credentials
+      const { version, ...changes } = request.payload
+
+      // Confirmed decision (completion ticket AC6): changing the contact
+      // email alone must not carry over the old email's entitlement. Every
+      // existing grant on this registration (for every identity, not just
+      // the caller's) is revoked as soon as the change is persisted; the
+      // new email must re-verify — via the normal
+      // POST /email-verifications(/verify) flow with this reference —
+      // before anyone can access the registration again. This is
+      // deliberately unconditional (not just "if it differs from the
+      // caller's own verified identity") so a changed email can never
+      // retain implicit access through a stale grant. Dotted keys are
+      // rejected by patchSchema, so this can read the nested value directly
+      // rather than guessing at a flattened key.
+      const changingContactEmail =
+        typeof changes?.primaryContact?.contactEmail === 'string'
+
+      const actor = {
+        type:
+          identityType === IDENTITY_TYPE.EXTERNAL
+            ? ACTOR_TYPE.EXTERNAL_USER
+            : ACTOR_TYPE.CASE_OFFICER,
+        id: subject
+      }
+
+      try {
+        const updated = await request.registrations.withTransaction(
+          async (session) => {
+            const result = await request.registrations.update(
+              reference,
+              changes,
+              {
+                by: actor,
+                expectedVersion: version,
+                requestId: requestIdFromTrace(),
+                session
+              }
+            )
+            // Revoking in the same transaction as the update means a failure
+            // partway through never leaves the old email still holding
+            // access: either both the update and the revocation commit, or
+            // neither does.
+            if (result && changingContactEmail) {
+              const accessRepository = createRegistrationAccessRepository({
+                db: request.db
+              })
+              await accessRepository.revokeAllForReference(reference, {
+                session
+              })
+            }
+            return result
+          }
+        )
+        if (!updated) {
+          throw Boom.notFound('Registration not found')
+        }
+        return h.response(updated)
+      } catch (err) {
+        if (err instanceof VersionConflictError) {
+          throw Boom.conflict(
+            'The registration has changed since it was loaded. Reload it and try again.'
+          )
+        }
+        if (err.isBoom) {
+          throw err
+        }
+        if (err instanceof TypeError) {
+          throw Boom.badRequest(err.message)
+        }
+        request.log(['error'], err)
+        throw Boom.internal('Failed to update registration')
       }
     }
   }
