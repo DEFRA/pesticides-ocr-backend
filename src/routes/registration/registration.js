@@ -517,9 +517,6 @@ export const register = [
         if (err.isBoom) {
           throw err
         }
-        if (err instanceof TypeError) {
-          throw Boom.badRequest(err.message)
-        }
         request.log(['error'], err)
         throw Boom.internal('Failed to update registration')
       }

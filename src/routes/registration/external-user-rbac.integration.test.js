@@ -400,9 +400,9 @@ describe('External user RBAC: end-to-end flow', () => {
     expect(patchResponse.statusCode).toBe(404)
   })
 
-  // Any error from the transaction that isn't a VersionConflictError, a Boom,
-  // or a TypeError must be logged and surfaced as a generic 500, never leak
-  // internals to the caller.
+  // Any error from the transaction that isn't a VersionConflictError or a
+  // Boom must be logged and surfaced as a generic 500, never leak internals
+  // to the caller.
   test('PATCH returns 500 for an unexpected error from the transaction', async () => {
     const reference = await submitRegistration()
     const accessToken = await verifyForReference(reference)
@@ -425,10 +425,13 @@ describe('External user RBAC: end-to-end flow', () => {
     }
   })
 
-  // A TypeError from the repository layer (e.g. a guard assertion) is mapped
-  // to 400, not 500 — it indicates a bad caller input the Joi schema didn't
-  // catch, not a server fault.
-  test('PATCH returns 400 when the transaction throws a TypeError', async () => {
+  // A TypeError from the repository layer (e.g. a guard assertion, or a
+  // genuine bug such as reading a property of undefined) indicates a server
+  // fault, not a bad caller input — the Joi schema (including .min(2)) has
+  // already rejected malformed/empty payloads by this point. It must be
+  // logged and surfaced as a generic 500, not mapped to 400, so it is never
+  // hidden as a client error or leak an internal message to the caller.
+  test('PATCH returns 500 when the transaction throws a TypeError', async () => {
     const reference = await submitRegistration()
     const accessToken = await verifyForReference(reference)
 
@@ -444,7 +447,7 @@ describe('External user RBAC: end-to-end flow', () => {
         headers: { authorization: `Bearer ${accessToken}` },
         payload: { version: 1, businessName: 'Should Fail' }
       })
-      expect(response.statusCode).toBe(400)
+      expect(response.statusCode).toBe(500)
     } finally {
       server.registrations.withTransaction = original
     }
