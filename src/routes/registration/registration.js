@@ -40,6 +40,7 @@ const MAX_BUSINESS_NAME = 200
 const MAX_TELEPHONE = 20
 const MAX_MEMBER_SCHEMES = 50
 const MAX_ADDITIONAL_ADDRESSES = 20
+const REGISTRATION_NOT_FOUND_MESSAGE = 'Registration not found'
 
 const addressSchema = Joi.object({
   addressLine1: Joi.string()
@@ -413,7 +414,7 @@ export const register = [
       // authorisation failure — but the response stays generic either way,
       // per AC4/AC5 (no data leakage).
       if (!registration) {
-        throw Boom.notFound('Registration not found')
+        throw Boom.notFound(REGISTRATION_NOT_FOUND_MESSAGE)
       }
       return h.response(registration)
     }
@@ -465,7 +466,7 @@ export const register = [
               { session }
             )
             if (!current) {
-              throw Boom.notFound('Registration not found')
+              throw Boom.notFound(REGISTRATION_NOT_FOUND_MESSAGE)
             }
             // A stale version is left to update() below, which reports it as
             // a 409 — validating a merge built on out-of-date data would
@@ -504,7 +505,7 @@ export const register = [
           }
         )
         if (!updated) {
-          throw Boom.notFound('Registration not found')
+          throw Boom.notFound(REGISTRATION_NOT_FOUND_MESSAGE)
         }
         return h.response(updated)
       } catch (err) {
