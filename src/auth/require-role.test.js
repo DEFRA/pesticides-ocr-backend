@@ -2,7 +2,7 @@ import { describe, test, expect, afterEach } from 'vitest'
 
 import { config } from '#/config.js'
 import { requireRole, getCaseOfficerRoles } from './require-role.js'
-import { STRATEGY_NAME } from './strategy-name.js'
+import { ENTRA_STRATEGY_NAME } from './strategy-name.js'
 
 describe('getCaseOfficerRoles', () => {
   const original = config.get('auth.entra.roleValues')
@@ -21,7 +21,7 @@ describe('getCaseOfficerRoles', () => {
 describe('requireRole', () => {
   test('returns the strategy + scope for the given roles', () => {
     expect(requireRole('case_officer')).toEqual({
-      strategy: STRATEGY_NAME,
+      strategy: ENTRA_STRATEGY_NAME,
       scope: ['case_officer']
     })
   })

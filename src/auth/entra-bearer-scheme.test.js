@@ -4,7 +4,7 @@ import { SignJWT, generateKeyPair } from 'jose'
 
 import { entraBearerScheme } from './entra-bearer-scheme.js'
 import { requireRole } from './require-role.js'
-import { STRATEGY_NAME } from './strategy-name.js'
+import { ENTRA_STRATEGY_NAME } from './strategy-name.js'
 
 const ISSUER = 'https://login.microsoftonline.com/test-tenant/v2.0'
 const AUDIENCE = 'api://ocr-backend'
@@ -14,7 +14,7 @@ const AUDIENCE = 'api://ocr-backend'
 // instead of fetching a remote JWKS.
 async function buildServer({ mode, getKeySet, resolveEntra }) {
   const server = Hapi.server()
-  server.auth.scheme(STRATEGY_NAME, (s, options) =>
+  server.auth.scheme(ENTRA_STRATEGY_NAME, (s, options) =>
     entraBearerScheme(s, {
       mode,
       getKeySet,
@@ -28,7 +28,7 @@ async function buildServer({ mode, getKeySet, resolveEntra }) {
       ...options
     })
   )
-  server.auth.strategy(STRATEGY_NAME, STRATEGY_NAME)
+  server.auth.strategy(ENTRA_STRATEGY_NAME, ENTRA_STRATEGY_NAME)
   server.route({
     method: 'GET',
     path: '/protected',

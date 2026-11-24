@@ -64,17 +64,25 @@ function tokenHasScope(payload, requiredScope) {
 // next, instead of a hard 401 that would stop it ever being tried — only a
 // token that IS ours but fails signature/expiry later should get a real 401
 // with a message.
-function rejectIfNotOurs(token, { mode, issuer }) {
+function rejectIfNotOurs(request, token, { mode, issuer }) {
   let unverifiedPayload
   try {
     unverifiedPayload = decodeJwt(token)
-  } catch {
+  } catch (err) {
+    request.log(
+      ['auth'],
+      `Bearer token not handled by entra-bearer: not a decodable JWT (${err.message})`
+    )
     throw Boom.unauthorized(null, 'Bearer')
   }
   const looksForeign =
     unverifiedPayload.iss === EXTERNAL_TOKEN_ISSUER ||
     (mode === 'live' && issuer && unverifiedPayload.iss !== issuer)
   if (looksForeign) {
+    request.log(
+      ['auth'],
+      `Bearer token not handled by entra-bearer: issuer '${unverifiedPayload.iss}' is not an Entra issuer`
+    )
     throw Boom.unauthorized(null, 'Bearer')
   }
 }
@@ -90,7 +98,7 @@ export function entraBearerScheme(_server, options = {}) {
       }
 
       const { issuer, audience, requiredScope } = resolveEntra()
-      rejectIfNotOurs(token, { mode, issuer })
+      rejectIfNotOurs(request, token, { mode, issuer })
 
       let payload
       try {

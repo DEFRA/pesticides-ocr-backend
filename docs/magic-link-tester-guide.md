@@ -80,11 +80,7 @@ Also worth trying, each with its own distinct message:
 
 ### Option B — API-level, with Postman (for developers/QA)
 
-See `email-verification-magic-link.postman_collection.json` (or `email-verification-magic-link.dev.postman_collection.json` for the CDP dev environment) for request/resend/verify/status checks without needing the frontend at all.
-
-### Option C — Full scripted test scenarios (for the team tester / sign-off)
-
-See `magic-link-test-scenarios.md` for a complete numbered list of scenarios (happy path, cross-device, expired, reused, resend, rate-limited, Notify failure, accessibility, cross-browser and performance checks), intended for a dedicated test pass and sign-off recording.
+See `email-verification-magic-link.postman_collection.json` for request/resend/verify/status checks without needing the frontend at all.
 
 ---
 
@@ -117,8 +113,6 @@ Contact the development team with:
 
 ## 7. Related documents
 
-- `magic-link-api-design.md` — the full technical design
-- `magic-link-tickets.md` — ticket breakdown (MLV-0 to MLV-9)
-- `magic-link-test-scenarios.md` — the full numbered test scenario list, for formal sign-off
+- `../README.md` → "API endpoints" — the full API contract
 - `email-verification-magic-link.postman_collection.json` — API-level request/response checks
 - `external-user-rbac-tester-guide.md` — the related, separate feature letting an applicant come back later to view/edit a registration they already submitted

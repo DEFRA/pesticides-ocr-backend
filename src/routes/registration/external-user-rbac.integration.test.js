@@ -107,11 +107,11 @@ describe('External user RBAC: end-to-end flow', () => {
     await server.stop({ timeout: 0 })
   })
 
-  async function submitRegistration() {
+  async function submitRegistration(payload = validRegistrationPayload) {
     const response = await server.inject({
       method: 'POST',
       url: '/register',
-      payload: validRegistrationPayload
+      payload
     })
     expect(response.statusCode).toBe(201)
     return JSON.parse(response.payload).reference
@@ -295,6 +295,74 @@ describe('External user RBAC: end-to-end flow', () => {
       payload: { version: 1, businessName: 'Stale Update' }
     })
     expect(staleResponse.statusCode).toBe(409)
+  })
+
+  // Editing other contact details, or re-sending the same email (even with
+  // different casing/whitespace), is not a contact-email change, so it must
+  // not revoke access.
+  test('editing the contact phone number, or the same email re-cased, keeps access', async () => {
+    const reference = await submitRegistration()
+    const accessToken = await verifyForReference(reference)
+
+    const patchResponse = await server.inject({
+      method: 'PATCH',
+      url: `/registrations/${reference}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        version: 1,
+        primaryContact: {
+          contactName: 'Jonny Pesticide',
+          contactTelephone: '07700900123',
+          contactEmail: `  ${CONTACT_EMAIL.toUpperCase()}  `
+        }
+      }
+    })
+    expect(patchResponse.statusCode).toBe(200)
+
+    const getResponse = await server.inject({
+      method: 'GET',
+      url: `/registrations/${reference}`,
+      headers: { authorization: `Bearer ${accessToken}` }
+    })
+    expect(getResponse.statusCode).toBe(200)
+  })
+
+  // PATCH must leave a record POST /register would have accepted: the
+  // changes are merged into the stored record and the result validated
+  // against the full schema, so cross-field rules still apply.
+  test('PATCH rejects a change that breaks a cross-field rule (mainCustomer)', async () => {
+    const { mainCustomer: _omitted, ...withoutMainCustomer } =
+      validRegistrationPayload
+    const reference = await submitRegistration({
+      ...withoutMainCustomer,
+      businessActivities: ['seller-amateur']
+    })
+    const accessToken = await verifyForReference(reference)
+
+    const response = await server.inject({
+      method: 'PATCH',
+      url: `/registrations/${reference}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { version: 1, businessActivities: ['manufacture'] }
+    })
+    expect(response.statusCode).toBe(400)
+  })
+
+  test('PATCH rejects a change that breaks a cross-field rule (quantity)', async () => {
+    const { quantity: _omitted, ...withoutQuantity } = validRegistrationPayload
+    const reference = await submitRegistration({
+      ...withoutQuantity,
+      addressActivities: ['store']
+    })
+    const accessToken = await verifyForReference(reference)
+
+    const response = await server.inject({
+      method: 'PATCH',
+      url: `/registrations/${reference}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { version: 1, addressActivities: ['use', 'store'] }
+    })
+    expect(response.statusCode).toBe(400)
   })
 
   // A grant can outlive the registration it names (e.g. deleted or never

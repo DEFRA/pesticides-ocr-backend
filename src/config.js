@@ -1,6 +1,5 @@
 import convict from 'convict'
 
-import { EXTERNAL_USER_ROLE } from '#/common/constants/roles.js'
 import convictFormatWithValidator from 'convict-format-with-validator'
 
 import { convictValidateMongoUri } from '#/common/helpers/convict/validate-mongo-uri.js'
@@ -360,11 +359,6 @@ export const config = convict({
   // to prove inbox ownership) and from the journey token (session tracking) —
   // this is the actual authorisation credential for record-level access.
   externalUser: {
-    role: {
-      doc: 'The RBAC role value assigned to authenticated external users (own-record access only). Fixed as a code constant (common/constants/roles.js), not configurable via env var — an env override that disagreed with the constant would make every external call fail, since the two are compared directly (see require-own-registration.js).',
-      format: String,
-      default: EXTERNAL_USER_ROLE
-    },
     tokenSecret: {
       doc: 'HMAC secret used to sign/verify external-user access tokens issued after email verification. Set via CDP Secrets, never committed. Empty = fails closed (no external-user token can be issued or verified) outside local tier.',
       format: String,

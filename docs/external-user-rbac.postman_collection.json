@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Pesticides OCR Backend: External User RBAC",
-    "description": "Applicant self-service access to an EXISTING registration (view/edit), built on top of magic-link email verification. This collection covers only the RBAC-specific additions — for the underlying request/resend/verify flow itself, see `email-verification-magic-link.postman_collection.json`.\n\nFull spec: `external-user-rbac-spec.html`. Design decisions (all confirmed): `magic-link-tickets.md` → \"Complete secure applicant access to registrations: decisions confirmed\".\n\n## Setup\n1. Set `baseUrl` (local default `http://localhost:3001`).\n2. Set `journeyTokenSecret` to the backend's `JOURNEY_TOKEN_SECRET` (same as the email-verification collection).\n3. Set `email` to an address on the Notify team-key guest list, OR skip real email sending by seeding a verification record directly in Mongo and setting `linkToken` yourself (the API never returns the raw token, by design) — see `scripts/test-external-user-flow.js` for how the automated test script does this.\n4. Submit a registration first (folder 1) to get a `reference` and set it, with `contactEmail` matching `email`.\n\n## Why two tokens look similar but aren't\n`x-journey-token` binds a request to one frontend session (used throughout email verification). `externalAccessToken` (returned by verify, only when `reference` is supplied) is a completely different, longer-lived credential scoped to one registration. Don't confuse the two — they use different secrets and neither can substitute for the other.",
+    "description": "Applicant self-service access to an EXISTING registration (view/edit), built on top of magic-link email verification. This collection covers only the RBAC-specific additions — for the underlying request/resend/verify flow itself, see `email-verification-magic-link.postman_collection.json`.\n\nFull spec and confirmed design decisions (§6): `external-user-rbac-spec.html`.\n\n## Setup\n1. Set `baseUrl` (local default `http://localhost:3001`).\n2. Set `journeyTokenSecret` to the backend's `JOURNEY_TOKEN_SECRET` (same as the email-verification collection).\n3. Set `email` to an address on the Notify team-key guest list, OR skip real email sending by seeding a verification record directly in Mongo and setting `linkToken` yourself (the API never returns the raw token, by design).\n4. Submit a registration first (folder 1) to get a `reference` and set it, with `contactEmail` matching `email`.\n\n## Why two tokens look similar but aren't\n`x-journey-token` binds a request to one frontend session (used throughout email verification). `externalAccessToken` (returned by verify, only when `reference` is supplied) is a completely different, longer-lived credential scoped to one registration. Don't confuse the two — they use different secrets and neither can substitute for the other.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -25,18 +25,39 @@
     }
   ],
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3001" },
-    { "key": "journeyTokenSecret", "value": "" },
-    { "key": "email", "value": "your.name@example.com" },
-    { "key": "otherEmail", "value": "someone.else@example.com" },
-    { "key": "journeyNonce", "value": "" },
-    { "key": "journeyToken", "value": "" },
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001"
+    },
+    {
+      "key": "journeyTokenSecret",
+      "value": ""
+    },
+    {
+      "key": "email",
+      "value": "your.name@example.com"
+    },
+    {
+      "key": "otherEmail",
+      "value": "someone.else@example.com"
+    },
+    {
+      "key": "journeyNonce",
+      "value": ""
+    },
+    {
+      "key": "journeyToken",
+      "value": ""
+    },
     {
       "key": "linkToken",
       "value": "",
       "description": "Raw magic-link token. The API never returns this — paste it from the email, or seed it directly in Mongo for local testing (see the collection description)."
     },
-    { "key": "otherLinkToken", "value": "" },
+    {
+      "key": "otherLinkToken",
+      "value": ""
+    },
     {
       "key": "reference",
       "value": "",
@@ -52,7 +73,25 @@
       "value": "",
       "description": "Set automatically by the verify request's test script once obtained."
     },
-    { "key": "version", "value": "1" }
+    {
+      "key": "version",
+      "value": "1"
+    },
+    {
+      "key": "crossFieldReference",
+      "value": "",
+      "description": "Set by folder 6."
+    },
+    {
+      "key": "crossFieldAccessToken",
+      "value": "",
+      "description": "Set by folder 6 after verifying."
+    },
+    {
+      "key": "emailUpper",
+      "value": "",
+      "description": "Set automatically: upper-cased copy of email."
+    }
   ],
   "item": [
     {
@@ -77,11 +116,20 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"businessActivities\": [\"manufacture\", \"market\"],\n  \"mainCustomer\": \"professional\",\n  \"businessName\": \"My Own Business Ltd\",\n  \"address\": {\n    \"addressLine1\": \"1 Example Street\",\n    \"addressLine2\": \"\",\n    \"addressTown\": \"Town\",\n    \"addressCounty\": \"\",\n    \"addressPostcode\": \"AB12 3CD\"\n  },\n  \"primaryContact\": {\n    \"contactName\": \"Postman Tester\",\n    \"contactTelephone\": \"01234567890\",\n    \"contactEmail\": \"{{email}}\"\n  },\n  \"addressActivities\": [\"use\", \"store\"],\n  \"quantity\": {\n    \"quantityType\": \"area\",\n    \"quantity\": \"50\"\n  },\n  \"professionalSectors\": [\"agriculture-horticulture\"],\n  \"memberSchemes\": [\"BASIS\"],\n  \"additionalAddresses\": []\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/register",
@@ -109,11 +157,20 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"businessActivities\": [\"manufacture\"],\n  \"mainCustomer\": \"professional\",\n  \"businessName\": \"Someone Else's Business Ltd\",\n  \"address\": {\n    \"addressLine1\": \"2 Example Street\",\n    \"addressLine2\": \"\",\n    \"addressTown\": \"Town\",\n    \"addressCounty\": \"\",\n    \"addressPostcode\": \"AB12 3CD\"\n  },\n  \"primaryContact\": {\n    \"contactName\": \"Someone Else\",\n    \"contactTelephone\": \"01234567891\",\n    \"contactEmail\": \"{{otherEmail}}\"\n  },\n  \"addressActivities\": [\"use\"],\n  \"quantity\": {\n    \"quantityType\": \"area\",\n    \"quantity\": \"10\"\n  },\n  \"professionalSectors\": [\"agriculture-horticulture\"],\n  \"memberSchemes\": [],\n  \"additionalAddresses\": []\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/register",
@@ -148,13 +205,23 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-journey-token", "value": "{{journeyToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-journey-token",
+                "value": "{{journeyToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"token\": \"{{linkToken}}\",\n  \"reference\": \"{{reference}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/email-verifications/verify",
@@ -182,13 +249,23 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-journey-token", "value": "{{journeyToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-journey-token",
+                "value": "{{journeyToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"token\": \"{{linkToken}}\",\n  \"reference\": \"{{otherReference}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/email-verifications/verify",
@@ -215,13 +292,23 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-journey-token", "value": "{{journeyToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-journey-token",
+                "value": "{{journeyToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"token\": \"{{linkToken}}\",\n  \"reference\": \"OCR-DOES-NOT-EXIST\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/email-verifications/verify",
@@ -250,13 +337,23 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-journey-token", "value": "{{journeyToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-journey-token",
+                "value": "{{journeyToken}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"token\": \"{{linkToken}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/email-verifications/verify",
@@ -322,7 +419,10 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
               {
                 "key": "Authorization",
                 "value": "Bearer {{externalAccessToken}}"
@@ -331,8 +431,93 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"version\": {{version}},\n  \"businessName\": \"My Own Business Ltd (edited)\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{reference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["registrations", "{{reference}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH phone number + same email in different case -> 200, access kept",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"emailUpper\", pm.collectionVariables.get(\"email\").toUpperCase())"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200))",
+                  "pm.collectionVariables.set(\"version\", pm.response.json().version)"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{externalAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{version}},\n  \"primaryContact\": {\n    \"contactName\": \"Postman Tester\",\n    \"contactTelephone\": \"07700900123\",\n    \"contactEmail\": \"{{emailUpper}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{reference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["registrations", "{{reference}}"]
+            },
+            "description": "Only a real change of contact email revokes access. A new phone number, or the same email re-cased (compared trimmed and lower-cased), must not."
+          }
+        },
+        {
+          "name": "Same token still works after that edit -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200 (access not revoked)\", () => pm.response.to.have.status(200))",
+                  "pm.collectionVariables.set(\"version\", pm.response.json().version)"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{externalAccessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/registrations/{{reference}}",
               "host": ["{{baseUrl}}"],
@@ -380,7 +565,10 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
               {
                 "key": "Authorization",
                 "value": "Bearer {{externalAccessToken}}"
@@ -389,7 +577,11 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"version\": 1,\n  \"businessName\": \"Hijacked\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/registrations/{{otherReference}}",
@@ -437,7 +629,10 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer not-a-real-token" }
+              {
+                "key": "Authorization",
+                "value": "Bearer not-a-real-token"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/registrations/{{reference}}",
@@ -471,7 +666,12 @@
               "raw": "{{baseUrl}}/search?reference={{reference}}",
               "host": ["{{baseUrl}}"],
               "path": ["search"],
-              "query": [{ "key": "reference", "value": "{{reference}}" }]
+              "query": [
+                {
+                  "key": "reference",
+                  "value": "{{reference}}"
+                }
+              ]
             },
             "description": "/search requires the entra-bearer strategy (internal/staff). An external-user token, however validly signed for its own purpose, must be rejected here — the two strategies share nothing."
           }
@@ -499,7 +699,10 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
               {
                 "key": "Authorization",
                 "value": "Bearer {{externalAccessToken}}"
@@ -508,7 +711,11 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"version\": {{version}},\n  \"primaryContact\": {\n    \"contactName\": \"Postman Tester\",\n    \"contactTelephone\": \"01234567890\",\n    \"contactEmail\": \"new-address-{{$timestamp}}@example.com\"\n  }\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/registrations/{{reference}}",
@@ -543,7 +750,180 @@
               "host": ["{{baseUrl}}"],
               "path": ["registrations", "{{reference}}"]
             },
-            "description": "The token itself is still validly signed and not expired, but its persisted grant was revoked by the PATCH above (immediate, unconditional revocation on contact-email change — decision 6.4 in external-user-rbac-spec.html)."
+            "description": "The token itself is still validly signed and not expired, but its persisted grant was revoked by the PATCH above (immediate revocation on contact-email change — decision 6.4 in external-user-rbac-spec.html)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. PATCH keeps cross-field rules (merged record is validated)",
+      "description": "PATCH merges the changes into the stored registration and validates the result against the same full schema as POST /register. This folder uses its own registration, stored WITHOUT a mainCustomer (valid because it is seller-amateur) and WITHOUT a quantity (valid because it only stores). Before request 2, put a fresh, unused magic-link token for {{email}} in linkToken.",
+      "item": [
+        {
+          "name": "Create registration with no mainCustomer and no quantity -> 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201))",
+                  "pm.collectionVariables.set(\"crossFieldReference\", pm.response.json().reference)"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessActivities\": [\n    \"seller-amateur\"\n  ],\n  \"businessName\": \"Cross-field Test Ltd\",\n  \"address\": {\n    \"addressLine1\": \"3 Example Street\",\n    \"addressLine2\": \"\",\n    \"addressTown\": \"Town\",\n    \"addressCounty\": \"\",\n    \"addressPostcode\": \"AB12 3CD\"\n  },\n  \"primaryContact\": {\n    \"contactName\": \"Postman Tester\",\n    \"contactTelephone\": \"01234567890\",\n    \"contactEmail\": \"{{email}}\"\n  },\n  \"addressActivities\": [\n    \"store\"\n  ],\n  \"professionalSectors\": [\n    \"agriculture-horticulture\"\n  ],\n  \"memberSchemes\": [\n    \"BASIS\"\n  ],\n  \"additionalAddresses\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["register"]
+            }
+          }
+        },
+        {
+          "name": "Verify for it -> 200 + token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200))",
+                  "const body = pm.response.json()",
+                  "pm.test(\"includes an externalAccessToken\", () => pm.expect(body.externalAccessToken).to.be.a(\"string\"))",
+                  "pm.collectionVariables.set(\"crossFieldAccessToken\", body.externalAccessToken)"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-journey-token",
+                "value": "{{journeyToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{linkToken}}\",\n  \"reference\": \"{{crossFieldReference}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/email-verifications/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["email-verifications", "verify"]
+            },
+            "description": "Needs a FRESH, unused linkToken."
+          }
+        },
+        {
+          "name": "PATCH businessActivities to remove seller-amateur -> 400 (mainCustomer now required)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400))"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{crossFieldAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 1,\n  \"businessActivities\": [\"manufacture\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{crossFieldReference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["registrations", "{{crossFieldReference}}"]
+            },
+            "description": "Each field is valid on its own, but the merged record would have no mainCustomer, which POST /register would reject."
+          }
+        },
+        {
+          "name": "PATCH addressActivities to add use -> 400 (quantity now required)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400))"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{crossFieldAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 1,\n  \"addressActivities\": [\"use\", \"store\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/registrations/{{crossFieldReference}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["registrations", "{{crossFieldReference}}"]
+            },
+            "description": "The merged record would have addressActivities including use but no quantity, which POST /register would reject."
           }
         }
       ]

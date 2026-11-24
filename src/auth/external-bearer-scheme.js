@@ -62,10 +62,18 @@ export function externalBearerScheme() {
       let unverifiedPayload
       try {
         unverifiedPayload = decodeJwt(token)
-      } catch {
+      } catch (err) {
+        request.log(
+          ['auth'],
+          `Bearer token not handled by external-bearer: not a decodable JWT (${err.message})`
+        )
         throw Boom.unauthorized(null, 'Bearer')
       }
       if (unverifiedPayload.iss !== EXTERNAL_TOKEN_ISSUER) {
+        request.log(
+          ['auth'],
+          `Bearer token not handled by external-bearer: issuer '${unverifiedPayload.iss}' is not the external-user issuer`
+        )
         throw Boom.unauthorized(null, 'Bearer')
       }
 

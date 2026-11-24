@@ -6,7 +6,10 @@ import { config } from '#/config.js'
 import { saveRegistration } from '#/services/registration/registration.js'
 import { isEmailVerifiedForJourney } from '#/services/email-verification/registration-gate.js'
 import { missingEmailVerificationSettings } from '#/services/email-verification/config-guard.js'
-import { normalisedEmailSchema } from '#/services/email-verification/email-address.js'
+import {
+  normaliseEmail,
+  normalisedEmailSchema
+} from '#/services/email-verification/email-address.js'
 import { requireJourneyId } from '#/common/helpers/require-journey-id.js'
 import { withErrorCode } from '#/common/helpers/error-code.js'
 import { HTTP_CREATED } from '#/common/constants/http-status.js'
@@ -274,6 +277,32 @@ const patchSchema = Joi.object({
   .min(2) // version + at least one real change
   .messages({ 'object.min': 'At least one field must be changed' })
 
+// A PATCH only carries the fields being changed, so validating just those
+// would lose the rules that link fields to each other (e.g. mainCustomer is
+// required unless seller-amateur is selected; quantity is required when an
+// address activity is "use"). Merge the changes into the stored record and
+// check the result against the same full schema POST /register uses, so a
+// record saved via PATCH is always one POST would have accepted.
+const REGISTRATION_FIELDS = Object.keys(schema.describe().keys)
+
+function assertMergedRegistrationIsValid(current, changes) {
+  const stored = Object.fromEntries(
+    REGISTRATION_FIELDS.filter((field) => field in current).map((field) => [
+      field,
+      current[field]
+    ])
+  )
+  const { error } = schema.validate({ ...stored, ...changes })
+  if (error) {
+    throw Boom.badRequest(error.message, {
+      validation: error.details.map((d) => ({
+        field: d.path.join('.'),
+        message: d.message
+      }))
+    })
+  }
+}
+
 // The request ID comes from a header, so one that's empty or too long is
 // dropped rather than failing the applicant's submission.
 function requestIdFromTrace() {
@@ -408,19 +437,17 @@ export const register = [
       const { version, ...changes } = request.payload
 
       // Confirmed decision (completion ticket AC6): changing the contact
-      // email alone must not carry over the old email's entitlement. Every
+      // email must not carry over the old email's entitlement. Every
       // existing grant on this registration (for every identity, not just
-      // the caller's) is revoked as soon as the change is persisted; the
+      // the caller's) is revoked in the same transaction as the update; the
       // new email must re-verify — via the normal
       // POST /email-verifications(/verify) flow with this reference —
-      // before anyone can access the registration again. This is
-      // deliberately unconditional (not just "if it differs from the
-      // caller's own verified identity") so a changed email can never
-      // retain implicit access through a stale grant. Dotted keys are
-      // rejected by patchSchema, so this can read the nested value directly
-      // rather than guessing at a flattened key.
-      const changingContactEmail =
-        typeof changes?.primaryContact?.contactEmail === 'string'
+      // before anyone can access the registration again. Revocation only
+      // happens when the stored email actually changes (compared normalised),
+      // so editing the contact's name or phone number doesn't lock the
+      // applicant out. Dotted keys are rejected by patchSchema, so this can
+      // read the nested value directly.
+      const newContactEmail = changes.primaryContact?.contactEmail
 
       const actor = {
         type:
@@ -433,6 +460,24 @@ export const register = [
       try {
         const updated = await request.registrations.withTransaction(
           async (session) => {
+            const current = await request.registrations.findByReference(
+              reference,
+              { session }
+            )
+            if (!current) {
+              throw Boom.notFound('Registration not found')
+            }
+            // A stale version is left to update() below, which reports it as
+            // a 409 — validating a merge built on out-of-date data would
+            // give a misleading 400.
+            if (current.version === version) {
+              assertMergedRegistrationIsValid(current, changes)
+            }
+            const changingContactEmail =
+              typeof newContactEmail === 'string' &&
+              normaliseEmail(newContactEmail) !==
+                normaliseEmail(current.primaryContact?.contactEmail)
+
             const result = await request.registrations.update(
               reference,
               changes,

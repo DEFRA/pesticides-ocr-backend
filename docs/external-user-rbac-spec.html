@@ -70,27 +70,27 @@
 This is a dedicated specification for <strong>External User RBAC</strong> (applicant self-service access to an
 existing registration), split out from the magic-link email-verification documents it builds on top of. For the
 underlying email-verification mechanism itself (requesting/resending/verifying a link for a brand-new submission),
-see <code>magic-link-api-design.md</code>. This document covers only what RBAC adds on top of that.
+see README "API endpoints". This document covers only what RBAC adds on top of that.
 </blockquote>
 
 <table>
   <tr><th>Service</th><td>pesticides-ocr-backend (API)</td></tr>
-  <tr><th>Builds on</th><td>Magic-link email verification (<code>magic-link-api-design.md</code>) — specifically <code>POST /email-verifications/verify</code></td></tr>
+  <tr><th>Builds on</th><td>Magic-link email verification (README "API endpoints") — specifically <code>POST /email-verifications/verify</code></td></tr>
   <tr><th>Status</th><td>Implemented; all design decisions confirmed (2026-11-11)</td></tr>
-  <tr><th>Related docs</th><td><code>magic-link-tickets.md</code> → "Complete secure applicant access to registrations: decisions confirmed"; <code>external-user-rbac.postman_collection.json</code>; <code>magic-link-tester-guide.md</code> §1a for a plain-English summary</td></tr>
+  <tr><th>Related docs</th><td><code>external-user-rbac.postman_collection.json</code>; <code>external-user-rbac-tester-guide.md</code> for a plain-English summary</td></tr>
 </table>
 
 <hr>
 
 <h2>1. Purpose and scope</h2>
 
-<p>Magic-link email verification (see <code>magic-link-api-design.md</code>) proves an applicant owns an email address, for the duration of a single journey, with no lasting session or token. That's sufficient for completing a brand-new submission, but it doesn't let an applicant <strong>come back later</strong> to view or edit a registration they already made.</p>
+<p>Magic-link email verification (see README "API endpoints") proves an applicant owns an email address, for the duration of a single journey, with no lasting session or token. That's sufficient for completing a brand-new submission, but it doesn't let an applicant <strong>come back later</strong> to view or edit a registration they already made.</p>
 
 <p><strong>External User RBAC</strong> is the additive capability that lets them do that: an applicant who already owns a registration (as its <code>primaryContact.contactEmail</code>) can prove that ownership again by magic link, and in exchange receive a short-lived access token scoped to <em>that one registration only</em>.</p>
 
 <p><strong>In scope:</strong> entitlement checking (does this verified email really own this registration), issuing/renewing/revoking scoped access tokens, and the two protected endpoints (<code>GET</code>/<code>PATCH /registrations/&#123;reference&#125;</code>) that accept them.</p>
 
-<p><strong>Out of scope:</strong> the email-verification mechanism itself (link generation, Notify sending, rate limiting — unchanged, see <code>magic-link-api-design.md</code>); any change to internal (staff) authentication or authorisation.</p>
+<p><strong>Out of scope:</strong> the email-verification mechanism itself (link generation, Notify sending, rate limiting — unchanged, see README "API endpoints"); any change to internal (staff) authentication or authorisation.</p>
 
 <h3>Relationship to internal (staff) RBAC</h3>
 
@@ -143,7 +143,7 @@ registration.primaryContact.contactEmail (lower-cased, trimmed)</code></pre>
   "code": "REGISTRATION_ACCESS_DENIED"
 }</code></pre>
 
-<p>Every other outcome of the underlying link verification (expired, superseded, already used, invalid) is completely unchanged — see <code>magic-link-api-design.md</code> §7.3 / README "POST /email-verifications/verify".</p>
+<p>Every other outcome of the underlying link verification (expired, superseded, already used, invalid) is completely unchanged — see README "POST /email-verifications/verify".</p>
 
 <hr>
 
@@ -183,7 +183,7 @@ registration.primaryContact.contactEmail (lower-cased, trimmed)</code></pre>
 
 <p>Deliberately distinct issuer, audience and signing material from the internal Entra tokens, so the two auth strategies (<code>entra-bearer</code> vs <code>external-bearer</code>) can never accept each other's credentials, even by accident — see the dedicated cross-strategy test in <code>src/auth/external-bearer-scheme.test.js</code>.</p>
 
-<p><strong>PATCH payload:</strong> validated against an explicit field schema (<code>unknown(false)</code>), not arbitrary keys. A dotted key such as <code>"primaryContact.contactEmail"</code> is rejected with <code>400</code> rather than silently accepted — this matters because it previously could have bypassed the contact-email-change revocation check below, which reads the parsed, nested value. A version conflict (<code>VersionConflictError</code>) returns <code>409</code>.</p>
+<p><strong>PATCH payload:</strong> validated against an explicit field schema (<code>unknown(false)</code>), not arbitrary keys. A dotted key such as <code>"primaryContact.contactEmail"</code> is rejected with <code>400</code> rather than silently accepted — this matters because it previously could have bypassed the contact-email-change revocation check below, which reads the parsed, nested value. The changes are then merged into the stored registration and the result is validated against the same full schema as <code>POST /register</code>, so cross-field rules still hold (for example, removing <code>seller-amateur</code> without a <code>mainCustomer</code>, or adding <code>use</code> without a <code>quantity</code>, returns <code>400</code>). A version conflict (<code>VersionConflictError</code>) returns <code>409</code>.</p>
 
 <hr>
 
@@ -202,28 +202,35 @@ registration.primaryContact.contactEmail (lower-cased, trimmed)</code></pre>
 
 <hr>
 
-<h2>6. Design decisions (all confirmed 2026-11-11)</h2>
+<h2>6. Design decisions</h2>
 
-<p>Full rationale for each of these lives in <code>magic-link-tickets.md</code> → "Complete secure applicant access to registrations: decisions confirmed". Summarised here for quick reference:</p>
+<p>Each decision below is stated with its rationale. Re-open any of them only with an explicit, recorded reason.</p>
 
 <h3>6.1 Which contact establishes entitlement</h3>
-<p><strong>Decision:</strong> only the registration's own <code>primaryContact.contactEmail</code>. No other contact (e.g. an additional address's) is ever entitled.</p>
+<p><strong>Decision:</strong> only the registration's own <code>primaryContact.contactEmail</code>. No other contact (e.g. an additional address's) is ever entitled. The comparison is trimmed and lower-cased (<code>services/external-user/entitlement.js</code>).</p>
+<p><strong>Rationale:</strong> the primary contact is the one field the applicant explicitly nominates as "the person this registration belongs to". Extending entitlement to additional-address contacts would let a third party (e.g. a site manager named only as a delivery contact) gain edit rights to someone else's submission without ever being asked to consent. If shared/delegated access is needed later, it should be its own explicit feature (e.g. an <code>authorisedContacts</code> list), not a side-effect of this check.</p>
 
 <h3>6.2 Which routes accept applicants vs staff</h3>
 <p><strong>Original decision:</strong> completely separate routes/strategies, no route genuinely shared.</p>
 <p><strong>Superseded (feature/BE-717):</strong> <code>GET</code>/<code>PATCH /registrations/&#123;reference&#125;</code> are now <strong>shared</strong> — both bearer schemes read the same <code>Authorization</code> header and fall through to each other by issuer, with the route declaring both strategies and every role via <code>requireSharedAccess()</code> (role-level), then <code>authorise()</code> dispatching to the correct record-level check by <code>identityType</code> (see §4). The admin editing UI needed the same endpoints case officers already use, so separate routes per population was no longer workable. Each strategy still only ever accepts its own tokens — see §4 for the fall-through mechanics.</p>
 
 <h3>6.3 Grant expiry, revocation and re-verification</h3>
-<p><strong>Decision:</strong> grant and token lifetimes are tied together (30 minutes); re-verifying renews the existing grant rather than duplicating it.</p>
+<p><strong>Decision:</strong> grant and token lifetimes are tied together (30 minutes); re-verifying renews the existing grant in place (new <code>grantedAt</code>/<code>expiresAt</code>, any prior <code>revokedAt</code> cleared) rather than duplicating it. A grant can be explicitly revoked (<code>revokeAllForReference</code>); <code>isPermitted</code> treats a revoked or expired grant as not permitted.</p>
+<p><strong>Rationale:</strong> tying grant lifetime to token lifetime means a persisted grant never outlives every credential that could use it, so a stale grant is harmless by construction. The cost (re-verifying every 30 minutes) is accepted in exchange for not managing two separate expiries. If 30 minutes proves too short, raise <code>tokenTtlSeconds</code> rather than decoupling the lifetimes (but see open question in §6.7).</p>
 
 <h3>6.4 Effect of a contact-email change</h3>
-<p><strong>Decision:</strong> immediate, unconditional revocation of every existing grant on that registration — no "let the current session finish" grace period.</p>
+<p><strong>Decision:</strong> immediate revocation of every existing grant on that registration whenever the contact email actually changes — no "let the current session finish" grace period. The new email has no access until it goes through the normal verify flow with the <code>reference</code> and passes the entitlement check again. Revocation runs in the same transaction as the update.</p>
+<p><strong>Only a real change revokes:</strong> the new and stored emails are compared normalised (trimmed, lower-cased); editing the contact's name or telephone, or re-sending the same email, does not revoke access.</p>
+<p><strong>Operational note:</strong> <code>PATCH</code> does not verify ownership of a new <code>primaryContact.contactEmail</code>, unlike <code>POST /register</code>. A typo therefore locks the applicant out until the address is corrected, and whoever controls the new address can verify for this reference and gain access. The same applies when a case officer edits the email. Accepted for now; operations should take it into account (for example, confirming a changed address with the applicant out of band).</p>
+<p><strong>Rationale:</strong> if a session is ever compromised, changing the contact email to one the attacker owns must not give a smooth, uninterrupted continuation of access, as that would turn a one-time entitlement check into no check at all. Letting the current session linger trades a small amount of friction for a real security gap.</p>
 
 <h3>6.5 Token issuer/audience/algorithm/lifetime</h3>
 <p><strong>Decision:</strong> HS256, distinct issuer/audience from Entra tokens, 30-minute lifetime (intentionally matching the frontend's planned 30-minute session TTL).</p>
+<p><strong>Rationale:</strong> the issuer, audience and algorithm are deliberately distinct from the Entra token's so the two strategies can never accept each other's tokens. The 30-minute lifetime is a deliberate match with the frontend session (<code>pesticides-ocr-frontend/external-user-rbac-frontend-changes.md</code> §2.3) so neither side outlives the other. The issuer/audience strings are internal detail; nothing downstream pins to their literal values.</p>
 
 <h3>6.6 403 vs non-disclosing 404 for denied access</h3>
 <p><strong>Decision:</strong> generic <code>403</code> (matches the rest of the API's convention for "authenticated but not allowed"), with an identical body whether the registration doesn't exist or simply isn't the caller's.</p>
+<p><strong>Rationale:</strong> 403 and a non-disclosing 404 are equally safe provided the body never varies by reason. The only question was consistency with the rest of the API, which already uses 403 for "authenticated but not allowed". This matches the frontend design (<code>pesticides-ocr-frontend/external-user-rbac-frontend-changes.md</code> §2.5), so no frontend change is needed.</p>
 
 <h3>6.7 Open questions raised by sharing the routes (feature/BE-717, not yet confirmed)</h3>
 <p>Sharing <code>GET</code>/<code>PATCH /registrations/&#123;reference&#125;</code> between populations surfaced questions not covered by the original 2026-11-11 decisions, flagged here for the team rather than decided unilaterally:</p>
@@ -241,13 +248,12 @@ registration.primaryContact.contactEmail (lower-cased, trimmed)</code></pre>
 
 <p>See:</p>
 <ul>
-  <li><code>external-user-rbac.postman_collection.json</code> — API-level request/response checks, covering entitlement success/failure, cross-record denial, token expiry, and internal-route isolation.</li>
-  <li><code>scripts/test-external-user-flow.js</code> — an automated end-to-end script walking the whole flow (see <code>magic-link-tester-guide.md</code> §1a onward for the plain-English tester guide, or a dedicated RBAC tester guide if split out separately).</li>
+  <li><code>external-user-rbac.postman_collection.json</code> — API-level request/response checks, covering entitlement success/failure, cross-record denial, missing/invalid tokens, access to an internal-only route (<code>/search</code>), and revocation on contact-email change. Token expiry is not covered by the collection.</li>
   <li><code>src/auth/external-bearer-scheme.test.js</code>, <code>src/auth/require-own-registration.test.js</code>, <code>src/repositories/registration-access.test.js</code>, <code>src/services/external-user/*.test.js</code>, <code>src/routes/registration/external-user-rbac.integration.test.js</code> — unit and integration coverage.</li>
 </ul>
 
 <footer>
-  See also: <code>magic-link-api-design.md</code> (the email-verification mechanism this builds on), <code>magic-link-tickets.md</code> (ticket breakdown and confirmed decisions), <code>README.md</code> → "External-user RBAC" (API reference, kept in the main API spec since the two protected endpoints are documented there alongside every other route).
+  See also: <code>../README.md</code> → "API endpoints" (the email-verification mechanism this builds on) and <code>../README.md</code> → "External-user RBAC" (API reference, kept in the main API spec since the two protected endpoints are documented there alongside every other route).
 </footer>
 
 </body>

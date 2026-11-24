@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose'
 
+import { EXTERNAL_USER_ROLE } from '#/common/constants/roles.js'
 import { config } from '#/config.js'
 
 // External-user access tokens (EQ external-RBAC): a short-lived, HMAC-signed
@@ -35,9 +36,8 @@ function requireSecret() {
 export async function issueExternalAccessToken({ subject, reference }) {
   const key = requireSecret()
   const ttlSeconds = config.get('externalUser.tokenTtlSeconds')
-  const role = config.get('externalUser.role')
 
-  return new SignJWT({ reference, roles: [role] })
+  return new SignJWT({ reference, roles: [EXTERNAL_USER_ROLE] })
     .setProtectedHeader({ alg: ALG })
     .setSubject(subject)
     .setIssuer(ISSUER)

@@ -2,7 +2,7 @@ import Boom from '@hapi/boom'
 
 import { EXTERNAL_USER_ROLE } from '#/common/constants/roles.js'
 import { createRegistrationAccessRepository } from '#/repositories/registration-access.js'
-import { EXTERNAL_STRATEGY_NAME, STRATEGY_NAME } from './strategy-name.js'
+import { EXTERNAL_STRATEGY_NAME, ENTRA_STRATEGY_NAME } from './strategy-name.js'
 import { getCaseOfficerRoles } from './require-role.js'
 
 // Route `auth` options for a *shared* route: both case officers (entra-bearer)
@@ -12,7 +12,7 @@ import { getCaseOfficerRoles } from './require-role.js'
 // population once a route is shared.
 export function requireSharedAccess() {
   return {
-    strategies: [STRATEGY_NAME, EXTERNAL_STRATEGY_NAME],
+    strategies: [ENTRA_STRATEGY_NAME, EXTERNAL_STRATEGY_NAME],
     scope: [EXTERNAL_USER_ROLE, ...getCaseOfficerRoles()]
   }
 }
