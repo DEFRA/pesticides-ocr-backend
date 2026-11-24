@@ -5,9 +5,16 @@
 .server
 node_modules
 npm-debug.log
+dev-server.log
 coverage
 .cache
 .eslintcache
 .env
 .claude
 .github/copilot-*.md
+# Local-only reference material (not part of the RBAC deliverable)
+docxs/
+postman/
+confluence-export/
+scripts/test-external-user-flow.js
+*.code-workspace

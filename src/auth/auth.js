@@ -1,8 +1,9 @@
 import { config } from '#/config.js'
 
 import { entraBearerScheme } from './entra-bearer-scheme.js'
+import { externalBearerScheme } from './external-bearer-scheme.js'
 import { getJwks } from './jwks.js'
-import { STRATEGY_NAME } from './strategy-name.js'
+import { EXTERNAL_STRATEGY_NAME, ENTRA_STRATEGY_NAME } from './strategy-name.js'
 
 // Resolve the Entra validation parameters, deriving the standard v2.0 issuer and
 // JWKS URI from the tenant id when they are not set explicitly.
@@ -50,7 +51,7 @@ export const auth = {
       }
 
       // The scheme and strategy share the one name (see strategy-name.js).
-      server.auth.scheme(STRATEGY_NAME, (schemeServer, schemeOptions) =>
+      server.auth.scheme(ENTRA_STRATEGY_NAME, (schemeServer, schemeOptions) =>
         entraBearerScheme(schemeServer, {
           mode,
           resolveEntra,
@@ -58,7 +59,12 @@ export const auth = {
           ...schemeOptions
         })
       )
-      server.auth.strategy(STRATEGY_NAME, STRATEGY_NAME)
+      server.auth.strategy(ENTRA_STRATEGY_NAME, ENTRA_STRATEGY_NAME)
+
+      // External-user access-token strategy (EQ external-RBAC): always
+      // signature-verified, no mock mode — see external-bearer-scheme.js.
+      server.auth.scheme(EXTERNAL_STRATEGY_NAME, externalBearerScheme)
+      server.auth.strategy(EXTERNAL_STRATEGY_NAME, EXTERNAL_STRATEGY_NAME)
     }
   }
 }

@@ -1,6 +1,6 @@
 import { config } from '#/config.js'
 
-import { STRATEGY_NAME } from './strategy-name.js'
+import { ENTRA_STRATEGY_NAME } from './strategy-name.js'
 
 // The configured case-officer role value(s) as an array. `auth.entra.roleValues`
 // is a comma-separated string; split + trim it once here so every protected
@@ -37,7 +37,7 @@ export function requireRole(...roles) {
     )
   }
   return {
-    strategy: STRATEGY_NAME,
+    strategy: ENTRA_STRATEGY_NAME,
     scope
   }
 }

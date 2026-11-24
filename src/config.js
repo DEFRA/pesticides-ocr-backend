@@ -1,4 +1,5 @@
 import convict from 'convict'
+
 import convictFormatWithValidator from 'convict-format-with-validator'
 
 import { convictValidateMongoUri } from '#/common/helpers/convict/validate-mongo-uri.js'
@@ -351,8 +352,41 @@ export const config = convict({
       env: 'JOURNEY_TOKEN_SECRET',
       sensitive: true
     }
+  },
+  // External-user RBAC: the access token issued after a successful magic-link
+  // email verification, scoped to the single registration the applicant is
+  // permitted to view/edit. Distinct from the link token (one-time, used only
+  // to prove inbox ownership) and from the journey token (session tracking) —
+  // this is the actual authorisation credential for record-level access.
+  externalUser: {
+    tokenSecret: {
+      doc: 'HMAC secret used to sign/verify external-user access tokens issued after email verification. Set via CDP Secrets, never committed. Empty = fails closed (no external-user token can be issued or verified) outside local tier.',
+      format: String,
+      default: '',
+      env: 'EXTERNAL_USER_TOKEN_SECRET',
+      sensitive: true
+    },
+    tokenTtlSeconds: {
+      doc: 'Lifetime (seconds) of an external-user access token before it must be re-issued via a fresh email verification.',
+      format: 'nat',
+      default: 1800,
+      env: 'EXTERNAL_USER_TOKEN_TTL_SECONDS'
+    }
   }
 })
 
 config.validate({ allowed: 'strict' })
 validateEmailVerificationConfig(config)
+
+// Fail at startup, not at request time: a missing secret must never turn
+// into a 500 for a caller who has already used up their one-time magic
+// link. Local tier is exempt so the app can boot without CDP Secrets while
+// the external-user routes are simply unusable until it's set.
+if (
+  config.get('cdpEnvironment') !== 'local' &&
+  !config.get('externalUser.tokenSecret')
+) {
+  throw new Error(
+    'externalUser.tokenSecret (EXTERNAL_USER_TOKEN_SECRET) must be set outside the local tier'
+  )
+}
