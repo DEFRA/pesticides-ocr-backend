@@ -25,23 +25,25 @@ const greenAcres = {
   reference: 'PPP-D4E-5F6',
   submittedAt: new Date('2026-05-02T10:00:00.000Z'),
   businessName: 'Green Acres Growers',
-  businessActivities: ['manufacture'],
-  mainCustomer: 'professional',
+  businessActivities: ['using'],
   address: {
     addressLine1: 'Highfield Farm',
     addressTown: 'Norwich',
-    addressPostcode: 'NR1 1AA'
+    addressPostcode: 'NR1 1AA',
+    addressRegion: 'england'
   },
   primaryContact: {
     contactName: 'Jane Doe',
     contactTelephone: '01234 567890',
     contactEmail: 'jane.doe@greenacres.example'
   },
-  addressActivities: ['store'],
-  quantity: { quantityType: 'amount', quantity: 500 },
-  professionalSectors: ['agriculture-horticulture'],
-  memberSchemes: ['BASIS'],
-  additionalAddresses: []
+  usingPPPs: {
+    whoApplies: 'self',
+    professionalSectors: ['forestry'],
+    memberSchemes: ['red-tractor'],
+    storing: ['no'],
+    quantity: '150-399'
+  }
 }
 
 const greenfield = {
@@ -241,14 +243,15 @@ describe('#searchRoute', () => {
     test('returns the fields the register shows, as stored, and its version', async () => {
       const { result } = await get('/search?applicantName=jane')
 
-      const {
-        professionalSectors,
-        memberSchemes,
-        additionalAddresses,
-        ...shown
-      } = greenAcres
+      const { usingPPPs, ...shown } = greenAcres
       // Stored with no version field, so it's at version 0.
-      expect(result.data).toEqual([{ ...shown, version: UNVERSIONED }])
+      expect(result.data).toEqual([
+        {
+          ...shown,
+          usingPPPs: { quantity: usingPPPs.quantity },
+          version: UNVERSIONED
+        }
+      ])
     })
 
     test('does not expose the mongo _id', async () => {

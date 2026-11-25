@@ -31,20 +31,18 @@ describe('saveRegistration', () => {
 
   const validData = {
     businessName: 'Test Co',
-    businessActivities: ['manufacture'],
-    mainCustomer: 'professional',
+    businessActivities: ['selling'],
     address: {
       addressLine1: '1 Test St',
       addressTown: 'Testville',
-      addressPostcode: 'TE1 1ST'
+      addressPostcode: 'TE1 1ST',
+      addressRegion: 'england'
     },
     primaryContact: {
       contactName: 'Test User',
       contactTelephone: '01234567890',
       contactEmail: 'test@test.com'
-    },
-    addressActivities: ['use'],
-    quantity: { quantityType: 'area', quantity: '10' }
+    }
   }
 
   test('returns an PPP reference by default', async () => {

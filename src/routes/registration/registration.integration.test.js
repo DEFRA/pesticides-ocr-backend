@@ -11,21 +11,19 @@ import {
 import { config } from '#/config.js'
 
 const payload = {
-  businessActivities: ['manufacture'],
-  mainCustomer: 'professional',
+  businessActivities: ['selling'],
   businessName: 'Company 1',
   address: {
     addressLine1: '67 My Road',
     addressTown: 'My Town',
-    addressPostcode: 'AB12 3CD'
+    addressPostcode: 'AB12 3CD',
+    addressRegion: 'england'
   },
   primaryContact: {
     contactName: 'Jonny Pesticide',
     contactTelephone: '01234567890',
     contactEmail: 'spray@everything.biz'
-  },
-  addressActivities: ['use'],
-  quantity: { quantityType: 'area', quantity: '67' }
+  }
 }
 
 describe('POST /register through the audited repository', () => {

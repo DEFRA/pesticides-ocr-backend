@@ -330,12 +330,12 @@ describe('External user RBAC: end-to-end flow', () => {
   // PATCH must leave a record POST /register would have accepted: the
   // changes are merged into the stored record and the result validated
   // against the full schema, so cross-field rules still apply.
-  test('PATCH rejects a change that breaks a cross-field rule (mainCustomer)', async () => {
-    const { mainCustomer: _omitted, ...withoutMainCustomer } =
+  test('PATCH rejects a change that breaks a cross-field rule (usingPPPs)', async () => {
+    const { usingPPPs: _omitted, ...withoutUsingPPPs } =
       validRegistrationPayload
     const reference = await submitRegistration({
-      ...withoutMainCustomer,
-      businessActivities: ['seller-amateur']
+      ...withoutUsingPPPs,
+      businessActivities: ['selling']
     })
     const accessToken = await verifyForReference(reference)
 
@@ -343,24 +343,22 @@ describe('External user RBAC: end-to-end flow', () => {
       method: 'PATCH',
       url: `/registrations/${reference}`,
       headers: { authorization: `Bearer ${accessToken}` },
-      payload: { version: 1, businessActivities: ['manufacture'] }
+      payload: { version: 1, businessActivities: ['using', 'selling'] }
     })
     expect(response.statusCode).toBe(400)
   })
 
-  test('PATCH rejects a change that breaks a cross-field rule (quantity)', async () => {
-    const { quantity: _omitted, ...withoutQuantity } = validRegistrationPayload
-    const reference = await submitRegistration({
-      ...withoutQuantity,
-      addressActivities: ['store']
-    })
+  test('PATCH rejects a change that breaks a cross-field rule (sub-sectors)', async () => {
+    const reference = await submitRegistration(validRegistrationPayload)
     const accessToken = await verifyForReference(reference)
+    const { agriSubsectors: _omitted, ...usingPPPs } =
+      validRegistrationPayload.usingPPPs
 
     const response = await server.inject({
       method: 'PATCH',
       url: `/registrations/${reference}`,
       headers: { authorization: `Bearer ${accessToken}` },
-      payload: { version: 1, addressActivities: ['use', 'store'] }
+      payload: { version: 1, usingPPPs }
     })
     expect(response.statusCode).toBe(400)
   })
