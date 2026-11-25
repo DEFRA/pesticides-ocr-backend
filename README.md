@@ -134,37 +134,74 @@ Public, called by the frontend to submit an application. It needs the frontend's
 
 ```json
 {
-  "businessActivities": ["manufacture", "market"],
-  "mainCustomer": "professional",
+  "businessActivities": ["using", "selling"],
   "businessName": "Company Name",
   "address": {
     "addressLine1": "1 Example Street",
     "addressLine2": "Village",
     "addressTown": "Town",
     "addressCounty": "County",
-    "addressPostcode": "AB12 3CD"
+    "addressPostcode": "AB12 3CD",
+    "addressRegion": "england"
   },
   "primaryContact": {
     "contactName": "Full Name",
+    "contactJobTitle": "Farm manager",
     "contactTelephone": "01234567890",
     "contactEmail": "contact@example.com"
   },
-  "addressActivities": ["use", "store"],
-  "quantity": {
-    "quantityType": "area",
-    "quantity": "50"
-  },
-  "professionalSectors": ["agriculture-horticulture"],
-  "memberSchemes": ["BASIS"],
-  "additionalAddresses": []
+  "usingPPPs": {
+    "whoApplies": "contractor",
+    "contractor": {
+      "contractorName": "Contractor Ltd",
+      "address": {
+        "addressLine1": "2 Example Road",
+        "addressTown": "Town",
+        "addressPostcode": "AB12 3CE",
+        "addressRegion": "wales"
+      }
+    },
+    "professionalSectors": [
+      "agriculture",
+      "forestry",
+      "Golf course maintenance"
+    ],
+    "agriSubsectors": ["arable", "potatoes"],
+    "memberSchemes": ["red-tractor"],
+    "storing": ["own", "third-party"],
+    "storageLocation": ["main-address", "another-address"],
+    "ownStorageAddresses": [
+      {
+        "addressLine1": "Unit 4",
+        "addressTown": "Town",
+        "addressPostcode": "AB12 3CF",
+        "addressRegion": "scotland"
+      }
+    ],
+    "storageContact": {
+      "contactName": "Full Name",
+      "contactJobTitle": "",
+      "contactTelephone": "01234567890",
+      "contactEmail": "storage@example.com",
+      "businessName": "Storage Ltd"
+    },
+    "quantity": "60-149"
+  }
 }
 ```
 
-Some answers are only required when the journey asks for them:
+This is the frontend journey's answers (v1.4). Some are only required when the journey asks for them, and an answer to a page the journey skipped is rejected:
 
-- `mainCustomer` is optional when `businessActivities` includes `seller-amateur`.
-- `quantity` is required only when `addressActivities` includes `use`.
-- `professionalSectors` is either a list of sector codes, or a list holding just the applicant's own description under Other (1 to 100 characters).
+- `address` is either an address in Great Britain, with `addressRegion` (`england`, `scotland` or `wales`), or `{ "internationalAddress": "..." }`, free text up to 500 characters. `addressCounty` is optional and only comes from an address lookup.
+- `contactJobTitle` is optional on any contact, trimmed, and may be empty (up to 100 characters).
+- `usingPPPs` is required when `businessActivities` includes `using`.
+- `contractor` is required when `whoApplies` is `contractor`.
+- `agriSubsectors`, `amenitySubsectors` and `hortiSubsectors` are required when `professionalSectors` includes `agriculture`, `amenity` or `horticulture`.
+- `memberSchemes` is required (it can be empty, meaning none) unless `amenity` is the only one of those three sectors.
+- `professionalSectors`, the sub-sectors and `memberSchemes` are the ticked codes followed by at most one answer of the applicant's own from the page's Other box (1 to 100 characters).
+- `storing` can include `no` only on its own. `storageLocation` is required when it includes `own`, and `storageContact` when it includes `third-party`.
+- `ownStorageAddresses` (1 to 20 addresses) is required when `storageLocation` includes `another-address`.
+- `quantity` is a band of litres or kilograms used a year: `1-29`, `30-59`, `60-149`, `150-399` or `400-plus`.
 
 Answers that are sent are always validated. The allowed values are in `src/common/constants/registration-answers.js`.
 
@@ -262,7 +299,7 @@ A shared route (see [External-user RBAC](#external-user-rbac)): accepts **either
 
 ### PATCH /registrations/{reference} (shared: case officer or applicant)
 
-Same auth as the `GET` above. The body must include the **`version` from the caller's own most recent `GET`** of this registration (optimistic concurrency, same rule as `DELETE` below), plus the changed fields. Unlike the old `unknown(true)` behaviour, the payload is validated against an explicit field schema: unknown or dotted keys (e.g. `"primaryContact.contactEmail"`) are rejected with `400` rather than silently accepted.
+Same auth as the `GET` above. The body must include the **`version` from the caller's own most recent `GET`** of this registration (optimistic concurrency, same rule as `DELETE` below), plus the changed fields. Unlike the old `unknown(true)` behaviour, the payload is validated against an explicit field schema: unknown or dotted keys (e.g. `"primaryContact.contactEmail"`) are rejected with `400` rather than silently accepted. The editable fields are `businessActivities`, `businessName`, `address`, `primaryContact` and `usingPPPs`, which is replaced as a whole.
 
 ```json
 {

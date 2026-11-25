@@ -27,20 +27,31 @@ import {
   SERVICE_NOT_CONFIGURED
 } from '#/common/constants/error-codes.js'
 import {
-  ADDRESS_ACTIVITIES,
-  ADDRESS_ACTIVITY,
+  ADDRESS_REGIONS,
+  AGRI_SUBSECTORS,
+  AMENITY_SUBSECTORS,
   BUSINESS_ACTIVITIES,
   BUSINESS_ACTIVITY,
+  HORTI_SUBSECTORS,
+  MEMBER_SCHEMES,
+  PROFESSIONAL_SECTOR,
   PROFESSIONAL_SECTORS,
-  QUANTITY_TYPES
+  STORAGE_LOCATION,
+  STORAGE_LOCATIONS,
+  STORING,
+  STORING_VALUES,
+  USING_QUANTITIES,
+  WHO_APPLIES,
+  WHO_APPLIES_VALUES
 } from '#/common/constants/registration-answers.js'
 
 const MAX_SHORT_TEXT = 100
 const MAX_BUSINESS_NAME = 200
+const MAX_INTERNATIONAL_ADDRESS = 500
 const MAX_TELEPHONE = 20
-const MAX_MEMBER_SCHEMES = 50
-const MAX_ADDITIONAL_ADDRESSES = 20
+const MAX_OWN_STORAGE_ADDRESSES = 20
 const REGISTRATION_NOT_FOUND_MESSAGE = 'Registration not found'
+const SELECT_COUNTRY_MESSAGE = 'Select a country'
 
 const addressSchema = Joi.object({
   addressLine1: Joi.string()
@@ -87,8 +98,36 @@ const addressSchema = Joi.object({
       'string.empty': 'Enter your postcode',
       'string.pattern.base': 'Enter a valid UK postcode',
       'any.required': 'Enter your postcode'
+    }),
+  addressRegion: Joi.string()
+    .valid(...ADDRESS_REGIONS)
+    .required()
+    .messages({
+      'any.only': SELECT_COUNTRY_MESSAGE,
+      'string.empty': SELECT_COUNTRY_MESSAGE,
+      'any.required': SELECT_COUNTRY_MESSAGE
     })
 })
+
+const ENTER_INTERNATIONAL_ADDRESS_MESSAGE = 'Enter your main business address'
+
+const internationalAddressSchema = Joi.object({
+  internationalAddress: Joi.string()
+    .trim()
+    .min(1)
+    .max(MAX_INTERNATIONAL_ADDRESS)
+    .required()
+    .messages({
+      'string.empty': ENTER_INTERNATIONAL_ADDRESS_MESSAGE,
+      'string.max': 'Business address must be 500 characters or less',
+      'any.required': ENTER_INTERNATIONAL_ADDRESS_MESSAGE
+    })
+})
+
+const mainAddressSchema = Joi.alternatives().conditional(
+  Joi.object({ internationalAddress: Joi.exist() }).unknown(),
+  { then: internationalAddressSchema, otherwise: addressSchema }
+)
 
 const contactSchema = Joi.object({
   contactName: Joi.string()
@@ -100,6 +139,14 @@ const contactSchema = Joi.object({
       'string.empty': 'Enter a contact name',
       'string.max': 'Contact name must be 100 characters or less',
       'any.required': 'Enter a contact name'
+    }),
+  contactJobTitle: Joi.string()
+    .trim()
+    .max(MAX_SHORT_TEXT)
+    .allow('')
+    .optional()
+    .messages({
+      'string.max': 'Job title or role must be 100 characters or less'
     }),
   contactTelephone: Joi.string()
     .trim()
@@ -125,28 +172,149 @@ const contactSchema = Joi.object({
     })
 })
 
-const additionalAddressSchema = Joi.object({
-  address: addressSchema.required().messages({
-    'any.required': 'Address is required'
-  }),
-  contact: contactSchema.required().messages({
-    'any.required': 'Contact details are required'
-  }),
-  activity: Joi.array()
-    .items(Joi.string().valid(...ADDRESS_ACTIVITIES))
+const ENTER_BUSINESS_NAME_MESSAGE = 'Enter the business name'
+
+const contractorSchema = Joi.object({
+  contractorName: Joi.string()
+    .trim()
     .min(1)
-    .max(ADDRESS_ACTIVITIES.length)
-    .unique()
+    .max(MAX_SHORT_TEXT)
     .required()
     .messages({
-      'array.min': 'Select at least one activity',
-      'any.required': 'Select at least one activity'
+      'string.empty': 'Enter the business or company name',
+      'string.max': 'Business or company name must be 100 characters or less',
+      'any.required': 'Enter the business or company name'
+    }),
+  address: addressSchema.required()
+})
+
+const storageContactSchema = contactSchema.keys({
+  businessName: Joi.string()
+    .trim()
+    .min(1)
+    .max(MAX_SHORT_TEXT)
+    .required()
+    .messages({
+      'string.empty': ENTER_BUSINESS_NAME_MESSAGE,
+      'string.max': 'Business name must be 100 characters or less',
+      'any.required': ENTER_BUSINESS_NAME_MESSAGE
     })
 })
 
-const SELECT_SECTOR_MESSAGE =
-  'Select a professional sector or describe your main type of work'
-const ENTER_MAIN_CUSTOMER_MESSAGE = 'Enter your main customer'
+const codesWithOther = (codes) =>
+  Joi.array()
+    .items(Joi.string().trim().min(1).max(MAX_SHORT_TEXT))
+    .max(codes.length + 1)
+    .unique()
+    .custom((answers, helpers) =>
+      answers.filter((answer) => !codes.includes(answer)).length > 1
+        ? helpers.error('array.oneOther')
+        : answers
+    )
+    .messages({ 'array.oneOther': 'Give only one Other answer' })
+
+const includes = (...values) =>
+  Joi.array()
+    .has(Joi.valid(...values))
+    .required()
+
+const askedWhen = (key, is, answer) =>
+  answer.when(key, { is, then: Joi.required(), otherwise: Joi.forbidden() })
+
+const amenityOnly = includes(PROFESSIONAL_SECTOR.AMENITY).custom(
+  (sectors, helpers) =>
+    sectors.includes(PROFESSIONAL_SECTOR.AGRICULTURE) ||
+    sectors.includes(PROFESSIONAL_SECTOR.HORTICULTURE)
+      ? helpers.error('any.invalid')
+      : sectors
+)
+
+const SELECT_STORING_MESSAGE = 'Select where the products are stored'
+
+const noneOnItsOwn = (storing, helpers) =>
+  storing.includes(STORING.NONE) && storing.length > 1
+    ? helpers.error('array.exclusive')
+    : storing
+
+const usingPPPsSchema = Joi.object({
+  whoApplies: Joi.string()
+    .valid(...WHO_APPLIES_VALUES)
+    .required()
+    .messages({
+      'any.only': 'Select who applies PPPs for your organisation',
+      'any.required': 'Select who applies PPPs for your organisation'
+    }),
+  contractor: askedWhen(
+    'whoApplies',
+    Joi.valid(WHO_APPLIES.CONTRACTOR),
+    contractorSchema
+  ),
+  professionalSectors: codesWithOther(PROFESSIONAL_SECTORS)
+    .min(1)
+    .required()
+    .messages({
+      'array.min': 'Select a sector or describe your main type of work',
+      'any.required': 'Select a sector or describe your main type of work'
+    }),
+  agriSubsectors: askedWhen(
+    'professionalSectors',
+    includes(PROFESSIONAL_SECTOR.AGRICULTURE),
+    codesWithOther(AGRI_SUBSECTORS).min(1)
+  ),
+  amenitySubsectors: askedWhen(
+    'professionalSectors',
+    includes(PROFESSIONAL_SECTOR.AMENITY),
+    codesWithOther(AMENITY_SUBSECTORS).min(1)
+  ),
+  hortiSubsectors: askedWhen(
+    'professionalSectors',
+    includes(PROFESSIONAL_SECTOR.HORTICULTURE),
+    codesWithOther(HORTI_SUBSECTORS).min(1)
+  ),
+  memberSchemes: codesWithOther(MEMBER_SCHEMES).when('professionalSectors', {
+    is: amenityOnly,
+    then: Joi.forbidden(),
+    otherwise: Joi.required()
+  }),
+  storing: Joi.array()
+    .items(Joi.string().valid(...STORING_VALUES))
+    .min(1)
+    .unique()
+    .required()
+    .custom(noneOnItsOwn)
+    .messages({
+      'array.min': SELECT_STORING_MESSAGE,
+      'any.required': SELECT_STORING_MESSAGE,
+      'array.exclusive': `${SELECT_STORING_MESSAGE}, or select 'We do not store PPPs'`
+    }),
+  storageLocation: askedWhen(
+    'storing',
+    includes(STORING.OWN),
+    Joi.array()
+      .items(Joi.string().valid(...STORAGE_LOCATIONS))
+      .min(1)
+      .unique()
+  ),
+  ownStorageAddresses: askedWhen(
+    'storageLocation',
+    includes(STORAGE_LOCATION.ANOTHER_ADDRESS),
+    Joi.array().items(addressSchema).min(1).max(MAX_OWN_STORAGE_ADDRESSES)
+  ),
+  storageContact: askedWhen(
+    'storing',
+    includes(STORING.THIRD_PARTY),
+    storageContactSchema
+  ),
+  quantity: Joi.string()
+    .valid(...USING_QUANTITIES)
+    .required()
+    .messages({
+      'any.only':
+        'Select the quantity of PPPs or adjuvants you use in a typical year',
+      'any.required':
+        'Select the quantity of PPPs or adjuvants you use in a typical year'
+    })
+})
 
 const schema = Joi.object({
   businessActivities: Joi.array()
@@ -159,18 +327,6 @@ const schema = Joi.object({
       'array.min': 'Select at least one business activity',
       'any.required': 'Select at least one business activity'
     }),
-  mainCustomer: Joi.string()
-    .trim()
-    .min(1)
-    .when('businessActivities', {
-      is: Joi.array().has(BUSINESS_ACTIVITY.SELLER_AMATEUR),
-      then: Joi.optional(),
-      otherwise: Joi.required()
-    })
-    .messages({
-      'string.empty': ENTER_MAIN_CUSTOMER_MESSAGE,
-      'any.required': ENTER_MAIN_CUSTOMER_MESSAGE
-    }),
   businessName: Joi.string()
     .trim()
     .min(1)
@@ -181,67 +337,17 @@ const schema = Joi.object({
       'string.max': 'Business name must be 200 characters or less',
       'any.required': 'Enter a business name'
     }),
-  address: addressSchema.required().messages({
+  address: mainAddressSchema.required().messages({
     'any.required': 'Address is required'
   }),
   primaryContact: contactSchema.required().messages({
     'any.required': 'Primary contact details are required'
   }),
-  addressActivities: Joi.array()
-    .items(Joi.string().valid(...ADDRESS_ACTIVITIES))
-    .min(1)
-    .max(ADDRESS_ACTIVITIES.length)
-    .unique()
-    .required()
-    .messages({
-      'array.min': 'Select at least one address activity',
-      'any.required': 'Select at least one address activity'
-    }),
-  quantity: Joi.object({
-    quantityType: Joi.string()
-      .valid(...QUANTITY_TYPES)
-      .required()
-      .messages({
-        'any.only': 'Select a quantity type',
-        'any.required': 'Select a quantity type'
-      }),
-    quantity: Joi.number().positive().required().messages({
-      'number.base': 'Enter a valid quantity',
-      'number.positive': 'Quantity must be a positive number',
-      'any.required': 'Enter a quantity'
-    })
+  usingPPPs: usingPPPsSchema.when('businessActivities', {
+    is: includes(BUSINESS_ACTIVITY.USING),
+    then: Joi.required(),
+    otherwise: Joi.optional()
   })
-    .when('addressActivities', {
-      is: Joi.array().has(ADDRESS_ACTIVITY.USE),
-      then: Joi.required(),
-      otherwise: Joi.optional()
-    })
-    .messages({ 'any.required': 'Quantity is required' }),
-  // Either the ticked sectors, or the applicant's own description under Other.
-  professionalSectors: Joi.alternatives()
-    .try(
-      Joi.array()
-        .items(Joi.string().valid(...PROFESSIONAL_SECTORS))
-        .max(PROFESSIONAL_SECTORS.length)
-        .unique(),
-      Joi.array()
-        .items(Joi.string().trim().min(1).max(MAX_SHORT_TEXT))
-        .length(1)
-    )
-    .optional()
-    .messages({
-      'alternatives.match': SELECT_SECTOR_MESSAGE,
-      'alternatives.types': SELECT_SECTOR_MESSAGE
-    }),
-  memberSchemes: Joi.array()
-    .items(Joi.string().trim().min(1).max(MAX_SHORT_TEXT))
-    .max(MAX_MEMBER_SCHEMES)
-    .unique()
-    .optional(),
-  additionalAddresses: Joi.array()
-    .items(additionalAddressSchema)
-    .max(MAX_ADDITIONAL_ADDRESSES)
-    .optional()
 })
 
 // Explicit partial schema for PATCH /registrations/{reference}: every field
@@ -258,32 +364,19 @@ const patchSchema = Joi.object({
     'any.required': 'expectedVersion (version) is required'
   }),
   businessActivities: schema.extract('businessActivities').optional(),
-  mainCustomer: Joi.string().trim().min(1).optional().messages({
-    'string.empty': ENTER_MAIN_CUSTOMER_MESSAGE
-  }),
   businessName: schema.extract('businessName').optional(),
   address: schema.extract('address').optional(),
   primaryContact: schema.extract('primaryContact').optional(),
-  addressActivities: schema.extract('addressActivities').optional(),
-  quantity: Joi.object({
-    quantityType: Joi.string()
-      .valid(...QUANTITY_TYPES)
-      .required(),
-    quantity: Joi.number().positive().required()
-  }).optional(),
-  professionalSectors: schema.extract('professionalSectors'),
-  memberSchemes: schema.extract('memberSchemes'),
-  additionalAddresses: schema.extract('additionalAddresses')
+  usingPPPs: usingPPPsSchema.optional()
 })
   .min(2) // version + at least one real change
   .messages({ 'object.min': 'At least one field must be changed' })
 
 // A PATCH only carries the fields being changed, so validating just those
-// would lose the rules that link fields to each other (e.g. mainCustomer is
-// required unless seller-amateur is selected; quantity is required when an
-// address activity is "use"). Merge the changes into the stored record and
-// check the result against the same full schema POST /register uses, so a
-// record saved via PATCH is always one POST would have accepted.
+// would lose the rules that link fields to each other (e.g. usingPPPs is
+// required when using PPPs is ticked). Merge the changes into the stored
+// record and check the result against the same full schema POST /register
+// uses, so a record saved via PATCH is always one POST would have accepted.
 const REGISTRATION_FIELDS = Object.keys(schema.describe().keys)
 
 function assertMergedRegistrationIsValid(current, changes) {
