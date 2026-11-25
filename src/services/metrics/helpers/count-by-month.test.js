@@ -136,13 +136,13 @@ describe('#countByMonth', () => {
     expect(result).toEqual({ total: 0, byMonth: [] })
   })
 
-  test('refuses the registrations collection, which is counted through the repository', async () => {
+  test('refuses any collection that is not a metrics collection, such as registrations', async () => {
     await expect(
       countByMonth(db, {
         collection: OCR_REGISTRATION_COLLECTION,
         dateField: SUBMITTED_AT
       })
-    ).rejects.toThrow('Count registrations through the audited repository')
+    ).rejects.toThrow('count registrations through the audited repository')
     expect(collection).not.toHaveBeenCalled()
   })
 })

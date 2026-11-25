@@ -749,6 +749,26 @@ Versions start at 1 when a registration is created, and each successful change a
 
 `update` and `softDelete` also require `expectedVersion`: the version the caller loaded, a non-negative integer. The change is made only if the registration is still at that version, so two people editing the same registration can't overwrite each other's changes. If it has changed since, nothing is saved and the call rejects with a `VersionConflictError` (`src/repositories/version-conflict-error.js`), with `code: 'VERSION_CONFLICT'`, the `reference`, the `expectedVersion` and the `currentVersion`. APIs should return it as `409 Conflict`. A registration that doesn't exist, or is deleted, isn't a conflict: the call returns `null` (`404 Not Found`). Inside `withTransaction`, a conflict rolls back the whole transaction, like any other failure.
 
+## Data-access boundary
+
+Registration data is reached only through `src/repositories` (routes → services → repositories → MongoDB), so audit history, soft-delete, transactions and version checks aren't bypassed by normal application code. `npm run lint` (part of the pull request checks) fails if application code outside the exceptions below:
+
+- imports the `mongodb` or `mongo-locks` packages,
+- imports the `OCR_REGISTRATION_COLLECTION`, `OCR_REGISTRATION_HISTORY_COLLECTION`, `REGISTRATION_ACCESS_COLLECTION` or `AUDIT_HISTORY_COLLECTION` names from `src/common/constants/collections.js`, or
+- opens one of those collections by name with `.collection('ocr-registration…')` or `.collection('audit_history')`, or
+- loads the driver or `collections.js` with a dynamic `import()`, which the rules can't check.
+
+Use `request.registrations` instead. The rules and the exceptions are in `eslint.config.js`, and `eslint.config.test.js` checks that they fail as intended. The exceptions are explicit:
+
+| Exception                                                                                             | Why                                                      |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `src/repositories/**`                                                                                 | the persistence layer                                    |
+| `src/plugins/mongodb.js`                                                                              | opens the connection and builds the repositories         |
+| `src/**/*.test.js`, `scripts/delete-seed.test.js`, `src/routes/registration/registration.fixtures.js` | seed, check and clean up test data                       |
+| `scripts/seed.js`, `scripts/delete-seed.js`                                                           | development-only seed data, which the service never runs |
+
+The rule applies to user (registration) data only. The email-verification (`ocr-email-verifications`, `ocr-email-verification-rate-limits`) and metrics collections aren't user data and aren't restricted, so their services still use `request.db` directly. Access grants (`ocr-registration-access`) are restricted, and go through `src/repositories/registration-access.js` rather than the audited repository. Lint can't see through a variable collection name or a raw `request.db` handle, so review those in code review. `createRegistrationAccessRepository({ db: request.db })` in `src/auth/require-own-registration.js` and `src/routes/registration/registration.js` hands the handle to a repository and is an approved technical exception. A new exception needs a reviewed change to the list in `eslint.config.js`, with the reason added to this table; don't disable the rule inline.
+
 ## Database seeding
 
 Seed scripts are available for local development and testing.
