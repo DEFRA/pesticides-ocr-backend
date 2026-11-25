@@ -1,7 +1,10 @@
 import Joi from 'joi'
 import Boom from '@hapi/boom'
 import { getTraceId } from '@defra/hapi-tracing'
-import { MAX_REQUEST_ID_LENGTH } from '#/common/constants/history.js'
+import {
+  MAX_REASON_LENGTH,
+  MAX_REQUEST_ID_LENGTH
+} from '#/common/constants/history.js'
 import { config } from '#/config.js'
 import { saveRegistration } from '#/services/registration/registration.js'
 import { isEmailVerifiedForJourney } from '#/services/email-verification/registration-gate.js'
@@ -253,10 +256,7 @@ const schema = Joi.object({
 // Shared by both populations for now (see README §"External-user RBAC" open
 // question: whether case officers and external users should eventually have
 // different editable-field sets).
-const patchSchema = Joi.object({
-  version: Joi.number().integer().min(0).strict().required().messages({
-    'any.required': 'expectedVersion (version) is required'
-  }),
+const editableFields = {
   businessActivities: schema.extract('businessActivities').optional(),
   mainCustomer: Joi.string().trim().min(1).optional().messages({
     'string.empty': ENTER_MAIN_CUSTOMER_MESSAGE
@@ -274,9 +274,19 @@ const patchSchema = Joi.object({
   professionalSectors: schema.extract('professionalSectors'),
   memberSchemes: schema.extract('memberSchemes'),
   additionalAddresses: schema.extract('additionalAddresses')
+}
+
+// `reason` is recorded in the history entry; it isn't a change in itself, so
+// at least one editable field is still required.
+const patchSchema = Joi.object({
+  version: Joi.number().integer().min(0).strict().required().messages({
+    'any.required': 'expectedVersion (version) is required'
+  }),
+  reason: Joi.string().trim().max(MAX_REASON_LENGTH).allow('').optional(),
+  ...editableFields
 })
-  .min(2) // version + at least one real change
-  .messages({ 'object.min': 'At least one field must be changed' })
+  .or(...Object.keys(editableFields))
+  .messages({ 'object.missing': 'At least one field must be changed' })
 
 // A PATCH only carries the fields being changed, so validating just those
 // would lose the rules that link fields to each other (e.g. mainCustomer is
@@ -435,7 +445,7 @@ export const register = [
       await authorise(request, { action: 'registration:update', reference })
 
       const { identityType, subject } = request.auth.credentials
-      const { version, ...changes } = request.payload
+      const { version, reason, ...changes } = request.payload
 
       // Confirmed decision (completion ticket AC6): changing the contact
       // email must not carry over the old email's entitlement. Every
@@ -484,6 +494,7 @@ export const register = [
               changes,
               {
                 by: actor,
+                reason,
                 expectedVersion: version,
                 requestId: requestIdFromTrace(),
                 session

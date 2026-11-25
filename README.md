@@ -267,6 +267,7 @@ Same auth as the `GET` above. The body must include the **`version` from the cal
 ```json
 {
   "version": 2,
+  "reason": "Contact details updated at the applicant's request",
   "primaryContact": {
     "contactName": "Jane Doe",
     "contactTelephone": "01234567890",
@@ -275,12 +276,14 @@ Same auth as the `GET` above. The body must include the **`version` from the cal
 }
 ```
 
+`reason` is optional, up to 500 characters, trimmed, and recorded in the update's history entry (see [Registration history](#registration-history)); an empty or blank reason isn't recorded. It doesn't count as a change, so the body must also include at least one field to change.
+
 **Response (200):** the updated registration, with its new `version`.
 
 | Response | When                                                                                                                                                         |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `200`    | Updated: the registration as stored, with the incremented `version`                                                                                          |
-| `400`    | `version` is missing or not an integer, the body has an unknown/dotted field, or is otherwise invalid                                                        |
+| `400`    | `version` is missing or not an integer, `reason` is too long, no field to change is given, the body has an unknown/dotted field, or is otherwise invalid     |
 | `401`    | The bearer token is missing, invalid or expired (on whichever strategy actually matched it)                                                                  |
 | `403`    | External caller: the token does not name this reference, or its grant is missing, expired or revoked. Internal caller: denied by `requireInternalPermission` |
 | `404`    | There's no such registration (authorisation was already confirmed, so this means data inconsistency, not an authorisation failure)                           |
