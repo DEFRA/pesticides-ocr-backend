@@ -16,40 +16,55 @@ export const journeyToken = (nonce, secret = JOURNEY_SECRET) =>
   `${nonce}.${createHmac('sha256', secret).update(nonce).digest('hex')}`
 
 export const validRegistrationPayload = {
-  businessActivities: ['manufacture', 'market'],
-  mainCustomer: 'professional',
+  businessActivities: ['using', 'selling'],
   businessName: 'Company 1',
   address: {
     addressLine1: '67 My Road',
     addressLine2: 'My Village',
     addressTown: 'My Town',
     addressCounty: 'North Yorkshire',
-    addressPostcode: 'AB12 3CD'
+    addressPostcode: 'AB12 3CD',
+    addressRegion: 'england'
   },
   primaryContact: {
     contactName: 'Jonny Pesticide',
+    contactJobTitle: 'Farm manager',
     contactTelephone: '01234567890',
     contactEmail: CONTACT_EMAIL
   },
-  addressActivities: ['use', 'store'],
-  quantity: { quantityType: 'area', quantity: '67' },
-  professionalSectors: ['agriculture-horticulture', 'amenity'],
-  memberSchemes: ['Scheme A'],
-  additionalAddresses: [
-    {
+  usingPPPs: {
+    whoApplies: 'contractor',
+    contractor: {
+      contractorName: 'Spray Contractors Ltd',
       address: {
+        addressLine1: '2 Contractor Lane',
+        addressTown: 'Sprayton',
+        addressPostcode: 'CF10 1AA',
+        addressRegion: 'wales'
+      }
+    },
+    professionalSectors: ['agriculture', 'amenity', 'Golf course maintenance'],
+    agriSubsectors: ['arable', 'potatoes'],
+    amenitySubsectors: ['sports-public-amenity'],
+    memberSchemes: ['red-tractor', 'Scheme A'],
+    storing: ['own', 'third-party'],
+    storageLocation: ['main-address', 'another-address'],
+    ownStorageAddresses: [
+      {
         addressLine1: '1 Other St',
         addressTown: 'Othertown',
-        addressPostcode: 'SW1A 2AA'
-      },
-      contact: {
-        contactName: 'Jane Doe',
-        contactTelephone: '07700900000',
-        contactEmail: 'jane@example.com'
-      },
-      activity: ['use']
-    }
-  ]
+        addressPostcode: 'SW1A 2AA',
+        addressRegion: 'england'
+      }
+    ],
+    storageContact: {
+      contactName: 'Jane Doe',
+      contactTelephone: '07700900000',
+      contactEmail: 'jane@example.com',
+      businessName: 'Storage Co'
+    },
+    quantity: '60-149'
+  }
 }
 
 // Stores a record as a used magic link leaves it. `email` is stored as given,

@@ -8,9 +8,10 @@ import {
   validRegistrationPayload
 } from '#/routes/registration/registration.fixtures.js'
 import {
-  ADDRESS_ACTIVITY,
   BUSINESS_ACTIVITY,
-  PROFESSIONAL_SECTOR
+  PROFESSIONAL_SECTOR,
+  STORING,
+  WHO_APPLIES
 } from '#/common/constants/registration-answers.js'
 
 const mockSaveRegistration = vi.fn()
@@ -55,6 +56,14 @@ describe('POST /register', () => {
 
   const validPayload = validRegistrationPayload
 
+  const withUsingPPPs = (changes, ...omit) => {
+    const usingPPPs = { ...validPayload.usingPPPs, ...changes }
+    omit.forEach((key) => delete usingPPPs[key])
+    return { ...validPayload, usingPPPs }
+  }
+
+  const messageOf = (response) => JSON.parse(response.payload).message
+
   describe('success', () => {
     test('returns 201 and reference on valid payload', async () => {
       mockSaveRegistration.mockResolvedValue({ reference: 'PP-ABC-123' })
@@ -80,7 +89,11 @@ describe('POST /register', () => {
         expect.anything(),
         expect.objectContaining({
           businessName: 'Company 1',
-          businessActivities: ['manufacture', 'market']
+          businessActivities: [
+            BUSINESS_ACTIVITY.USING,
+            BUSINESS_ACTIVITY.SELLING
+          ],
+          usingPPPs: validPayload.usingPPPs
         }),
         { requestId: 'request-1' }
       )
@@ -89,14 +102,25 @@ describe('POST /register', () => {
     test('accepts payload without optional fields', async () => {
       mockSaveRegistration.mockResolvedValue({ reference: 'PP-MIN-001' })
 
-      const {
-        professionalSectors,
-        memberSchemes,
-        additionalAddresses,
-        ...rest
-      } = validPayload
+      const { addressLine2, addressCounty, ...address } = validPayload.address
+      const { contactJobTitle, ...primaryContact } = validPayload.primaryContact
 
-      const response = await postRegister(rest)
+      const response = await postRegister({
+        ...validPayload,
+        address,
+        primaryContact
+      })
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    test('accepts an address outside Great Britain', async () => {
+      mockSaveRegistration.mockResolvedValue({ reference: 'PP-INT-001' })
+
+      const response = await postRegister({
+        ...validPayload,
+        address: { internationalAddress: 'Rue de la Paix 12\n75002 Paris' }
+      })
 
       expect(response.statusCode).toBe(201)
     })
@@ -109,76 +133,135 @@ describe('POST /register', () => {
       return postRegister(payload)
     }
 
-    test.each([
-      [[BUSINESS_ACTIVITY.SELLER_AMATEUR]],
-      [[BUSINESS_ACTIVITY.MANUFACTURE, BUSINESS_ACTIVITY.SELLER_AMATEUR]]
-    ])(
-      'accepts no mainCustomer when the activities are %j',
-      async (businessActivities) => {
-        const { mainCustomer, ...rest } = validPayload
-
-        const response = await post({ ...rest, businessActivities })
-
-        expect(response.statusCode).toBe(201)
-      }
-    )
-
-    test('still validates a mainCustomer sent by an amateur seller', async () => {
-      const response = await post({
-        ...validPayload,
-        businessActivities: [BUSINESS_ACTIVITY.SELLER_AMATEUR],
-        mainCustomer: '   '
-      })
-
-      expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toBe(
-        'Enter your main customer'
-      )
-    })
-
-    test('accepts no quantity when the address activities have no use', async () => {
-      const { quantity, ...rest } = validPayload
+    test('accepts no usingPPPs when using PPPs is not ticked', async () => {
+      const { usingPPPs, ...rest } = validPayload
 
       const response = await post({
         ...rest,
-        addressActivities: [ADDRESS_ACTIVITY.STORE]
+        businessActivities: [BUSINESS_ACTIVITY.SELLING]
       })
 
       expect(response.statusCode).toBe(201)
     })
 
-    test('returns 400 with no quantity when the address activities include use', async () => {
-      const { quantity, ...rest } = validPayload
+    test('returns 400 with no usingPPPs when using PPPs is ticked', async () => {
+      const { usingPPPs, ...rest } = validPayload
 
-      const response = await post({
-        ...rest,
-        addressActivities: [ADDRESS_ACTIVITY.USE]
-      })
+      const response = await post(rest)
 
       expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toBe('Quantity is required')
+      expect(messageOf(response)).toBe('"usingPPPs" is required')
     })
 
-    test('still validates a quantity sent without use', async () => {
-      const response = await post({
-        ...validPayload,
-        addressActivities: [ADDRESS_ACTIVITY.STORE],
-        quantity: { quantityType: 'volume', quantity: '10' }
-      })
+    test('accepts no contractor when the organisation applies PPPs itself', async () => {
+      const response = await post(
+        withUsingPPPs({ whoApplies: WHO_APPLIES.SELF }, 'contractor')
+      )
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    test.each([
+      ['a contractor is missing', withUsingPPPs({}, 'contractor')],
+      [
+        'agricultural sub-sectors are missing',
+        withUsingPPPs({}, 'agriSubsectors')
+      ],
+      [
+        'storage addresses are missing',
+        withUsingPPPs({}, 'ownStorageAddresses')
+      ],
+      ['a storage contact is missing', withUsingPPPs({}, 'storageContact')],
+      ['the quantity is missing', withUsingPPPs({}, 'quantity')]
+    ])('returns 400 when %s', async (_, payload) => {
+      const response = await post(payload)
 
       expect(response.statusCode).toBe(400)
     })
 
-    test('saves the Other description, trimmed, as the only professional sector', async () => {
-      const response = await post({
-        ...validPayload,
-        professionalSectors: ['  Golf courses  ']
-      })
+    test.each([
+      [
+        'a contractor when the organisation applies PPPs itself',
+        withUsingPPPs({ whoApplies: WHO_APPLIES.SELF }),
+        '"usingPPPs.contractor" is not allowed'
+      ],
+      [
+        'horticultural sub-sectors when horticulture is not ticked',
+        withUsingPPPs({ hortiSubsectors: ['orchards'] }),
+        '"usingPPPs.hortiSubsectors" is not allowed'
+      ],
+      [
+        'member schemes when amenity is the only sector with sub-sectors',
+        withUsingPPPs(
+          { professionalSectors: [PROFESSIONAL_SECTOR.AMENITY] },
+          'agriSubsectors'
+        ),
+        '"usingPPPs.memberSchemes" is not allowed'
+      ],
+      [
+        'a storage location when nothing is stored',
+        withUsingPPPs(
+          { storing: [STORING.NONE] },
+          'ownStorageAddresses',
+          'storageContact'
+        ),
+        '"usingPPPs.storageLocation" is not allowed'
+      ]
+    ])('returns 400 for %s', async (_, payload, message) => {
+      const response = await post(payload)
+
+      expect(response.statusCode).toBe(400)
+      expect(messageOf(response)).toContain(message)
+    })
+
+    test('accepts no member schemes when amenity is the only sector with sub-sectors', async () => {
+      const response = await post(
+        withUsingPPPs(
+          { professionalSectors: [PROFESSIONAL_SECTOR.AMENITY] },
+          'agriSubsectors',
+          'memberSchemes'
+        )
+      )
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    test('accepts an empty list of member schemes', async () => {
+      const response = await post(withUsingPPPs({ memberSchemes: [] }))
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    test('accepts nothing stored, with no storage answers', async () => {
+      const response = await post(
+        withUsingPPPs(
+          { storing: [STORING.NONE] },
+          'storageLocation',
+          'ownStorageAddresses',
+          'storageContact'
+        )
+      )
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    test('saves the Other description, trimmed, after the ticked sectors', async () => {
+      const response = await post(
+        withUsingPPPs(
+          { professionalSectors: [PROFESSIONAL_SECTOR.FORESTRY, '  Golf  '] },
+          'agriSubsectors',
+          'amenitySubsectors'
+        )
+      )
 
       expect(response.statusCode).toBe(201)
       expect(mockSaveRegistration).toHaveBeenLastCalledWith(
         expect.anything(),
-        expect.objectContaining({ professionalSectors: ['Golf courses'] }),
+        expect.objectContaining({
+          usingPPPs: expect.objectContaining({
+            professionalSectors: [PROFESSIONAL_SECTOR.FORESTRY, 'Golf']
+          })
+        }),
         expect.anything()
       )
     })
@@ -191,9 +274,7 @@ describe('POST /register', () => {
       const response = await postRegister(validPayload)
 
       expect(response.statusCode).toBe(500)
-      expect(JSON.parse(response.payload).message).toBe(
-        'An internal server error occurred'
-      )
+      expect(messageOf(response)).toBe('An internal server error occurred')
     })
   })
 
@@ -217,7 +298,7 @@ describe('POST /register', () => {
       })
 
       expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toMatch(/business activity/i)
+      expect(messageOf(response)).toMatch(/business activity/i)
     })
 
     test('returns 400 when businessName is missing', async () => {
@@ -226,16 +307,17 @@ describe('POST /register', () => {
       const response = await postRegister(rest)
 
       expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toMatch(/business name/i)
+      expect(messageOf(response)).toMatch(/business name/i)
     })
 
-    test('returns 400 when mainCustomer is missing', async () => {
-      const { mainCustomer, ...rest } = validPayload
-
-      const response = await postRegister(rest)
+    test('returns 400 for an answer the journey no longer asks', async () => {
+      const response = await postRegister({
+        ...validPayload,
+        mainCustomer: 'professional'
+      })
 
       expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toMatch(/main customer/i)
+      expect(messageOf(response)).toBe('"mainCustomer" is not allowed')
     })
 
     test('returns 400 for invalid UK postcode', async () => {
@@ -245,8 +327,37 @@ describe('POST /register', () => {
       })
 
       expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toMatch(/postcode/i)
+      expect(messageOf(response)).toMatch(/postcode/i)
     })
+
+    test('returns 400 when the address region is missing', async () => {
+      const { addressRegion, ...address } = validPayload.address
+
+      const response = await postRegister({ ...validPayload, address })
+
+      expect(response.statusCode).toBe(400)
+      expect(messageOf(response)).toBe('Select a country')
+    })
+
+    test.each([
+      ['empty', '   ', 'Enter your main business address'],
+      [
+        'over 500 characters',
+        'x'.repeat(501),
+        'Business address must be 500 characters or less'
+      ]
+    ])(
+      'returns 400 for an address outside Great Britain that is %s',
+      async (_, internationalAddress, message) => {
+        const response = await postRegister({
+          ...validPayload,
+          address: { internationalAddress }
+        })
+
+        expect(response.statusCode).toBe(400)
+        expect(messageOf(response)).toBe(message)
+      }
+    )
 
     test('returns 400 for invalid email address', async () => {
       const response = await postRegister({
@@ -258,7 +369,7 @@ describe('POST /register', () => {
       })
 
       expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toMatch(/email/i)
+      expect(messageOf(response)).toMatch(/email/i)
     })
 
     test('returns 400 for invalid telephone number', async () => {
@@ -271,27 +382,17 @@ describe('POST /register', () => {
       })
 
       expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toMatch(/telephone/i)
+      expect(messageOf(response)).toMatch(/telephone/i)
     })
 
-    test('returns 400 for invalid quantityType', async () => {
-      const response = await postRegister({
-        ...validPayload,
-        quantity: { quantityType: 'volume', quantity: '10' }
-      })
+    test.each([
+      ['an unknown band', '1000-plus'],
+      ['the old shape', { quantityType: 'area', quantity: 10 }]
+    ])('returns 400 for a quantity that is %s', async (_, quantity) => {
+      const response = await postRegister(withUsingPPPs({ quantity }))
 
       expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toMatch(/quantity type/i)
-    })
-
-    test('returns 400 for non-numeric quantity value', async () => {
-      const response = await postRegister({
-        ...validPayload,
-        quantity: { quantityType: 'area', quantity: 'lots' }
-      })
-
-      expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toMatch(/quantity/i)
+      expect(messageOf(response)).toMatch(/quantity/i)
     })
 
     test('returns 400 for invalid businessActivity value', async () => {
@@ -305,46 +406,66 @@ describe('POST /register', () => {
 
     test.each([
       [
-        'a sector code with an Other description',
-        [PROFESSIONAL_SECTOR.AMENITY, 'Golf courses']
+        'two Other descriptions',
+        [PROFESSIONAL_SECTOR.FORESTRY, 'Golf', 'Parks']
       ],
-      ['two Other descriptions', ['Golf courses', 'Parks']],
       ['a blank Other description', ['   ']],
       ['an Other description over 100 characters', ['x'.repeat(101)]],
       [
         'a repeated sector code',
-        [PROFESSIONAL_SECTOR.AMENITY, PROFESSIONAL_SECTOR.AMENITY]
+        [PROFESSIONAL_SECTOR.FORESTRY, PROFESSIONAL_SECTOR.FORESTRY]
       ],
+      ['no answers', []],
       ['a string instead of a list', 'Golf courses'],
       ['null', null]
     ])('returns 400 for professionalSectors with %s', async (_, sectors) => {
-      const response = await postRegister({
-        ...validPayload,
-        professionalSectors: sectors
-      })
+      const response = await postRegister(
+        withUsingPPPs(
+          { professionalSectors: sectors },
+          'agriSubsectors',
+          'amenitySubsectors'
+        )
+      )
 
       expect(response.statusCode).toBe(400)
-      expect(JSON.parse(response.payload).message).toBe(
-        'Select a professional sector or describe your main type of work'
+    })
+
+    test('returns 400 when not storing PPPs is ticked with where they are stored', async () => {
+      const response = await postRegister(
+        withUsingPPPs({ storing: [STORING.NONE, STORING.OWN] })
+      )
+
+      expect(response.statusCode).toBe(400)
+      expect(messageOf(response)).toContain(
+        "Select where the products are stored, or select 'We do not store PPPs'"
       )
     })
 
-    test('returns 400 when additional address has missing contact', async () => {
-      const response = await postRegister({
-        ...validPayload,
-        additionalAddresses: [
-          {
-            address: {
+    test('returns 400 when a storage address has no town', async () => {
+      const response = await postRegister(
+        withUsingPPPs({
+          ownStorageAddresses: [
+            {
               addressLine1: '1 Other St',
-              addressTown: 'Othertown',
-              addressPostcode: 'SW1A 2AA'
-            },
-            activity: ['use']
-          }
-        ]
-      })
+              addressPostcode: 'SW1A 2AA',
+              addressRegion: 'england'
+            }
+          ]
+        })
+      )
 
       expect(response.statusCode).toBe(400)
+      expect(messageOf(response)).toBe('Enter town or city')
+    })
+
+    test('returns 400 when the storage contact has no business name', async () => {
+      const { businessName, ...storageContact } =
+        validPayload.usingPPPs.storageContact
+
+      const response = await postRegister(withUsingPPPs({ storageContact }))
+
+      expect(response.statusCode).toBe(400)
+      expect(messageOf(response)).toBe('Enter the business name')
     })
   })
 })
