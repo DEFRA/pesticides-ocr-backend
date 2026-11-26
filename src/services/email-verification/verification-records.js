@@ -80,6 +80,17 @@ export function markVerified(db, { tokenHash, now }) {
   )
 }
 
+// Undoes markVerified for a link whose access grant then failed, so the
+// applicant can retry with the same link until it expires. Matches the exact
+// verifiedAt this attempt set, so it can never reopen a link some other
+// request verified.
+export function restorePending(db, { tokenHash, verifiedAt }) {
+  return records(db).updateOne(
+    { tokenHash, status: STATUS.VERIFIED, verifiedAt },
+    { $set: { status: STATUS.PENDING, verifiedAt: null } }
+  )
+}
+
 export function findByTokenHash(db, tokenHash) {
   return records(db).findOne({ tokenHash })
 }

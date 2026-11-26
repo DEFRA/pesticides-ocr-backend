@@ -15,7 +15,8 @@ import {
   findLatestRecord,
   findRecentVerification,
   insertSendingRecord,
-  markVerified
+  markVerified,
+  restorePending
 } from '#/services/email-verification/verification-records.js'
 
 const settings = { linkTtlSeconds: 900, recordRetentionSeconds: 86400 }
@@ -237,6 +238,51 @@ describe('#activateRecord', () => {
         status: STATUS.SUPERSEDED
       })
     ).toBe(9)
+  })
+})
+
+describe('#restorePending', () => {
+  const verifiedLink = async () => {
+    const { tokenHash } = generateLinkToken()
+    const { _id } = await insertSendingRecord(db, {
+      journeyId: 'journey-1',
+      email: 'jane@example.com',
+      tokenHash,
+      now: NOW,
+      settings
+    })
+    await activateRecord(
+      { client, db },
+      { _id, journeyId: 'journey-1', now: NOW }
+    )
+    await markVerified(db, { tokenHash, now: LATER })
+    return { _id, tokenHash }
+  }
+
+  test('reopens a link this attempt verified, so it can be used again', async () => {
+    const { tokenHash } = await verifiedLink()
+
+    await restorePending(db, { tokenHash, verifiedAt: LATER })
+
+    expect(await findByTokenHash(db, tokenHash)).toMatchObject({
+      status: STATUS.PENDING,
+      verifiedAt: null
+    })
+    expect(await markVerified(db, { tokenHash, now: LATER })).not.toBeNull()
+  })
+
+  test('leaves a link alone when it was verified by a different attempt', async () => {
+    const { tokenHash } = await verifiedLink()
+
+    await restorePending(db, {
+      tokenHash,
+      verifiedAt: new Date('2026-10-15T10:05:00.000Z')
+    })
+
+    expect(await findByTokenHash(db, tokenHash)).toMatchObject({
+      status: STATUS.VERIFIED,
+      verifiedAt: LATER
+    })
   })
 })
 

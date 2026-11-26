@@ -96,7 +96,8 @@ export async function verifyLinkToken(db, { token, journeyId }) {
       verified: true,
       sameJourney: verifiedSameJourney,
       subject: subjectForEmail(verified.email),
-      email: verified.email
+      email: verified.email,
+      verifiedAt: verified.verifiedAt
     }
   }
 

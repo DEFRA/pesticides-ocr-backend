@@ -110,6 +110,8 @@ registration.primaryContact.contactEmail (lower-cased, trimmed)</code></pre>
 
 <p>A failed check — whether because the email genuinely doesn't match, or because the supplied <code>reference</code> doesn't exist at all — returns the identical generic <code>403 REGISTRATION_ACCESS_DENIED</code>, so a caller can never use the response to learn whether a reference exists or who owns it (see decision §6.6).</p>
 
+<p><strong>Order of operations:</strong> the entitlement check runs <em>before</em> the one-time link is used up. The backend reads the still-pending link to learn which email it was sent to, then checks the registration. A denied or non-existent reference therefore leaves the link <strong>pending</strong>, so the applicant can correct a mistyped reference and retry until the link expires. If the link is used and a later step then fails (a changed registration email, a database error while creating the grant, or a token-signing error), the link is put back to pending so a retry still works. This restore is best-effort: if the restore write itself fails, the link stays used and the applicant must request a new one. An already-used, expired, superseded or unknown link is not re-opened and returns its usual error.</p>
+
 <hr>
 
 <h2>3. API contract (addition to <code>POST /email-verifications/verify</code>)</h2>
