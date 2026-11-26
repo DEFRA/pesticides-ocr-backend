@@ -1,6 +1,7 @@
 import Joi from 'joi'
 import { normalisedEmailSchema } from '#/services/email-verification/email-address.js'
 import { MAX_EMAIL_LENGTH } from '#/common/constants/email.js'
+import { MAX_REASON_LENGTH } from '#/common/constants/history.js'
 import {
   ADDRESS_REGIONS,
   AGRI_SUBSECTORS,
@@ -333,10 +334,7 @@ export const registrationSchema = Joi.object({
 // Shared by both populations for now (see README §"External-user RBAC" open
 // question: whether case officers and external users should eventually have
 // different editable-field sets).
-export const patchRegistrationSchema = Joi.object({
-  version: Joi.number().integer().min(0).strict().required().messages({
-    'any.required': 'expectedVersion (version) is required'
-  }),
+const editableFields = {
   businessActivities: registrationSchema
     .extract('businessActivities')
     .optional(),
@@ -344,6 +342,16 @@ export const patchRegistrationSchema = Joi.object({
   address: registrationSchema.extract('address').optional(),
   primaryContact: registrationSchema.extract('primaryContact').optional(),
   usingPPPs: usingPPPsSchema.optional()
+}
+
+// `reason` is recorded in the history entry; it isn't a change in itself, so
+// at least one editable field is still required.
+export const patchRegistrationSchema = Joi.object({
+  version: Joi.number().integer().min(0).strict().required().messages({
+    'any.required': 'expectedVersion (version) is required'
+  }),
+  reason: Joi.string().trim().max(MAX_REASON_LENGTH).allow('').optional(),
+  ...editableFields
 })
-  .min(2) // version + at least one real change
-  .messages({ 'object.min': 'At least one field must be changed' })
+  .or(...Object.keys(editableFields))
+  .messages({ 'object.missing': 'At least one field must be changed' })

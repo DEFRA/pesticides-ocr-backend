@@ -184,7 +184,7 @@ export const register = [
       await authorise(request, { action: 'registration:update', reference })
 
       const { identityType, subject } = request.auth.credentials
-      const { version, ...changes } = request.payload
+      const { version, reason, ...changes } = request.payload
 
       // Confirmed decision (completion ticket AC6): changing the contact
       // email must not carry over the old email's entitlement. Every
@@ -233,6 +233,7 @@ export const register = [
               changes,
               {
                 by: actor,
+                reason,
                 expectedVersion: version,
                 requestId: requestIdFromTrace(),
                 session

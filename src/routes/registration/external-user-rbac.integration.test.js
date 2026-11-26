@@ -5,8 +5,14 @@ import { SignJWT } from 'jose'
 import {
   EMAIL_VERIFICATIONS_COLLECTION,
   OCR_REGISTRATION_COLLECTION,
+  OCR_REGISTRATION_HISTORY_COLLECTION,
   REGISTRATION_ACCESS_COLLECTION
 } from '#/common/constants/collections.js'
+import { ACTOR_TYPE } from '#/common/constants/actors.js'
+import {
+  HISTORY_OPERATION,
+  MAX_REASON_LENGTH
+} from '#/common/constants/history.js'
 import { addSeconds } from '#/common/helpers/time.js'
 import { getCaseOfficerRoles } from '#/auth/require-role.js'
 import { createRegistrationAccessRepository } from '#/repositories/registration-access.js'
@@ -270,6 +276,166 @@ describe('External user RBAC: end-to-end flow', () => {
     expect(JSON.parse(patchResponse.payload)).toMatchObject({
       businessName: 'Officer Updated Name',
       version: 2
+    })
+  })
+
+  describe('PATCH reason and validation', () => {
+    const REASON = 'Corrected business name'
+
+    async function officerPatch(reference, payload) {
+      return server.inject({
+        method: 'PATCH',
+        url: `/registrations/${reference}`,
+        headers: { authorization: `Bearer ${await mockOfficerToken()}` },
+        payload
+      })
+    }
+
+    const updateEntryOf = (reference) =>
+      server.db
+        .collection(OCR_REGISTRATION_HISTORY_COLLECTION)
+        .findOne(
+          { reference, operation: HISTORY_OPERATION.UPDATE },
+          { projection: { _id: 0 } }
+        )
+
+    test('records the trimmed reason and the case officer in the update history entry', async () => {
+      const reference = await submitRegistration()
+
+      const response = await officerPatch(reference, {
+        version: 1,
+        reason: `  ${REASON}  `,
+        businessName: 'Officer Updated Name'
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(JSON.parse(response.payload)).not.toHaveProperty('reason')
+      expect(await updateEntryOf(reference)).toMatchObject({
+        version: 2,
+        by: { type: ACTOR_TYPE.CASE_OFFICER, id: OFFICER_SUBJECT },
+        reason: REASON,
+        snapshot: { businessName: 'Officer Updated Name', version: 2 }
+      })
+    })
+
+    test('records the reason and the external user in the update history entry', async () => {
+      const reference = await submitRegistration()
+      const accessToken = await verifyForReference(reference)
+
+      const response = await server.inject({
+        method: 'PATCH',
+        url: `/registrations/${reference}`,
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: {
+          version: 1,
+          reason: REASON,
+          businessName: 'Applicant Updated Name'
+        }
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(await updateEntryOf(reference)).toMatchObject({
+        version: 2,
+        by: { type: ACTOR_TYPE.EXTERNAL_USER },
+        reason: REASON
+      })
+    })
+
+    test.each([
+      ['no reason', {}],
+      ['an empty reason', { reason: '' }],
+      ['a blank reason', { reason: '   ' }]
+    ])('200 with %s, recording none', async (_label, body) => {
+      const reference = await submitRegistration()
+
+      const response = await officerPatch(reference, {
+        version: 1,
+        businessName: 'Officer Updated Name',
+        ...body
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(await updateEntryOf(reference)).not.toHaveProperty('reason')
+    })
+
+    test.each([
+      [
+        'a reason with no field to change',
+        { reason: REASON },
+        'At least one field must be changed'
+      ],
+      [
+        'a reason over the maximum length',
+        {
+          reason: 'x'.repeat(MAX_REASON_LENGTH + 1),
+          businessName: 'Officer Updated Name'
+        },
+        `"reason" length must be less than or equal to ${MAX_REASON_LENGTH} characters long`
+      ]
+    ])('400 for %s, changing nothing', async (_label, body, message) => {
+      const reference = await submitRegistration()
+
+      const response = await officerPatch(reference, { version: 1, ...body })
+
+      expect(response.statusCode).toBe(400)
+      expect(JSON.parse(response.payload).message).toContain(message)
+      expect(await registrations.findOne({ reference })).toMatchObject({
+        version: 1
+      })
+      expect(await updateEntryOf(reference)).toBeNull()
+    })
+
+    // System-managed fields, dotted keys and badly formed values never reach
+    // the repository: the registration and its history stay unchanged.
+    test.each([
+      ['reference', { reference: 'PPP-ZZZ-999' }],
+      ['createdAt', { createdAt: '2026-01-01T00:00:00.000Z' }],
+      ['createdBy', { createdBy: { type: ACTOR_TYPE.APPLICANT } }],
+      ['updatedAt', { updatedAt: '2026-01-01T00:00:00.000Z' }],
+      ['updatedBy', { updatedBy: { type: ACTOR_TYPE.CASE_OFFICER } }],
+      ['isDeleted', { isDeleted: true }],
+      ['deletedAt', { deletedAt: '2026-01-01T00:00:00.000Z' }],
+      ['deletedBy', { deletedBy: { type: ACTOR_TYPE.CASE_OFFICER } }],
+      ['history metadata', { history: [] }],
+      ['a dotted key', { 'primaryContact.contactEmail': 'new@example.com' }],
+      [
+        'a badly formed email',
+        {
+          primaryContact: {
+            contactName: 'Jane Doe',
+            contactTelephone: '01234567890',
+            contactEmail: 'not-an-email'
+          }
+        }
+      ]
+    ])('400 for %s, changing nothing', async (_label, body) => {
+      const reference = await submitRegistration()
+
+      const response = await officerPatch(reference, {
+        version: 1,
+        businessName: 'Officer Updated Name',
+        ...body
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(await registrations.findOne({ reference })).toMatchObject({
+        version: 1,
+        businessName: validRegistrationPayload.businessName
+      })
+      expect(await updateEntryOf(reference)).toBeNull()
+    })
+
+    test('400 when version is missing', async () => {
+      const reference = await submitRegistration()
+
+      const response = await officerPatch(reference, {
+        businessName: 'Officer Updated Name'
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(JSON.parse(response.payload).message).toContain(
+        'expectedVersion (version) is required'
+      )
     })
   })
 
