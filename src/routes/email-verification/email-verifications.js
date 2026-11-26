@@ -30,13 +30,21 @@ import { NotifySendError } from '#/services/notify/notify.js'
 import { missingEmailVerificationSettings } from '#/services/email-verification/config-guard.js'
 import { currentVerificationStatus } from '#/services/email-verification/current-status.js'
 import { normalisedEmailSchema } from '#/services/email-verification/email-address.js'
-import { isLinkTokenFormat } from '#/services/email-verification/link-token.js'
+import {
+  hashLinkToken,
+  isLinkTokenFormat
+} from '#/services/email-verification/link-token.js'
 import { LIMITS } from '#/services/email-verification/rate-limiter.js'
 import { requestVerificationLink } from '#/services/email-verification/request-link.js'
 import {
   recordVerifyRejected,
   verifyLinkToken
 } from '#/services/email-verification/verify-link.js'
+import {
+  STATUS,
+  findByTokenHash,
+  restorePending
+} from '#/services/email-verification/verification-records.js'
 import { issueExternalAccessToken } from '#/services/external-user/access-token.js'
 import { isEntitledToRegistration } from '#/services/external-user/entitlement.js'
 import { createRegistrationAccessRepository } from '#/repositories/registration-access.js'
@@ -154,6 +162,82 @@ function verifyRejectedError({ code, sameJourney }) {
 
 const isoOrNull = (date) => date?.toISOString() ?? null
 
+const denyAccess = () =>
+  withErrorCode(
+    Boom.forbidden('Not authorised to access this registration'),
+    REGISTRATION_ACCESS_DENIED
+  )
+
+// Verifying the email proves control of the inbox; it does NOT by itself prove
+// entitlement to this registration (completion ticket AC1). The verified email
+// must match the registration's own primary contact email before any grant is
+// created or token issued. A failed check returns the same generic denial
+// whether the registration does not exist or simply isn't the applicant's.
+//
+// Reads the still-pending link record (without consuming it) to learn which
+// email it was sent to. A link that is not live (used, expired, superseded,
+// unknown) is left for verifyLinkToken to reject with its usual 409/410/404.
+async function assertEntitledBeforeConsuming(request, { token, reference }) {
+  let registration
+  let pending
+  try {
+    const record = await findByTokenHash(request.db, hashLinkToken(token))
+    pending =
+      record?.status === STATUS.PENDING && record.expiresAt > new Date()
+        ? record
+        : null
+    if (pending) {
+      registration = await request.registrations.findByReference(reference)
+    }
+  } catch (error) {
+    logger.error(loggableError(error), 'Email verification failed')
+    throw withErrorCode(
+      Boom.internal('Failed to verify email'),
+      VERIFICATION_FAILED
+    )
+  }
+  if (pending && !isEntitledToRegistration(registration, pending.email)) {
+    throw denyAccess()
+  }
+}
+
+// Re-checks entitlement against the current registration (it may have changed
+// since the pre-check), then grants access and issues the token. The grant's
+// expiry matches the token's TTL, and re-verifying renews (not duplicates) the
+// existing grant, clearing any prior revocation — see registration-access.js.
+async function grantAccessAndIssueToken(request, { reference, result }) {
+  const registration = await request.registrations.findByReference(reference)
+  if (!isEntitledToRegistration(registration, result.email)) {
+    throw denyAccess()
+  }
+
+  const accessRepository = createRegistrationAccessRepository({
+    db: request.db
+  })
+  const grantedAt = new Date()
+  await accessRepository.grant({
+    subject: result.subject,
+    reference,
+    grantedAt,
+    expiresAt: addSeconds(grantedAt, config.get('externalUser.tokenTtlSeconds'))
+  })
+  return issueExternalAccessToken({ subject: result.subject, reference })
+}
+
+async function restoreLinkSafely(request, token, result) {
+  try {
+    await restorePending(request.db, {
+      tokenHash: hashLinkToken(token),
+      verifiedAt: result.verifiedAt
+    })
+  } catch (restoreError) {
+    logger.error(
+      loggableError(restoreError),
+      'Could not restore link to pending'
+    )
+  }
+}
+
 // POST /email-verifications: request or resend a magic link.
 // POST /email-verifications/verify: use up a link.
 // GET /email-verifications/current: the journey's latest link.
@@ -216,10 +300,18 @@ export const emailVerifications = [
       }
     },
     handler: async (request, h) => {
+      const { token, reference } = request.payload
+
+      // With a reference, access is checked BEFORE the one-time link is
+      // consumed, so a mistyped or unentitled reference never burns it.
+      if (reference) {
+        await assertEntitledBeforeConsuming(request, { token, reference })
+      }
+
       let result
       try {
         result = await verifyLinkToken(request.db, {
-          token: request.payload.token,
+          token,
           journeyId: optionalJourneyId(request)
         })
       } catch (error) {
@@ -238,44 +330,21 @@ export const emailVerifications = [
       // registration (reference supplied) is access granted and a token
       // issued — a brand-new submission still gets no session/token
       // (unchanged behaviour, see magic-link-api-design.md §1).
-      //
-      // Verifying the email proves control of the inbox; it does NOT by
-      // itself prove entitlement to this registration (completion ticket
-      // AC1). The verified email must match the registration's own primary
-      // contact email before any grant is created or token issued. A failed
-      // check returns the same generic denial whether the registration does
-      // not exist or simply isn't the applicant's — the response never
-      // confirms which.
       let externalAccessToken
-      if (request.payload.reference) {
-        const { reference } = request.payload
-        const registration =
-          await request.registrations.findByReference(reference)
-        if (!isEntitledToRegistration(registration, result.email)) {
-          throw withErrorCode(
-            Boom.forbidden('Not authorised to access this registration'),
-            REGISTRATION_ACCESS_DENIED
-          )
+      if (reference) {
+        try {
+          externalAccessToken = await grantAccessAndIssueToken(request, {
+            reference,
+            result
+          })
+        } catch (error) {
+          // Anything failing after the link was consumed (a lost race on the
+          // registration's email, a database or signing error) must not leave
+          // the applicant with a spent link and no access: put it back to
+          // pending so a retry works until it expires.
+          await restoreLinkSafely(request, token, result)
+          throw error
         }
-
-        const accessRepository = createRegistrationAccessRepository({
-          db: request.db
-        })
-        // The grant's expiry matches the token's TTL, and re-verifying
-        // renews (not duplicates) the existing grant, clearing any prior
-        // revocation — see registration-access.js for the full rationale.
-        const tokenTtlSeconds = config.get('externalUser.tokenTtlSeconds')
-        const grantedAt = new Date()
-        await accessRepository.grant({
-          subject: result.subject,
-          reference,
-          grantedAt,
-          expiresAt: addSeconds(grantedAt, tokenTtlSeconds)
-        })
-        externalAccessToken = await issueExternalAccessToken({
-          subject: result.subject,
-          reference
-        })
       }
 
       return h.response({

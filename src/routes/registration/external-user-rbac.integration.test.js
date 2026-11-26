@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 
 import { SignJWT } from 'jose'
+import { Collection } from 'mongodb'
 
 import {
   EMAIL_VERIFICATIONS_COLLECTION,
@@ -136,6 +137,76 @@ describe('External user RBAC: end-to-end flow', () => {
     expect(body.externalAccessToken).toBeTypeOf('string')
     return body.externalAccessToken
   }
+
+  const postVerify = (token, reference) =>
+    server.inject({
+      method: 'POST',
+      url: '/email-verifications/verify',
+      headers: { 'x-journey-token': journeyToken(JOURNEY) },
+      payload: { token, reference }
+    })
+
+  const linkStatus = async (token) =>
+    (
+      await server.db
+        .collection(EMAIL_VERIFICATIONS_COLLECTION)
+        .findOne({ tokenHash: hashLinkToken(token) })
+    ).status
+
+  test('a denied reference leaves the link pending, then the same link works with the right reference', async () => {
+    const reference = await submitRegistration()
+    const otherReference = await submitRegistration({
+      ...validRegistrationPayload,
+      primaryContact: {
+        ...validRegistrationPayload.primaryContact,
+        contactEmail: 'someone.else@example.com'
+      }
+    })
+    const token = await seedPendingVerification(server.db)
+
+    const denied = await postVerify(token, otherReference)
+    expect(denied.statusCode).toBe(403)
+    expect(await linkStatus(token)).toBe(STATUS.PENDING)
+
+    const retry = await postVerify(token, reference)
+    expect(retry.statusCode).toBe(200)
+    expect(JSON.parse(retry.payload).externalAccessToken).toBeTypeOf('string')
+    expect(await linkStatus(token)).toBe(STATUS.VERIFIED)
+  })
+
+  test('a non-existent reference gets the same 403 and the link still works afterwards', async () => {
+    const reference = await submitRegistration()
+    const token = await seedPendingVerification(server.db)
+
+    const missing = await postVerify(token, 'PPP-NO0-NE0')
+    expect(missing.statusCode).toBe(403)
+    expect(await linkStatus(token)).toBe(STATUS.PENDING)
+
+    const retry = await postVerify(token, reference)
+    expect(retry.statusCode).toBe(200)
+  })
+
+  test('a failure creating the grant leaves the link pending and creates no access', async () => {
+    const reference = await submitRegistration()
+    const token = await seedPendingVerification(server.db)
+    const grantSpy = vi
+      .spyOn(Collection.prototype, 'updateOne')
+      .mockRejectedValueOnce(new Error('transient database failure'))
+
+    const failed = await postVerify(token, reference)
+    grantSpy.mockRestore()
+
+    expect(failed.statusCode).toBe(500)
+    expect(await linkStatus(token)).toBe(STATUS.PENDING)
+    expect(
+      await server.db
+        .collection(REGISTRATION_ACCESS_COLLECTION)
+        .countDocuments({})
+    ).toBe(0)
+
+    const retry = await postVerify(token, reference)
+    expect(retry.statusCode).toBe(200)
+  })
 
   test('full flow: register, verify for the reference, view and edit own registration', async () => {
     const reference = await submitRegistration()

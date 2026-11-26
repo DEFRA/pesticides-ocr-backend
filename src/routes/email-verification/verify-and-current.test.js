@@ -456,6 +456,106 @@ describe('email verification: verify and current status', () => {
       expect(response.payload).not.toContain('Entitlement Test Co')
     })
 
+    const verifyWithReference = (token, reference) =>
+      server.inject({
+        method: 'POST',
+        url: '/email-verifications/verify',
+        headers: journeyHeaders(JOURNEY),
+        payload: { token, reference }
+      })
+
+    test('a denied reference does not use up the link: retrying with the right reference succeeds', async () => {
+      await seedRegistration('someone-else@example.com', 'PPP-OTH-001')
+      await seedRegistration(EMAIL)
+      const token = await sendLink()
+
+      const denied = await verifyWithReference(token, 'PPP-OTH-001')
+      const retry = await verifyWithReference(token, REFERENCE)
+
+      expect(denied.statusCode).toBe(403)
+      expect(retry.statusCode).toBe(200)
+      expect(retry.result.externalAccessToken).toBeTypeOf('string')
+    })
+
+    test('a non-existent reference returns the same 403 body and leaves the link usable', async () => {
+      await seedRegistration('someone-else@example.com', 'PPP-OTH-001')
+      await seedRegistration(EMAIL)
+      const token = await sendLink()
+
+      const notYours = await verifyWithReference(token, 'PPP-OTH-001')
+      const missing = await verifyWithReference(token, 'PPP-NOT-REL')
+      const retry = await verifyWithReference(token, REFERENCE)
+
+      expect(missing.statusCode).toBe(403)
+      expect(missing.payload).toBe(notYours.payload)
+      expect(retry.statusCode).toBe(200)
+    })
+
+    test('a failure creating the grant leaves the link pending so the retry works', async () => {
+      await seedRegistration(EMAIL)
+      const token = await sendLink()
+      vi.spyOn(Collection.prototype, 'updateOne').mockRejectedValueOnce(
+        new Error('transient database failure')
+      )
+
+      const failed = await verifyWithReference(token, REFERENCE)
+      const retry = await verifyWithReference(token, REFERENCE)
+
+      expect(failed.statusCode).toBe(500)
+      expect(retry.statusCode).toBe(200)
+      expect(retry.result.externalAccessToken).toBeTypeOf('string')
+    })
+
+    test('a failure issuing the access token leaves the link pending so the retry works', async () => {
+      await seedRegistration(EMAIL)
+      const token = await sendLink()
+      const { config } = await import('#/config.js')
+      const originalSecret = config.get('externalUser.tokenSecret')
+      config.set('externalUser.tokenSecret', '')
+
+      let failed
+      try {
+        failed = await verifyWithReference(token, REFERENCE)
+      } finally {
+        config.set('externalUser.tokenSecret', originalSecret)
+      }
+      const retry = await verifyWithReference(token, REFERENCE)
+
+      expect(failed.statusCode).toBe(500)
+      expect(retry.statusCode).toBe(200)
+      expect(retry.result.externalAccessToken).toBeTypeOf('string')
+    })
+
+    test('when the link cannot be restored, the original error is returned and the restore failure is logged', async () => {
+      await seedRegistration(EMAIL)
+      const token = await sendLink()
+      vi.spyOn(Collection.prototype, 'updateOne')
+        .mockRejectedValueOnce(new Error('grant failed'))
+        .mockRejectedValueOnce(new Error('restore failed'))
+
+      const failed = await verifyWithReference(token, REFERENCE)
+      const retry = await verifyWithReference(token, REFERENCE)
+
+      expect(failed.statusCode).toBe(500)
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.anything(),
+        'Could not restore link to pending'
+      )
+      expect(retry.statusCode).toBe(409)
+      expect(retry.result.code).toBe('TOKEN_ALREADY_USED')
+    })
+
+    test('a used link with a reference is still rejected 409, not re-opened', async () => {
+      await seedRegistration(EMAIL)
+      const token = await sendLink()
+      await verifyWithReference(token, REFERENCE)
+
+      const again = await verifyWithReference(token, REFERENCE)
+
+      expect(again.statusCode).toBe(409)
+      expect(again.result.code).toBe('TOKEN_ALREADY_USED')
+    })
+
     test('verifying without a reference is unaffected (no entitlement check, no token issued)', async () => {
       await seedRegistration(EMAIL)
       const token = await sendLink()

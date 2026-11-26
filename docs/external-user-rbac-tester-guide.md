@@ -62,6 +62,7 @@ This is the heart of what this ticket changes, so it's worth being explicit abou
 **Key security rules (already tested and confirmed working):**
 
 - A one-time code can only be used **once**.
+- **A mistyped or wrong registration reference does not use up the code.** The system checks the applicant is allowed in _before_ using the code, so they can correct the reference and try again with the same link (until it expires). If something fails behind the scenes while granting access, the code is put back so they can retry.
 - **Proving you own an email address is not, by itself, enough to access a registration.** The email on the magic link request must also match that specific registration's own contact email — the system checks this before handing out any access, every time (not just the first time).
 - A pass only works for **the applicant's own registration** — trying to view someone else's is blocked, and the error message is identical whether the registration doesn't exist or just isn't theirs (so nobody can use the error to go "fishing" for valid references).
 - A pass **cannot** be used to access staff-only ("internal") parts of the system (for example search). The one exception is by design: `GET`/`PATCH /registrations/{reference}` are shared with staff, but a pass still only works for the applicant's own registration.
@@ -123,6 +124,7 @@ See `external-user-rbac.postman_collection.json` — set up as described in its 
 ✅ The error shown for "wrong registration" and "registration doesn't exist" look identical — nothing about the message gives away which one it is
 ✅ Applicant **cannot** access staff/internal-only pages
 ✅ The link only works once
+✅ A wrong or mistyped registration reference does not use up the link — retrying the same link with the correct reference works
 ✅ The link stops working after it expires
 ✅ Changing the registration's contact email immediately revokes the applicant's own current access — they must verify the new address again
 
